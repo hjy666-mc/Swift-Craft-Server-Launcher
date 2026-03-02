@@ -68,22 +68,16 @@ jobs:
             EXCLUDED_ARCHS="$EXCLUDED_ARCHS" \
             archive
 
-      - name: Add Sparkle public key to generated Info.plist
+      - name: Add HelpBook config to generated Info.plist
         run: |
           ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
           APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
           INFO_PLIST_PATH="$APP_PATH/Contents/Info.plist"
-          
+
           if [[ ! -f "$INFO_PLIST_PATH" ]]; then
             echo "❌ 未找到生成的 Info.plist: $INFO_PLIST_PATH"
             exit 1
           fi
-          
-          echo "📝 向生成的 Info.plist 添加 Sparkle 公钥..."
-          /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH"
-          
-          echo "✅ Sparkle 公钥已添加到生成的 Info.plist"
 
           echo "📝 向生成的 Info.plist 添加 HelpBook 配置..."
           /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string SwiftCraftServerLauncher.help" "$INFO_PLIST_PATH" 2>/dev/null || \

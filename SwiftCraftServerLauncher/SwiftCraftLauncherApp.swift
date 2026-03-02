@@ -41,7 +41,6 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject var gameLaunchUseCase = GameLaunchUseCase()
     @StateObject var serverLaunchUseCase = ServerLaunchUseCase()
     @StateObject private var globalErrorHandler = GlobalErrorHandler.shared
-    @StateObject private var sparkleUpdateService = SparkleUpdateService.shared
     @StateObject var generalSettingsManager = GeneralSettingsManager.shared
     @StateObject var themeManager = ThemeManager.shared
     @StateObject private var skinSelectionStore = SkinSelectionStore()
@@ -71,7 +70,6 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(serverNodeRepository)
                 .environmentObject(gameLaunchUseCase)
                 .environmentObject(serverLaunchUseCase)
-                .environmentObject(sparkleUpdateService)
                 .environmentObject(generalSettingsManager)
                 .environmentObject(skinSelectionStore)
                 .preferredColorScheme(themeManager.currentColorScheme)
@@ -90,13 +88,6 @@ struct SwiftCraftServerLauncherApp: App {
         .windowResizability(.contentMinSize)
         .conditionalRestorationBehavior()
         .commands {
-
-            CommandGroup(after: .appInfo) {
-                Button("menu.check.updates".localized()) {
-                    sparkleUpdateService.checkForUpdatesWithUI()
-                }
-                .keyboardShortcut("u", modifiers: [.command, .shift])
-            }
             CommandGroup(after: .help) {
                 Button("menu.open.log".localized()) {
                     Logger.shared.openLogFile()
@@ -112,7 +103,6 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(gameRepository)
                 .environmentObject(serverRepository)
                 .environmentObject(serverNodeRepository)
-                .environmentObject(sparkleUpdateService)
                 .environmentObject(generalSettingsManager)
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
