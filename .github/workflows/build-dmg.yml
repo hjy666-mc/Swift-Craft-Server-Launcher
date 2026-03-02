@@ -29,14 +29,12 @@ jobs:
       - name: Extract version info
         id: version
         run: |
-          MARKETING_VERSION_RAW=$(awk '/\/\* Release \*\/ = {/,/};/ {if ($0 ~ /MARKETING_VERSION/) print $0}' SwiftCraftServerLauncher.xcodeproj/project.pbxproj | head -1 | sed 's/.*= //' | sed 's/;//')
-          # 去除引号
-          MARKETING_VERSION=$(echo "$MARKETING_VERSION_RAW" | sed 's/^"//' | sed 's/"$//')
-          
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
+            MARKETING_VERSION="$VERSION"
           else
-            VERSION="$MARKETING_VERSION"
+            VERSION="BETA"
+            MARKETING_VERSION="BETA"
           fi
           
           # 清理版本号中的无效字符（用于文件名和 artifact 名称）
