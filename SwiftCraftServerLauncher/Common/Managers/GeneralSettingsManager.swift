@@ -93,11 +93,21 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
 
     /// 界面风格：经典（列表 | 内容）/ 聚焦（内容 | 列表）
     @AppStorage("interfaceLayoutStyle")
-    var interfaceLayoutStyle: InterfaceLayoutStyle = .classic {
-        didSet { objectWillChange.send() }
+    var interfaceLayoutStyle: InterfaceLayoutStyle = .focused {
+        didSet {
+            if interfaceLayoutStyle != .focused {
+                interfaceLayoutStyle = .focused
+                return
+            }
+            objectWillChange.send()
+        }
     }
 
-    private init() {}
+    private init() {
+        if interfaceLayoutStyle != .focused {
+            interfaceLayoutStyle = .focused
+        }
+    }
 
     /// 当前启动器工作目录（WorkingPathProviding）
     /// 空时使用默认支持目录

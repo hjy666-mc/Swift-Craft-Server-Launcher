@@ -8,7 +8,8 @@ public struct ContentToolbarView: ToolbarContent {
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @EnvironmentObject var playerListViewModel: PlayerListViewModel
     @EnvironmentObject var detailState: ResourceDetailState
-    @AppStorage("activeServerNodeId") private var activeServerNodeId: String = ServerNode.local.id
+    @AppStorage("activeServerNodeId")
+    private var activeServerNodeId: String = ServerNode.local.id
 
     private var selectedNodeForCreation: ServerNode {
         serverNodeRepository.getNode(by: activeServerNodeId) ?? .local

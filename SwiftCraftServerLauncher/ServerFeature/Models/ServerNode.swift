@@ -27,7 +27,7 @@ struct ServerNode: Codable, Identifiable, Hashable {
         self.isLocal = isLocal
     }
 
-    static let local = ServerNode(
+    static let local = Self(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001") ?? UUID(),
         name: "Local Node",
         host: "localhost",

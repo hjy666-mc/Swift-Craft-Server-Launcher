@@ -31,7 +31,7 @@ final class ResourceFilterState: ObservableObject {
     @Published var localResourceFilter: LocalResourceFilter = .all
 
     init(dataSource: DataSource? = nil) {
-        self.dataSource = dataSource ?? GameSettingsManager.shared.defaultAPISource
+        self.dataSource = .modrinth
     }
 
     // MARK: - 便捷方法
@@ -92,7 +92,7 @@ final class ResourceFilterState: ObservableObject {
         Binding(get: { [weak self] in self?.selectedTab ?? 0 }, set: { [weak self] in self?.selectedTab = $0 })
     }
     var dataSourceBinding: Binding<DataSource> {
-        Binding(get: { [weak self] in self?.dataSource ?? .modrinth }, set: { [weak self] in self?.dataSource = $0 })
+        Binding(get: { [weak self] in self?.dataSource ?? .modrinth }, set: { [weak self] _ in self?.dataSource = .modrinth })
     }
     var searchTextBinding: Binding<String> {
         Binding(get: { [weak self] in self?.searchText ?? "" }, set: { [weak self] in self?.searchText = $0 })

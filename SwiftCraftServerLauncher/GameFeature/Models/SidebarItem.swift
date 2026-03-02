@@ -44,9 +44,6 @@ public enum ResourceType: String, CaseIterable {
     case modpack = "modpack"
 
     public var localizedName: String {
-        if self == .plugin {
-            return "Plugins"
-        }
         return "resource.content.type.\(rawValue)".localized()
     }
 

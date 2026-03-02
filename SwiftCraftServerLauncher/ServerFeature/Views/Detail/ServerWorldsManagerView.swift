@@ -65,9 +65,7 @@ struct ServerWorldsManagerView: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                if !isRemoteServer {
-                    importWorlds(urls)
-                }
+                importWorlds(urls)
             }
         }
     }
@@ -110,7 +108,22 @@ struct ServerWorldsManagerView: View {
     }
 
     private func importWorlds(_ urls: [URL]) {
-        if isRemoteServer { return }
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                for url in urls {
+                    guard url.startAccessingSecurityScopedResource() else { continue }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    do {
+                        try await SSHNodeService.uploadRemoteWorldDirectory(node: node, serverName: server.name, localURL: url)
+                    } catch {
+                        await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                    }
+                }
+                await MainActor.run { loadFolders() }
+            }
+            return
+        }
         let dir = worldDir()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for url in urls {

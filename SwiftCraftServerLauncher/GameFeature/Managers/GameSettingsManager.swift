@@ -41,7 +41,13 @@ class GameSettingsManager: ObservableObject {
 
     @AppStorage("defaultAPISource")
     var defaultAPISource: DataSource = .modrinth {
-        didSet { objectWillChange.send() }
+        didSet {
+            if defaultAPISource != .modrinth {
+                defaultAPISource = .modrinth
+                return
+            }
+            objectWillChange.send()
+        }
     }
 
     /// 是否在游戏版本选择中包含快照版（全局设置）

@@ -17,14 +17,7 @@ public struct GameSettingsView: View {
     public var body: some View {
         Form {
             LabeledContent("settings.default_api_source.label".localized()) {
-                Picker("", selection: $gameSettings.defaultAPISource) {
-                    ForEach(DataSource.allCases, id: \.self) { source in
-                        Text(source.localizedName).tag(source)
-                    }
-                }
-
-                .labelsHidden()
-                .fixedSize()
+                Text(DataSource.modrinth.localizedName)
             }.labeledContentStyle(.custom(alignment: .firstTextBaseline)).padding(.bottom, 10)
 
             LabeledContent("settings.game_versions.label".localized()) {

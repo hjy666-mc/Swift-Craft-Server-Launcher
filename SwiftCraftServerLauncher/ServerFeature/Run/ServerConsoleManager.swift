@@ -38,6 +38,15 @@ final class ServerConsoleManager: ObservableObject {
         inputPipes.removeValue(forKey: serverId)
     }
 
+    func clear(serverId: String) {
+        logs[serverId] = []
+    }
+
+    func appendSystemMessage(serverId: String, message: String) {
+        let line = "[SCSL] \(message)\n"
+        append(serverId: serverId, text: line)
+    }
+
     func send(serverId: String, command: String) {
         guard let pipe = inputPipes[serverId] else { return }
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)

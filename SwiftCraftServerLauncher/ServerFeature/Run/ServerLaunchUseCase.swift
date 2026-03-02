@@ -3,6 +3,10 @@ import Foundation
 final class ServerLaunchUseCase: ObservableObject {
     @MainActor
     func launchServer(server: ServerInstance) async {
+        ServerConsoleManager.shared.appendSystemMessage(
+            serverId: server.id,
+            message: "server.console.message.server_starting".localized()
+        )
         if server.javaPath == "java" {
             if let remoteNode = await resolveRemoteNodeForLaunch(server: server) {
                 await launchRemoteServer(server: server, node: remoteNode)
@@ -84,9 +88,17 @@ final class ServerLaunchUseCase: ObservableObject {
             ServerProcessManager.shared.storeProcess(serverId: server.id, process: process)
             ServerConsoleManager.shared.attach(serverId: server.id, input: inputPipe, output: outputPipe, error: errorPipe)
             ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: true)
+            ServerConsoleManager.shared.appendSystemMessage(
+                serverId: server.id,
+                message: "server.console.message.server_started".localized()
+            )
         } catch {
             Logger.shared.error("服务器启动失败: \(error.localizedDescription)")
             GlobalErrorHandler.shared.handle(error)
+            ServerConsoleManager.shared.appendSystemMessage(
+                serverId: server.id,
+                message: "server.console.message.server_start_failed".localized()
+            )
         }
     }
 
@@ -99,6 +111,10 @@ final class ServerLaunchUseCase: ObservableObject {
         _ = ServerProcessManager.shared.stopProcess(for: server.id)
         ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
         ServerConsoleManager.shared.detach(serverId: server.id)
+        ServerConsoleManager.shared.appendSystemMessage(
+            serverId: server.id,
+            message: "server.console.message.server_stopped".localized()
+        )
     }
 
     @MainActor
@@ -113,10 +129,18 @@ final class ServerLaunchUseCase: ObservableObject {
             try await SSHNodeService.updateRemoteServerProperties(node: node, server: server)
             try await SSHNodeService.startRemoteServer(node: node, server: server, launchCommand: launchCommand)
             ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: true)
+            ServerConsoleManager.shared.appendSystemMessage(
+                serverId: server.id,
+                message: "server.console.message.server_started".localized()
+            )
         } catch {
             Logger.shared.error("远程服务器启动失败: \(error.localizedDescription)")
             GlobalErrorHandler.shared.handle(error)
             ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+            ServerConsoleManager.shared.appendSystemMessage(
+                serverId: server.id,
+                message: "server.console.message.server_start_failed".localized()
+            )
         }
     }
 
@@ -133,6 +157,10 @@ final class ServerLaunchUseCase: ObservableObject {
             GlobalErrorHandler.shared.handle(error)
         }
         ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+        ServerConsoleManager.shared.appendSystemMessage(
+            serverId: server.id,
+            message: "server.console.message.server_stopped".localized()
+        )
     }
 
     private func buildLaunchCommand(
@@ -260,10 +288,8 @@ final class ServerLaunchUseCase: ObservableObject {
             return nil
         }
         let remoteNodes = nodes.filter { !$0.isLocal }
-        for node in remoteNodes {
-            if (try? await SSHNodeService.remoteServerDirectoryExists(node: node, serverName: server.name)) == true {
-                return node
-            }
+        for node in remoteNodes where (try? await SSHNodeService.remoteServerDirectoryExists(node: node, serverName: server.name)) == true {
+            return node
         }
         return nil
     }

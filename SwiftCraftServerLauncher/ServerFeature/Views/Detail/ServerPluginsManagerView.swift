@@ -5,7 +5,9 @@ struct ServerPluginsManagerView: View {
     let server: ServerInstance
     @Environment(\.dismiss)
     private var dismiss
+    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var files: [URL] = []
+    @State private var remoteFiles: [String] = []
     @State private var showImporter = false
 
     var body: some View {
@@ -19,16 +21,26 @@ struct ServerPluginsManagerView: View {
                 }
             },
             body: {
-                if files.isEmpty {
+                if isRemoteServer ? remoteFiles.isEmpty : files.isEmpty {
                     Text("common.empty".localized())
                         .foregroundColor(.secondary)
                 } else {
                     List {
-                        ForEach(files, id: \.self) { url in
-                            HStack {
-                                Text(url.lastPathComponent)
-                                Spacer()
-                                Button("common.remove".localized()) { removeFile(url) }
+                        if isRemoteServer {
+                            ForEach(remoteFiles, id: \.self) { fileName in
+                                HStack {
+                                    Text(fileName)
+                                    Spacer()
+                                    Button("common.remove".localized()) { removeRemoteFile(fileName) }
+                                }
+                            }
+                        } else {
+                            ForEach(files, id: \.self) { url in
+                                HStack {
+                                    Text(url.lastPathComponent)
+                                    Spacer()
+                                    Button("common.remove".localized()) { removeFile(url) }
+                                }
                             }
                         }
                     }
@@ -47,7 +59,7 @@ struct ServerPluginsManagerView: View {
         .onAppear { loadFiles() }
         .fileImporter(
             isPresented: $showImporter,
-            allowedContentTypes: [.zip, UTType(filenameExtension: "jar") ?? .data],
+            allowedContentTypes: [UTType(filenameExtension: "jar") ?? .data],
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
@@ -56,62 +68,76 @@ struct ServerPluginsManagerView: View {
         }
     }
 
+    private var isRemoteServer: Bool {
+        server.nodeId != ServerNode.local.id || server.javaPath == "java"
+    }
+
     private func pluginsDir() -> URL {
         AppPaths.serverPluginsDirectory(serverName: server.name)
     }
 
     private func loadFiles() {
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    let list = try await SSHNodeService.listRemotePlugins(node: node, serverName: server.name)
+                    await MainActor.run { remoteFiles = list }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
         let dir = pluginsDir()
         let all = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         files = all.filter { $0.pathExtension.lowercased() == "jar" }
     }
 
     private func addFiles(_ urls: [URL]) {
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                for url in urls where url.pathExtension.lowercased() == "jar" {
+                    guard url.startAccessingSecurityScopedResource() else { continue }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    do {
+                        try await SSHNodeService.uploadRemotePlugin(node: node, serverName: server.name, localURL: url)
+                    } catch {
+                        await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                    }
+                }
+                await MainActor.run { loadFiles() }
+            }
+            return
+        }
         let dir = pluginsDir()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
-            if url.pathExtension.lowercased() == "zip" {
-                unzip(url: url, to: dir)
-            } else {
-                let target = dir.appendingPathComponent(url.lastPathComponent)
-                try? FileManager.default.removeItem(at: target)
-                try? FileManager.default.copyItem(at: url, to: target)
-            }
+            guard url.pathExtension.lowercased() == "jar" else { continue }
+            let target = dir.appendingPathComponent(url.lastPathComponent)
+            try? FileManager.default.removeItem(at: target)
+            try? FileManager.default.copyItem(at: url, to: target)
         }
         loadFiles()
-    }
-
-    private func unzip(url: URL, to destination: URL) {
-        let tempDir = destination.appendingPathComponent(".import_tmp_\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-        process.arguments = ["-o", url.path, "-d", tempDir.path]
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            GlobalErrorHandler.shared.handle(error)
-            try? FileManager.default.removeItem(at: tempDir)
-            return
-        }
-
-        let enumerator = FileManager.default.enumerator(at: tempDir, includingPropertiesForKeys: nil)
-        while let fileURL = enumerator?.nextObject() as? URL {
-            if fileURL.pathExtension.lowercased() == "jar" {
-                let target = destination.appendingPathComponent(fileURL.lastPathComponent)
-                try? FileManager.default.removeItem(at: target)
-                try? FileManager.default.moveItem(at: fileURL, to: target)
-            }
-        }
-        try? FileManager.default.removeItem(at: tempDir)
     }
 
     private func removeFile(_ url: URL) {
         try? FileManager.default.removeItem(at: url)
         loadFiles()
+    }
+
+    private func removeRemoteFile(_ fileName: String) {
+        guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+        Task {
+            do {
+                try await SSHNodeService.removeRemotePlugin(node: node, serverName: server.name, fileName: fileName)
+                await MainActor.run { loadFiles() }
+            } catch {
+                await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+            }
+        }
     }
 }

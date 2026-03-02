@@ -35,8 +35,8 @@ final class ResourceImageCacheManager: @unchecked Sendable {
         config.requestCachePolicy = .returnCacheDataElseLoad
         config.urlCache = URLCache(
             memoryCapacity: 2 * 1024 * 1024,   // 2MB 内存缓存
-            diskCapacity: 20 * 1024 * 1024,    // 20MB 磁盘缓存
-            diskPath: "ResourceImageCache"
+            diskCapacity: 0,                   // 关闭磁盘缓存，避免 URLCache SQLite 异常日志
+            diskPath: nil
         )
         config.timeoutIntervalForRequest = 30
         self.urlSession = URLSession(configuration: config)

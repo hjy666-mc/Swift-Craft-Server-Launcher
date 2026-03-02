@@ -83,6 +83,9 @@ struct CategoryContentView: View {
                 selectedLoaders = []
             }
         }
+        if type == "resource" && project == ProjectType.mod {
+            selectedFeatures = [AppConstants.EnvironmentTypes.server]
+        }
     }
 
     // MARK: - Error Handling
@@ -153,7 +156,7 @@ struct CategoryContentView: View {
                 if type == "resource" {
                     loaderSection
                 }
-                environmentSection
+                EmptyView()
             case ProjectType.resourcepack:
                 resourcePackSections
             case ProjectType.shader:

@@ -58,16 +58,6 @@ public struct GeneralSettingsView: View {
                     .fixedSize()
             }.labeledContentStyle(.custom)
 
-            LabeledContent("settings.interface_style.label".localized()) {
-                Picker("", selection: $generalSettings.interfaceLayoutStyle) {
-                    ForEach(InterfaceLayoutStyle.allCases, id: \.self) { style in
-                        Text(style.localizedName).tag(style)
-                    }
-                }
-                .labelsHidden()
-                .fixedSize()
-            }.labeledContentStyle(.custom).padding(.bottom, 10)
-
             LabeledContent("settings.launcher_working_directory".localized()) {
                 VStack(alignment: .leading, spacing: 8) {
                     if !workingPathOptions.isEmpty {

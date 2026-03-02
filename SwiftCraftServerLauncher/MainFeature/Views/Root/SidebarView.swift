@@ -6,7 +6,8 @@ public struct SidebarView: View {
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var searchText: String = ""
-    @AppStorage("activeServerNodeId") private var activeServerNodeId: String = ServerNode.local.id
+    @AppStorage("activeServerNodeId")
+    private var activeServerNodeId: String = ServerNode.local.id
     @StateObject private var serverActionManager = ServerActionManager.shared
 
     public init() {}

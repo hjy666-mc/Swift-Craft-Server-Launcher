@@ -92,10 +92,7 @@ struct ServerPlayersView: View {
 
     private func loadAll() {
         if isRemoteServer {
-            whitelist = []
-            ops = []
-            bannedPlayers = []
-            bannedIps = []
+            loadRemoteLists()
             return
         }
         let dir = AppPaths.serverDirectory(serverName: server.name)
@@ -110,7 +107,10 @@ struct ServerPlayersView: View {
     }
 
     private func saveAll() {
-        if isRemoteServer { return }
+        if isRemoteServer {
+            saveRemoteLists()
+            return
+        }
         if serverStatusManager.isServerRunning(serverId: server.id) { return }
         let dir = AppPaths.serverDirectory(serverName: server.name)
         do {
@@ -210,5 +210,83 @@ struct ServerPlayersView: View {
                 }
             }
         }
+    }
+
+    private func loadRemoteLists() {
+        guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+        Task {
+            do {
+                async let whitelistText = SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: "whitelist.json")
+                async let opsText = SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: "ops.json")
+                async let bannedPlayersText = SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: "banned-players.json")
+                async let bannedIpsText = SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: "banned-ips.json")
+
+                let loadedWhitelist = decodeRemotePlayerList(try await whitelistText)
+                let loadedOps = decodeRemotePlayerList(try await opsText)
+                let loadedBannedPlayers = decodeRemotePlayerList(try await bannedPlayersText)
+                let loadedBannedIps = decodeRemotePlayerList(try await bannedIpsText)
+
+                await MainActor.run {
+                    whitelist = loadedWhitelist
+                    ops = loadedOps
+                    bannedPlayers = loadedBannedPlayers
+                    bannedIps = loadedBannedIps
+                }
+            } catch {
+                await MainActor.run {
+                    whitelist = []
+                    ops = []
+                    bannedPlayers = []
+                    bannedIps = []
+                }
+            }
+        }
+    }
+
+    private func saveRemoteLists() {
+        guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+        if serverStatusManager.isServerRunning(serverId: server.id) { return }
+        Task {
+            do {
+                try await SSHNodeService.writeRemoteConfigFile(
+                    node: node,
+                    serverName: server.name,
+                    relativePath: "whitelist.json",
+                    content: encodeRemotePlayerList(whitelist)
+                )
+                try await SSHNodeService.writeRemoteConfigFile(
+                    node: node,
+                    serverName: server.name,
+                    relativePath: "ops.json",
+                    content: encodeRemotePlayerList(ops)
+                )
+                try await SSHNodeService.writeRemoteConfigFile(
+                    node: node,
+                    serverName: server.name,
+                    relativePath: "banned-players.json",
+                    content: encodeRemotePlayerList(bannedPlayers)
+                )
+                try await SSHNodeService.writeRemoteConfigFile(
+                    node: node,
+                    serverName: server.name,
+                    relativePath: "banned-ips.json",
+                    content: encodeRemotePlayerList(bannedIps)
+                )
+            } catch {
+                await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+            }
+        }
+    }
+
+    private func decodeRemotePlayerList(_ text: String) -> [ServerPlayerListService.PlayerEntry] {
+        guard let data = text.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([ServerPlayerListService.PlayerEntry].self, from: data)) ?? []
+    }
+
+    private func encodeRemotePlayerList(_ entries: [ServerPlayerListService.PlayerEntry]) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(entries) else { return "[]\n" }
+        return String(decoding: data, as: UTF8.self) + "\n"
     }
 }

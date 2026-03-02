@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 
 private struct ServerConfigFileItem: Identifiable, Hashable {
-    let url: URL
+    let url: URL?
+    let relativePath: String
 
-    var id: String { url.path }
-    var fileName: String { url.lastPathComponent }
-    var relativePath: String { url.path }
+    var id: String { relativePath }
+    var fileName: String { URL(fileURLWithPath: relativePath).lastPathComponent }
 }
 
 struct ServerPropertiesEditorView: View {
@@ -72,8 +72,11 @@ struct ServerPropertiesEditorView: View {
         }
         .sheet(isPresented: $showRawPropertiesEditor) {
             ServerExtraConfigEditorView(
-                fileURL: AppPaths.serverDirectory(serverName: server.name).appendingPathComponent("server.properties"),
-                title: "server.properties.file_name".localized()
+                server: server,
+                item: ServerConfigFileItem(
+                    url: AppPaths.serverDirectory(serverName: server.name).appendingPathComponent("server.properties"),
+                    relativePath: "server.properties"
+                )
             )
             .presentationDetents([.fraction(0.95), .large])
         }
@@ -228,6 +231,7 @@ private struct ServerExtraConfigFilesView: View {
     let server: ServerInstance
     @Environment(\.dismiss)
     private var dismiss
+    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var files: [ServerConfigFileItem] = []
     @State private var searchText = ""
     @State private var selectedFile: ServerConfigFileItem?
@@ -255,7 +259,7 @@ private struct ServerExtraConfigFilesView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.fileName)
-                            Text(relativePath(for: item.url))
+                            Text(item.relativePath)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -271,7 +275,8 @@ private struct ServerExtraConfigFilesView: View {
         .padding()
         .onAppear { loadFiles() }
         .sheet(item: $selectedFile) { item in
-            ServerExtraConfigEditorView(fileURL: item.url, title: item.fileName)
+            ServerExtraConfigEditorView(server: server, item: item)
+                .environmentObject(serverNodeRepository)
                 .presentationDetents([.fraction(0.95), .large])
         }
     }
@@ -281,11 +286,26 @@ private struct ServerExtraConfigFilesView: View {
         guard !query.isEmpty else { return files }
         return files.filter {
             $0.fileName.lowercased().contains(query) ||
-            relativePath(for: $0.url).lowercased().contains(query)
+            $0.relativePath.lowercased().contains(query)
         }
     }
 
     private func loadFiles() {
+        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    let paths = try await SSHNodeService.listRemoteConfigFiles(node: node, serverName: server.name)
+                    await MainActor.run {
+                        files = paths.map { ServerConfigFileItem(url: nil, relativePath: $0) }
+                        Logger.shared.debug("配置文件面板加载(远程): \(server.name) -> \(files.count) 个")
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
         let root = AppPaths.serverDirectory(serverName: server.name)
         var result: [ServerConfigFileItem] = []
         let enumerator = FileManager.default.enumerator(
@@ -309,9 +329,9 @@ private struct ServerExtraConfigFilesView: View {
             if url.lastPathComponent.lowercased() == "eula.txt" {
                 continue
             }
-            result.append(ServerConfigFileItem(url: url))
+            result.append(ServerConfigFileItem(url: url, relativePath: relativePath(for: url)))
         }
-        files = result.sorted { $0.url.path < $1.url.path }
+        files = result.sorted { $0.relativePath < $1.relativePath }
     }
 
     private func relativePath(for url: URL) -> String {
@@ -324,10 +344,11 @@ private struct ServerExtraConfigFilesView: View {
 }
 
 private struct ServerExtraConfigEditorView: View {
-    let fileURL: URL
-    let title: String
+    let server: ServerInstance
+    let item: ServerConfigFileItem
     @Environment(\.dismiss)
     private var dismiss
+    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var content = ""
     @State private var isLoaded = false
     @State private var isDirty = false
@@ -335,7 +356,7 @@ private struct ServerExtraConfigEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(title)
+                Text(item.fileName)
                     .font(.headline)
                 Spacer()
                 Button("common.reload".localized()) { load() }
@@ -363,6 +384,27 @@ private struct ServerExtraConfigEditorView: View {
     }
 
     private func load() {
+        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    let text = try await SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: item.relativePath)
+                    await MainActor.run {
+                        content = text
+                        isLoaded = true
+                        isDirty = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        GlobalErrorHandler.shared.handle(error)
+                        isLoaded = true
+                        isDirty = false
+                    }
+                }
+            }
+            return
+        }
+        guard let fileURL = item.url else { return }
         do {
             content = try String(contentsOf: fileURL, encoding: .utf8)
             isLoaded = true
@@ -376,6 +418,19 @@ private struct ServerExtraConfigEditorView: View {
     }
 
     private func save() {
+        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.writeRemoteConfigFile(node: node, serverName: server.name, relativePath: item.relativePath, content: content)
+                    await MainActor.run { isDirty = false }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        guard let fileURL = item.url else { return }
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
             isDirty = false

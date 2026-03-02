@@ -76,10 +76,15 @@ enum SSHNodeService {
         }
         let command = """
         cd '\(escapeSingleQuotes(serverDir))' && \
-        (test -f eula.txt || printf "eula=true\\n" > eula.txt) && \
-        \(startCommand) && \
-        sleep 1 && \
-        if kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; tail -n 80 scsl-server.log; fi
+        if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then \
+          echo __SCSL_ALREADY_RUNNING__; \
+        else \
+          if test -f .scsl.pid && ! kill -0 $(cat .scsl.pid) 2>/dev/null; then rm -f .scsl.pid; fi; \
+          (test -f eula.txt || printf "eula=true\\n" > eula.txt) && \
+          \(startCommand) && \
+          sleep 1 && \
+          if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; tail -n 120 scsl-server.log 2>/dev/null || true; fi; \
+        fi
         """
         let output = try await runExpectSSH(
             host: node.host,
@@ -88,6 +93,13 @@ enum SSHNodeService {
             password: password,
             remoteCommand: command
         )
+        if output.contains("__SCSL_ALREADY_RUNNING__") {
+            throw GlobalError.validation(
+                chineseMessage: "服务器已在运行，请先停止当前实例或直接查看控制台",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
         guard output.contains("__SCSL_STARTED__") else {
             throw GlobalError.validation(
                 chineseMessage: "远程启动失败，请检查 SSH 输出: \(output.trimmingCharacters(in: .whitespacesAndNewlines))",
@@ -142,7 +154,21 @@ enum SSHNodeService {
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"
         let command = """
-        cd '\(escapeSingleQuotes(serverDir))' && if test -f scsl-server.log; then tail -n \(maxLines) scsl-server.log; else echo ""; fi
+        if cd '\(escapeSingleQuotes(serverDir))' 2>/dev/null; then \
+          if test -f scsl-server.log && test -s scsl-server.log; then \
+            tail -n \(maxLines) scsl-server.log; \
+          elif test -f logs/latest.log; then \
+            tail -n \(maxLines) logs/latest.log; \
+          elif test -f latest.log; then \
+            tail -n \(maxLines) latest.log; \
+          elif test -f server.log; then \
+            tail -n \(maxLines) server.log; \
+          else \
+            echo ""; \
+          fi; \
+        else \
+          echo "__SCSL_LOG_DIR_MISSING__"; \
+        fi
         """
         return try await runExpectSSH(
             host: node.host,
@@ -257,10 +283,11 @@ enum SSHNodeService {
     }
 
     static func readRemoteServerProperties(node: ServerNode, serverName: String) async throws -> [String: String] {
-        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        let serverDir = "\(root)/servers/\(serverName)"
-        let command = "cd '\(escapeSingleQuotes(serverDir))' && if test -f server.properties; then cat server.properties; fi"
-        let content = try await execute(node: node, remoteCommand: command)
+        let content = try await readRemoteConfigFile(
+            node: node,
+            serverName: serverName,
+            relativePath: "server.properties"
+        )
         return parseProperties(content)
     }
 
@@ -293,12 +320,191 @@ enum SSHNodeService {
         _ = try await execute(node: node, remoteCommand: command)
     }
 
+    static func uploadRemoteWorldDirectory(node: ServerNode, serverName: String, localURL: URL) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let worldName = localURL.lastPathComponent
+        let target = "\(serverDir)/\(worldName)"
+        _ = try await execute(
+            node: node,
+            remoteCommand: "mkdir -p '\(escapeSingleQuotes(serverDir))' && rm -rf '\(escapeSingleQuotes(target))'"
+        )
+        try await scpToRemote(node: node, localPath: localURL.path, remotePath: target, recursive: true)
+    }
+
     static func sendRemoteDirectCommand(node: ServerNode, serverName: String, command: String) async throws {
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"
         let cmd = command.replacingOccurrences(of: "'", with: "'\"'\"'")
         let remote = "cd '\(escapeSingleQuotes(serverDir))' && test -p .scsl.stdin && printf '%s\\n' '\(cmd)' >> .scsl.stdin"
         _ = try await execute(node: node, remoteCommand: remote)
+    }
+
+    static func executeRemoteRCON(
+        node: ServerNode,
+        serverName: String,
+        port: Int,
+        password: String,
+        command: String
+    ) async throws -> String {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let encodedPassword = Data(password.utf8).base64EncodedString()
+        let encodedCommand = Data(command.utf8).base64EncodedString()
+        let script = """
+        cd '\(escapeSingleQuotes(serverDir))' && python3 - <<'PY'
+        import base64, socket, struct, sys
+        HOST = "127.0.0.1"
+        PORT = \(port)
+        PASSWORD = base64.b64decode("\(encodedPassword)").decode("utf-8")
+        COMMAND = base64.b64decode("\(encodedCommand)").decode("utf-8")
+
+        def send_packet(sock, req_id, ptype, body):
+            b = body.encode("utf-8")
+            pkt = struct.pack("<iii", len(b)+10, req_id, ptype) + b + b"\\x00\\x00"
+            sock.sendall(pkt)
+
+        def recv_packet(sock):
+            head = sock.recv(4)
+            if len(head) < 4:
+                raise RuntimeError("eof")
+            size = struct.unpack("<i", head)[0]
+            data = b""
+            while len(data) < size:
+                chunk = sock.recv(size - len(data))
+                if not chunk:
+                    raise RuntimeError("eof")
+                data += chunk
+            req_id, ptype = struct.unpack("<ii", data[:8])
+            body = data[8:-2].decode("utf-8", errors="replace")
+            return req_id, ptype, body
+
+        try:
+            s = socket.create_connection((HOST, PORT), timeout=6.0)
+            send_packet(s, 101, 3, PASSWORD)
+            rid, _, _ = recv_packet(s)
+            if rid != 101:
+                print("__SCSL_RCON_AUTH_FAIL__")
+                sys.exit(0)
+            send_packet(s, 102, 2, COMMAND)
+            rid, _, body = recv_packet(s)
+            if rid != 102:
+                print("__SCSL_RCON_EXEC_FAIL__")
+            else:
+                print("__SCSL_RCON_OK__")
+                print(body)
+        except Exception as e:
+            print("__SCSL_RCON_ERR__:" + str(e))
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+        PY
+        """
+        let output = try await execute(node: node, remoteCommand: script)
+        if output.contains("__SCSL_RCON_AUTH_FAIL__") {
+            throw GlobalError.validation(
+                chineseMessage: "RCON 认证失败，请检查密码",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+        if output.contains("__SCSL_RCON_EXEC_FAIL__") {
+            throw GlobalError.validation(
+                chineseMessage: "RCON 命令执行失败",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+        if let range = output.range(of: "__SCSL_RCON_ERR__:") {
+            let detail = String(output[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GlobalError.validation(
+                chineseMessage: "RCON 连接失败: \(detail)",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+        if let okRange = output.range(of: "__SCSL_RCON_OK__") {
+            return String(output[okRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func listRemoteMods(node: ServerNode, serverName: String) async throws -> [String] {
+        try await listRemoteJarFiles(node: node, serverName: serverName, subDirectory: "mods")
+    }
+
+    static func listRemotePlugins(node: ServerNode, serverName: String) async throws -> [String] {
+        try await listRemoteJarFiles(node: node, serverName: serverName, subDirectory: "plugins")
+    }
+
+    static func uploadRemoteMod(node: ServerNode, serverName: String, localURL: URL) async throws {
+        try await uploadRemoteJar(node: node, serverName: serverName, subDirectory: "mods", localURL: localURL)
+    }
+
+    static func uploadRemotePlugin(node: ServerNode, serverName: String, localURL: URL) async throws {
+        try await uploadRemoteJar(node: node, serverName: serverName, subDirectory: "plugins", localURL: localURL)
+    }
+
+    static func removeRemoteMod(node: ServerNode, serverName: String, fileName: String) async throws {
+        try await removeRemoteJar(node: node, serverName: serverName, subDirectory: "mods", fileName: fileName)
+    }
+
+    static func removeRemotePlugin(node: ServerNode, serverName: String, fileName: String) async throws {
+        try await removeRemoteJar(node: node, serverName: serverName, subDirectory: "plugins", fileName: fileName)
+    }
+
+    static func listRemoteConfigFiles(node: ServerNode, serverName: String) async throws -> [String] {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let marker = "__SCSL_FILE__"
+        let command = """
+        cd '\(escapeSingleQuotes(serverDir))' && find . -type f -size -1000k \\( -iname '*.properties' -o -iname '*.yml' -o -iname '*.yaml' -o -iname '*.toml' -o -iname '*.json' -o -iname '*.conf' -o -iname '*.cfg' -o -iname '*.ini' \\) ! -iname 'eula.txt' -print | sed 's#^\\./##' | while IFS= read -r f; do printf '\(marker)%s\\n' \"$f\"; done
+        """
+        let output = try await execute(node: node, remoteCommand: command)
+        var files = output
+            .components(separatedBy: marker)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { isValidRemoteConfigPath($0) }
+            .filter { $0.lowercased() != "server.properties" }
+            .sorted()
+        if !files.contains("server.properties") {
+            let hasServerProperties = try await execute(
+                node: node,
+                remoteCommand: "cd '\(escapeSingleQuotes(serverDir))' && if test -f server.properties; then echo yes; else echo no; fi"
+            )
+            _ = hasServerProperties
+        }
+        files = Array(Set(files)).sorted()
+        Logger.shared.debug("远程配置文件扫描: \(serverName) -> \(files.count) 个, 示例: \(files.prefix(8).joined(separator: ", "))")
+        return files
+    }
+
+    static func readRemoteConfigFile(node: ServerNode, serverName: String, relativePath: String) async throws -> String {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = "cd '\(escapeSingleQuotes(serverDir))' && (base64 -w 0 '\(escapeSingleQuotes(relativePath))' 2>/dev/null || base64 '\(escapeSingleQuotes(relativePath))')"
+        let output = try await execute(node: node, remoteCommand: command)
+        let compact = output.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
+        if let data = Data(base64Encoded: compact),
+           let text = String(data: data, encoding: .utf8) {
+            Logger.shared.debug("远程读取配置文件成功: \(serverName)/\(relativePath), 长度: \(text.count)")
+            return text
+        }
+        Logger.shared.warning("远程读取配置文件 base64 解码失败，返回原文: \(serverName)/\(relativePath), 原始长度: \(output.count)")
+        return output
+    }
+
+    static func writeRemoteConfigFile(node: ServerNode, serverName: String, relativePath: String, content: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let base64 = Data(content.utf8).base64EncodedString()
+        let command = """
+        cd '\(escapeSingleQuotes(serverDir))' && printf '%s' '\(base64)' | base64 -d > '\(escapeSingleQuotes(relativePath))'
+        """
+        _ = try await execute(node: node, remoteCommand: command)
     }
 
     private static func parseProperties(_ content: String) -> [String: String] {
@@ -314,6 +520,51 @@ enum SSHNodeService {
             }
         }
         return result
+    }
+
+    private static func isValidRemoteConfigPath(_ value: String) -> Bool {
+        if value.contains("\u{0}") { return false }
+        if value.contains("spawn ssh") { return false }
+        if value.contains("StrictHostKeyChecking") { return false }
+        if value.hasPrefix("-o ") { return false }
+        if value.contains("password:") { return false }
+        if value.contains("System is booting up") { return false }
+        if value.contains("Warning: Permanently added") { return false }
+        if value.contains("__SCSL_") { return false }
+        if value.contains("\n") || value.contains("\r") { return false }
+        return true
+    }
+
+    private static func listRemoteJarFiles(node: ServerNode, serverName: String, subDirectory: String) async throws -> [String] {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dir = "\(root)/servers/\(serverName)/\(subDirectory)"
+        let output = try await execute(
+            node: node,
+            remoteCommand: "mkdir -p '\(escapeSingleQuotes(dir))' && cd '\(escapeSingleQuotes(dir))' && ls -1 *.jar 2>/dev/null || true"
+        )
+        return output
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
+    }
+
+    private static func uploadRemoteJar(node: ServerNode, serverName: String, subDirectory: String, localURL: URL) async throws {
+        guard localURL.pathExtension.lowercased() == "jar" else { return }
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dir = "\(root)/servers/\(serverName)/\(subDirectory)"
+        _ = try await execute(node: node, remoteCommand: "mkdir -p '\(escapeSingleQuotes(dir))'")
+        let remotePath = "\(dir)/\(localURL.lastPathComponent)"
+        try await scpToRemote(node: node, localPath: localURL.path, remotePath: remotePath, recursive: false)
+    }
+
+    private static func removeRemoteJar(node: ServerNode, serverName: String, subDirectory: String, fileName: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dir = "\(root)/servers/\(serverName)/\(subDirectory)"
+        _ = try await execute(
+            node: node,
+            remoteCommand: "cd '\(escapeSingleQuotes(dir))' && rm -f '\(escapeSingleQuotes(fileName))'"
+        )
     }
 
     private static func runExpectSSH(
@@ -332,15 +583,24 @@ enum SSHNodeService {
             process.standardError = errorPipe
             process.executableURL = URL(fileURLWithPath: "/usr/bin/expect")
 
+            let wrappedCommand = wrapRemoteCommand(remoteCommand)
             let script = """
+            log_user 0
             set timeout \(timeoutSeconds)
-            spawn ssh -p \(port) -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \(username)@\(host) "\(escapeDoubleQuotes(remoteCommand))"
+            match_max 2000000
+            set output ""
+            spawn ssh -tt -p \(port) -o LogLevel=ERROR -o ConnectTimeout=10 -o ConnectionAttempts=1 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \(username)@\(host) "\(escapeDoubleQuotes(wrappedCommand))"
             expect {
                 -re {.*yes/no.*} { send "yes\\r"; exp_continue }
                 -re {.*[Pp]assword:.*} { send "\(escapeExpectString(password))\\r"; exp_continue }
-                timeout { exit 124 }
-                eof
+                -re {.*Permission denied.*} { append output $expect_out(0,string); puts $output; exit 255 }
+                -re {.+} { append output $expect_out(0,string); exp_continue }
+                timeout { puts $output; exit 124 }
+                eof {
+                    catch { append output $expect_out(buffer) }
+                }
             }
+            puts $output
             catch wait result
             set code [lindex $result 3]
             exit $code
@@ -352,25 +612,91 @@ enum SSHNodeService {
             let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let out = String(data: outData, encoding: .utf8) ?? ""
             let err = String(data: errData, encoding: .utf8) ?? ""
-            let merged = (out + (err.isEmpty ? "" : "\n" + err)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let outOnly = sanitizeSSHClientNoise(out).trimmingCharacters(in: .whitespacesAndNewlines)
+            let merged = sanitizeSSHClientNoise(out + (err.isEmpty ? "" : "\n" + err))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowerAll = (outOnly + "\n" + merged).lowercased()
+            if lowerAll.contains("pam_nologin") || lowerAll.contains("system is booting up") {
+                continuation.resume(throwing: GlobalError.validation(
+                    chineseMessage: "远程系统正在启动中，SSH 暂不可用，请稍后重试",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                ))
+                return
+            }
             if process.terminationStatus == 0 {
-                    continuation.resume(returning: merged)
+                    continuation.resume(returning: outOnly)
             } else {
-                    let lower = merged.lowercased()
-                    if lower.contains("pam_nologin") || lower.contains("system is booting up") {
-                        continuation.resume(throwing: GlobalError.validation(
-                            chineseMessage: "远程系统正在启动中，SSH 暂不可用，请稍后重试（可先使用 RCON 指令）",
-                            i18nKey: "error.validation.server_not_selected",
-                            level: .notification
-                        ))
-                        return
-                    }
                     continuation.resume(throwing: GlobalError.validation(
-                        chineseMessage: "SSH 执行失败: \(merged)",
+                        chineseMessage: "SSH 执行失败(exit=\(process.terminationStatus)): \((merged.isEmpty ? "无输出" : merged))",
                         i18nKey: "error.validation.server_not_selected",
                         level: .notification
                     ))
             }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    private static func scpToRemote(
+        node: ServerNode,
+        localPath: String,
+        remotePath: String,
+        recursive: Bool
+    ) async throws {
+        let password = try loadPassword(for: node)
+        try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/expect")
+
+            let recursiveFlag = recursive ? "-r " : ""
+            let script = """
+            log_user 0
+            set timeout 1200
+            match_max 2000000
+            set output ""
+            spawn scp \(recursiveFlag)-P \(node.port) -o LogLevel=ERROR -o ConnectTimeout=10 -o ConnectionAttempts=1 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "\(escapeDoubleQuotes(localPath))" \(node.username)@\(node.host):"\(escapeDoubleQuotes(remotePath))"
+            expect {
+                -re {.*yes/no.*} { send "yes\\r"; exp_continue }
+                -re {.*[Pp]assword:.*} { send "\(escapeExpectString(password))\\r"; exp_continue }
+                -re {.*Permission denied.*} { append output $expect_out(0,string); puts $output; exit 255 }
+                -re {.+} { append output $expect_out(0,string); exp_continue }
+                timeout { puts $output; exit 124 }
+                eof {
+                    catch { append output $expect_out(buffer) }
+                }
+            }
+            puts $output
+            catch wait result
+            set code [lindex $result 3]
+            exit $code
+            """
+            process.arguments = ["-c", script]
+
+            process.terminationHandler = { _ in
+                let outData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let out = String(data: outData, encoding: .utf8) ?? ""
+                let err = String(data: errData, encoding: .utf8) ?? ""
+                let merged = (out + (err.isEmpty ? "" : "\n" + err)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if process.terminationStatus == 0 {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: GlobalError.validation(
+                        chineseMessage: "SCP 上传失败: \(merged)",
+                        i18nKey: "error.validation.server_not_selected",
+                        level: .notification
+                    ))
+                }
             }
 
             do {
@@ -416,5 +742,23 @@ enum SSHNodeService {
 
     private static func escapeSingleQuotes(_ value: String) -> String {
         value.replacingOccurrences(of: "'", with: "'\"'\"'")
+    }
+
+    private static func wrapRemoteCommand(_ command: String) -> String {
+        let base64 = Data(command.utf8).base64EncodedString()
+        return "printf %s '\(base64)' | base64 -d | /bin/sh"
+    }
+
+    private static func sanitizeSSHClientNoise(_ text: String) -> String {
+        text
+            .components(separatedBy: .newlines)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { return true }
+                if trimmed.hasPrefix("Connection to ") && trimmed.hasSuffix(" closed.") { return false }
+                if trimmed.hasPrefix("Connection to ") && trimmed.hasSuffix(" closed") { return false }
+                return true
+            }
+            .joined(separator: "\n")
     }
 }

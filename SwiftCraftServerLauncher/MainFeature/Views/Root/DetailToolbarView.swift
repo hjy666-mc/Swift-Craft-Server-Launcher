@@ -19,12 +19,7 @@ public struct DetailToolbarView: ToolbarContent {
 
     private func openCurrentResourceInBrowser() {
         guard let slug = detailState.loadedProjectDetail?.slug else { return }
-        let baseURL: String = switch filterState.dataSource {
-        case .modrinth:
-            URLConfig.API.Modrinth.webProjectBase
-        case .curseforge:
-            URLConfig.API.CurseForge.webProjectBase
-        }
+        let baseURL = URLConfig.API.Modrinth.webProjectBase
         guard let url = URL(string: baseURL + slug) else { return }
         openURL(url)
     }
@@ -89,20 +84,14 @@ public struct DetailToolbarView: ToolbarContent {
                     }
                     .help("resource.open_in_browser".localized())
                 } else {
-                    Menu {
-                        ForEach(DataSource.allCases, id: \.self) { source in
-                            Button(source.localizedName) {
-                                filterState.dataSource = source
-                            }
-                        }
-                    } label: {
-                        Label(filterState.dataSource.localizedName, systemImage: "network")
-                            .labelStyle(.titleOnly)
-                    }
+                    Label(DataSource.modrinth.localizedName, systemImage: "network")
+                        .labelStyle(.titleOnly)
                 }
             case .game:
                 EmptyView()
             case .node:
+                EmptyView()
+            @unknown default:
                 EmptyView()
             }
         }

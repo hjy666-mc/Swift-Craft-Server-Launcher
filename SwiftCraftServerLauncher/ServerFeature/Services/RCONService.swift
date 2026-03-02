@@ -86,7 +86,7 @@ enum RCONService {
             let chunk = try await receive(connection: connection, maxLength: length - data.count)
             if chunk.isEmpty {
                 throw GlobalError.validation(
-                    chineseMessage: "RCON 连接已断开",
+                    chineseMessage: "RCON 连接已断开，请确认服务器已启动且 enable-rcon、rcon.port、rcon.password 配置正确并已重启生效",
                     i18nKey: "error.validation.server_not_selected",
                     level: .notification
                 )

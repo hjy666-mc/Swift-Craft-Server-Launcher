@@ -107,14 +107,14 @@ struct SwiftCraftServerLauncherApp: App {
             CommandGroup(replacing: .saveItem) { }
         }
 
-            Settings {
-                SettingsView()
-                    .environmentObject(gameRepository)
-                    .environmentObject(serverRepository)
-                    .environmentObject(serverNodeRepository)
-                    .environmentObject(sparkleUpdateService)
-                    .environmentObject(generalSettingsManager)
-                    .preferredColorScheme(themeManager.currentColorScheme)
+        Settings {
+            SettingsView()
+                .environmentObject(gameRepository)
+                .environmentObject(serverRepository)
+                .environmentObject(serverNodeRepository)
+                .environmentObject(sparkleUpdateService)
+                .environmentObject(generalSettingsManager)
+                .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }
 

@@ -60,5 +60,4 @@ struct ContentView: View {
                 .environmentObject(serverRepository)
         }
     }
-
 }

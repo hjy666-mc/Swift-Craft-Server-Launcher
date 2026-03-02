@@ -2,11 +2,14 @@ import Foundation
 
 class ServerStatusManager: ObservableObject {
     static let shared = ServerStatusManager()
+    private static let runningStatesStorageKey = "server.running.states"
 
     @Published private var serverRunningStates: [String: Bool] = [:]
     @Published private var serverLaunchingStates: [String: Bool] = [:]
 
-    private init() {}
+    private init() {
+        serverRunningStates = UserDefaults.standard.dictionary(forKey: Self.runningStatesStorageKey) as? [String: Bool] ?? [:]
+    }
 
     func isServerRunning(serverId: String) -> Bool {
         let hasLocalProcess = ServerProcessManager.shared.getProcess(for: serverId) != nil
@@ -23,25 +26,28 @@ class ServerStatusManager: ObservableObject {
     private func updateServerStatusIfNeeded(serverId: String, actuallyRunning: Bool) {
         if let cachedState = serverRunningStates[serverId], cachedState != actuallyRunning {
             serverRunningStates[serverId] = actuallyRunning
+            persistRunningStates()
             Logger.shared.debug("服务器状态同步更新: \(serverId) -> \(actuallyRunning ? "运行中" : "已停止")")
         } else if serverRunningStates[serverId] == nil {
             serverRunningStates[serverId] = actuallyRunning
+            persistRunningStates()
         }
     }
 
     func setServerRunning(serverId: String, isRunning: Bool) {
-        DispatchQueue.main.async { [weak self] in
+        applyOnMain { [weak self] in
             guard let self else { return }
             let currentState = self.serverRunningStates[serverId]
             if currentState != isRunning {
                 self.serverRunningStates[serverId] = isRunning
+                self.persistRunningStates()
                 Logger.shared.debug("服务器状态更新: \(serverId) -> \(isRunning ? "运行中" : "已停止")")
             }
         }
     }
 
     func setServerLaunching(serverId: String, isLaunching: Bool) {
-        DispatchQueue.main.async { [weak self] in
+        applyOnMain { [weak self] in
             guard let self else { return }
             let currentState = self.serverLaunchingStates[serverId] ?? false
             if currentState != isLaunching {
@@ -56,9 +62,24 @@ class ServerStatusManager: ObservableObject {
     }
 
     func removeServerState(serverId: String) {
-        DispatchQueue.main.async { [weak self] in
+        applyOnMain { [weak self] in
             self?.serverRunningStates.removeValue(forKey: serverId)
             self?.serverLaunchingStates.removeValue(forKey: serverId)
+            self?.persistRunningStates()
+        }
+    }
+
+    private func persistRunningStates() {
+        UserDefaults.standard.set(serverRunningStates, forKey: Self.runningStatesStorageKey)
+    }
+
+    private func applyOnMain(_ action: @escaping () -> Void) {
+        if Thread.isMainThread {
+            action()
+        } else {
+            DispatchQueue.main.sync {
+                action()
+            }
         }
     }
 }

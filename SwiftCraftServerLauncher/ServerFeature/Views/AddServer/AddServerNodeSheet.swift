@@ -33,6 +33,10 @@ struct AddServerNodeSheet: View {
             },
             body: {
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("node.add.unavailable_hint".localized())
+                        .font(.caption)
+                        .foregroundColor(.orange)
+
                     TextField("node.add.name".localized(), text: $name)
                         .textFieldStyle(.roundedBorder)
                     TextField("node.add.host".localized(), text: $host)
