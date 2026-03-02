@@ -142,9 +142,9 @@ enum URLConfig {
         enum GitHub {
             static let gitHubBase = URLConfig.url("https://github.com")
             static let baseURL = URLConfig.url("https://api.github.com")
-            static let repositoryOwner = "suhang12332"
-            static let assetsRepositoryName = "Swift-Craft-Launcher-Assets"
-            static let repositoryName = "Swift-Craft-Launcher"
+            static let repositoryOwner = "hjy666-mc"
+            static let assetsRepositoryName = "Swift-Craft-Server-Launcher"
+            static let repositoryName = "Swift-Craft-Server-Launcher"
             /// 公告基础地址：
             /// 例如：https://raw.githubusercontent.com/suhang12332/Swift-Craft-Launcher-Assets/refs/heads/main/news/api/announcements/0.3.1-beta/ar.json
             static let announcementBaseURL = URLConfig.url("https://raw.githubusercontent.com/\(repositoryOwner)/\(assetsRepositoryName)/refs/heads/main/news/api/announcements")

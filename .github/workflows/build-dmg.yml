@@ -198,7 +198,7 @@ jobs:
           mkdir -p "$DMG_DIR"
           cp -R "$APP_PATH" "$DMG_DIR/"
           
-          DMG_NAME="SwiftCraftServerLauncher-${{ matrix.arch }}-${{ steps.version.outputs.safe_version }}.dmg"
+          DMG_NAME="SwiftCraftServerLauncher-${{ matrix.arch }}.dmg"
           
           # Use create-dmg for professional DMG creation
           create-dmg \
@@ -229,8 +229,8 @@ jobs:
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SwiftCraftServerLauncher-${{ matrix.arch }}-${{ steps.version.outputs.safe_version }}
-          path: SwiftCraftServerLauncher-${{ matrix.arch }}-${{ steps.version.outputs.safe_version }}.dmg
+          name: SwiftCraftServerLauncher-${{ matrix.arch }}
+          path: SwiftCraftServerLauncher-${{ matrix.arch }}.dmg
           retention-days: 30
 
       - name: Clean up
