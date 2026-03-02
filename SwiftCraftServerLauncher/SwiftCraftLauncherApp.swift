@@ -41,6 +41,7 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject var gameLaunchUseCase = GameLaunchUseCase()
     @StateObject var serverLaunchUseCase = ServerLaunchUseCase()
     @StateObject private var globalErrorHandler = GlobalErrorHandler.shared
+    @StateObject private var appUpdateService = AppUpdateService.shared
     @StateObject var generalSettingsManager = GeneralSettingsManager.shared
     @StateObject var themeManager = ThemeManager.shared
     @StateObject private var skinSelectionStore = SkinSelectionStore()
@@ -70,6 +71,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(serverNodeRepository)
                 .environmentObject(gameLaunchUseCase)
                 .environmentObject(serverLaunchUseCase)
+                .environmentObject(appUpdateService)
                 .environmentObject(generalSettingsManager)
                 .environmentObject(skinSelectionStore)
                 .preferredColorScheme(themeManager.currentColorScheme)
@@ -88,6 +90,13 @@ struct SwiftCraftServerLauncherApp: App {
         .windowResizability(.contentMinSize)
         .conditionalRestorationBehavior()
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("menu.check.updates".localized()) {
+                    appUpdateService.installLatestRelease()
+                }
+                .disabled(appUpdateService.isUpdating)
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .help) {
                 Button("menu.open.log".localized()) {
                     Logger.shared.openLogFile()
@@ -103,6 +112,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(gameRepository)
                 .environmentObject(serverRepository)
                 .environmentObject(serverNodeRepository)
+                .environmentObject(appUpdateService)
                 .environmentObject(generalSettingsManager)
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
