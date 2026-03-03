@@ -24,7 +24,13 @@ jobs:
           xcode-version: latest-stable
 
       - name: Install linters
-        run: brew install swiftlint swiftformat reviewdog
+        run: brew install swiftlint swiftformat
+
+      - name: Install reviewdog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | \
+            sh -s -- -b /usr/local/bin
+          reviewdog -version
 
       - name: SwiftFormat (lint)
         run: swiftformat . --lint --reporter github-actions-log
