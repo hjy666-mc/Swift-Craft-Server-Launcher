@@ -7,6 +7,7 @@ final class ServerConsoleManager: ObservableObject {
 
     @Published private(set) var logs: [String: [String]] = [:]
     private var inputPipes: [String: Pipe] = [:]
+    private var renderedCache: [String: AttributedString] = [:]
 
     private init() {}
 
@@ -40,6 +41,7 @@ final class ServerConsoleManager: ObservableObject {
 
     func clear(serverId: String) {
         logs[serverId] = []
+        renderedCache[serverId] = nil
     }
 
     func appendSystemMessage(serverId: String, message: String) {
@@ -59,6 +61,14 @@ final class ServerConsoleManager: ObservableObject {
     func logText(for serverId: String) -> String {
         let lines = logs[serverId] ?? []
         return lines.joined()
+    }
+
+    func renderedText(for serverId: String) -> AttributedString? {
+        renderedCache[serverId]
+    }
+
+    func setRenderedText(serverId: String, text: AttributedString) {
+        renderedCache[serverId] = text
     }
 
     private func append(serverId: String, text: String) {

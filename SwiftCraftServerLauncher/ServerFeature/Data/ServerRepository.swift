@@ -269,6 +269,7 @@ class ServerRepository: ObservableObject {
 
         await MainActor.run {
             serversByWorkingPath[workingPath] = uniqueServers
+            ServerStatusManager.shared.reconcileLoadedServers(uniqueServers)
         }
 
         if !duplicateIds.isEmpty {

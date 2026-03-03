@@ -56,6 +56,49 @@ enum LocalServerDirectService {
         _ = try runLocalShell(shell)
     }
 
+    static func sendInterrupt(server: ServerInstance, force: Bool = false) throws {
+        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let escapedServerDir = escapeSingleQuotes(serverDir.path)
+        let command: String
+        if force {
+            command = """
+            cd '\(escapedServerDir)' && \
+            if test -f .scsl.pid; then \
+              pid=$(cat .scsl.pid); \
+              pkill -KILL -P "$pid" 2>/dev/null || true; \
+              kill -KILL "$pid" 2>/dev/null || true; \
+              rm -f .scsl.pid .scsl.stdin; \
+              echo __SCSL_FORCE_INTERRUPTED__; \
+            else \
+              echo __SCSL_PID_MISSING__; \
+            fi
+            """
+        } else {
+            command = """
+            cd '\(escapedServerDir)' && \
+            if test -p .scsl.stdin; then printf '%s\\n' 'stop' > .scsl.stdin || true; fi && \
+            sleep 8 && \
+            if test -f .scsl.pid; then \
+              pid=$(cat .scsl.pid); \
+              if kill -0 "$pid" 2>/dev/null; then \
+                pkill -INT -P "$pid" 2>/dev/null || true; \
+                kill -INT "$pid" 2>/dev/null || true; \
+                sleep 2; \
+              fi; \
+              if kill -0 "$pid" 2>/dev/null; then \
+                pkill -TERM -P "$pid" 2>/dev/null || true; \
+                kill -TERM "$pid" 2>/dev/null || true; \
+              fi; \
+              rm -f .scsl.pid .scsl.stdin; \
+              echo __SCSL_INTERRUPTED__; \
+            else \
+              echo __SCSL_PID_MISSING__; \
+            fi
+            """
+        }
+        _ = try runLocalShell(command)
+    }
+
     static func isDirectModeAvailable(server: ServerInstance) -> Bool {
         let fifo = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(".scsl.stdin").path
         var isDir: ObjCBool = false

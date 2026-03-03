@@ -69,6 +69,26 @@ class ServerStatusManager: ObservableObject {
         }
     }
 
+    func reconcileLoadedServers(_ servers: [ServerInstance]) {
+        applyOnMain { [weak self] in
+            guard let self else { return }
+            var changed = false
+            for server in servers where server.nodeId == ServerNode.local.id {
+                let actual = LocalServerDirectService.isDirectModeAvailable(server: server)
+                if self.serverRunningStates[server.id] != actual {
+                    self.serverRunningStates[server.id] = actual
+                    changed = true
+                }
+                if !actual, self.serverLaunchingStates[server.id] == true {
+                    self.serverLaunchingStates[server.id] = false
+                }
+            }
+            if changed {
+                self.persistRunningStates()
+            }
+        }
+    }
+
     private func persistRunningStates() {
         UserDefaults.standard.set(serverRunningStates, forKey: Self.runningStatesStorageKey)
     }

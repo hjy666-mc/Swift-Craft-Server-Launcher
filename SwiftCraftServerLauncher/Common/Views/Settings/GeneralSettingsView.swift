@@ -166,6 +166,21 @@ public struct GeneralSettingsView: View {
                 )
                 .toggleStyle(.checkbox)
             }.labeledContentStyle(.custom).padding(.top, 6)
+
+            LabeledContent("控制台彩色输出") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(
+                        "启用彩色输出",
+                        isOn: $generalSettings.enableConsoleColoredOutput
+                    )
+                    .toggleStyle(.checkbox)
+                    Text("彩色输出会降低性能")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+            .padding(.top, 6)
         }
         .globalErrorHandler()
         .alert(

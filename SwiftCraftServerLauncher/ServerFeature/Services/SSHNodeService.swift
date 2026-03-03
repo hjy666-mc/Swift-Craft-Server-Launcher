@@ -454,6 +454,59 @@ enum SSHNodeService {
         }
     }
 
+    static func sendRemoteInterrupt(node: ServerNode, serverName: String, force: Bool = false) async throws {
+        let password = try loadPassword(for: node)
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let helper = "\(root)/.scsl/scsl-helper.sh"
+        let mode = force ? "force" : "soft"
+        let helperCommand = "'\(escapeSingleQuotes(helper))' interrupt '\(escapeSingleQuotes(serverDir))' '\(mode)'"
+        let fallbackCommand = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        if test -p .scsl.stdin; then printf '%s\\n' 'stop' > .scsl.stdin || true; fi && \
+        sleep 8 && \
+        if test -f .scsl.pid; then \
+          pid=$(cat .scsl.pid); \
+          if test "\(mode)" = "force"; then \
+            pkill -KILL -P "$pid" 2>/dev/null || true; \
+            kill -KILL "$pid" 2>/dev/null || true; \
+          else \
+            if kill -0 "$pid" 2>/dev/null; then \
+              pkill -INT -P "$pid" 2>/dev/null || true; \
+              kill -INT "$pid" 2>/dev/null || true; \
+              sleep 2; \
+            fi; \
+            if kill -0 "$pid" 2>/dev/null; then \
+              pkill -TERM -P "$pid" 2>/dev/null || true; \
+              kill -TERM "$pid" 2>/dev/null || true; \
+            fi; \
+          fi; \
+          rm -f .scsl.pid .scsl.stdin; \
+          echo __SCSL_INTERRUPTED__; \
+        else \
+          echo __SCSL_PID_MISSING__; \
+        fi
+        """
+        do {
+            try await ensureRemoteHelper(node: node, password: password)
+            _ = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand
+            )
+        } catch {
+            _ = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: fallbackCommand
+            )
+        }
+    }
+
     static func executeRemoteRCON(
         node: ServerNode,
         serverName: String,
@@ -927,6 +980,36 @@ enum SSHNodeService {
             else
               echo "__SCSL_STDIN_MISSING__"
               exit 3
+            fi
+            ;;
+          interrupt)
+            cd "$server_dir"
+            mode="${3:-soft}"
+            if test "$mode" != "force"; then
+              if test -p .scsl.stdin; then printf '%s\\n' 'stop' > .scsl.stdin || true; fi
+              sleep 8
+            fi
+            if test -f .scsl.pid; then
+              pid="$(cat .scsl.pid)"
+              if test "$mode" = "force"; then
+                pkill -KILL -P "$pid" 2>/dev/null || true
+                kill -KILL "$pid" 2>/dev/null || true
+              else
+                if kill -0 "$pid" 2>/dev/null; then
+                  pkill -INT -P "$pid" 2>/dev/null || true
+                  kill -INT "$pid" 2>/dev/null || true
+                  sleep 2
+                fi
+                if kill -0 "$pid" 2>/dev/null; then
+                  pkill -TERM -P "$pid" 2>/dev/null || true
+                  kill -TERM "$pid" 2>/dev/null || true
+                fi
+              fi
+              rm -f .scsl.pid .scsl.stdin
+              echo "__SCSL_INTERRUPTED__"
+            else
+              echo "__SCSL_PID_MISSING__"
+              exit 4
             fi
             ;;
           log)

@@ -96,7 +96,9 @@ final class ServerLaunchUseCase: ObservableObject {
             await stopRemoteServer(server: server)
             return
         }
-        try? LocalServerDirectService.stop(server: server)
+        _ = try? await Task.detached(priority: .userInitiated) {
+            try LocalServerDirectService.stop(server: server)
+        }.value
         _ = ServerProcessManager.shared.stopProcess(for: server.id)
         ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
         ServerConsoleManager.shared.detach(serverId: server.id)

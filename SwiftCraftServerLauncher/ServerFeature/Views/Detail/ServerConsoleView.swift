@@ -1,8 +1,10 @@
 import SwiftUI
+import AppKit
 
 struct ServerConsoleView: View {
     let server: ServerInstance
     @StateObject private var console = ServerConsoleManager.shared
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var commandText: String = ""
     @State private var remoteLogText: String = ""
@@ -15,6 +17,17 @@ struct ServerConsoleView: View {
     @State private var rconPort: String = "25575"
     @State private var rconPassword: String = ""
     @State private var lastRemoteLogError: String = ""
+    @State private var commandHistory: [String] = []
+    @State private var historyIndex: Int?
+    @FocusState private var commandFieldFocused: Bool
+    @State private var keyMonitor: Any?
+    @State private var renderedConsoleText: AttributedString = AttributedString()
+    @State private var renderTask: Task<Void, Never>?
+    @State private var progressiveRenderTask: Task<Void, Never>?
+    @State private var isRenderingConsole: Bool = false
+    @State private var renderLineLimit: Int = 100
+    @State private var hasNewLogsWhileBrowsingHistory: Bool = false
+    @State private var followBottom: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -30,16 +43,31 @@ struct ServerConsoleView: View {
                 .buttonStyle(.plain)
                 .help("common.clear".localized())
             }
-            consoleOutput
-            commandInput
+            terminalSurface
         }
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
+            loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
+            DispatchQueue.main.async {
+                commandFieldFocused = true
+            }
+            installKeyMonitor()
+            if let cached = console.renderedText(for: server.id), !cached.characters.isEmpty {
+                renderedConsoleText = cached
+            } else {
+                refreshRenderedConsole()
+            }
+            renderLineLimit = 100
+            hasNewLogsWhileBrowsingHistory = false
+            followBottom = true
+            scheduleProgressiveRenderIfNeeded()
         }
         .onChange(of: server.id) { _, _ in
+            renderedConsoleText = AttributedString()
+            isRenderingConsole = true
             remoteLogText = ""
             rconOutputText = ""
             localLogText = ""
@@ -49,13 +77,47 @@ struct ServerConsoleView: View {
             stopLocalLogPolling()
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
+            commandHistory = []
+            historyIndex = nil
+            loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
+            DispatchQueue.main.async {
+                commandFieldFocused = true
+            }
+            renderLineLimit = 100
+            refreshRenderedConsole()
+            scheduleProgressiveRenderIfNeeded()
         }
         .onDisappear {
             stopRemoteLogPolling()
             stopLocalLogPolling()
+            removeKeyMonitor()
+            console.setRenderedText(serverId: server.id, text: renderedConsoleText)
+            renderTask?.cancel()
+            progressiveRenderTask?.cancel()
+            renderTask = nil
+            progressiveRenderTask = nil
+            isRenderingConsole = false
         }
+        .onChange(of: consoleText) { _, _ in
+            if !followBottom {
+                hasNewLogsWhileBrowsingHistory = true
+            }
+            refreshRenderedConsole()
+            scheduleProgressiveRenderIfNeeded()
+        }
+    }
+
+    private var terminalSurface: some View {
+        VStack(spacing: 0) {
+            consoleOutput
+            commandInput
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.06))
+        )
     }
 
     private var consoleOutput: some View {
@@ -65,16 +127,60 @@ struct ServerConsoleView: View {
                     .font(.system(.caption, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                     .id("console_end")
             }
             .frame(minHeight: 220)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(0.06))
-            )
             .onChange(of: consoleText) { _, _ in
-                withAnimation(.easeOut(duration: 0.15)) {
+                guard followBottom else { return }
+                withAnimation(.easeOut(duration: 0.12)) {
                     proxy.scrollTo("console_end", anchor: .bottom)
+                }
+            }
+            .onChange(of: renderedConsoleText) { _, _ in
+                guard followBottom else { return }
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo("console_end", anchor: .bottom)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    guard followBottom else { return }
+                    proxy.scrollTo("console_end", anchor: .bottom)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if isRenderingConsole {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在渲染日志...")
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(10)
+                } else if hasNewLogsWhileBrowsingHistory {
+                    Button {
+                        followBottom = true
+                        hasNewLogsWhileBrowsingHistory = false
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("console_end", anchor: .bottom)
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.to.line")
+                            Text("到底部")
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(10)
                 }
             }
         }
@@ -90,14 +196,31 @@ struct ServerConsoleView: View {
                     SecureField("server.console.rcon.password".localized(), text: $rconPassword)
                         .textFieldStyle(.roundedBorder)
                 }
+                .padding(.horizontal, 8)
             }
             HStack(spacing: 8) {
-                TextField("server.console.placeholder".localized(), text: $commandText)
-                    .textFieldStyle(.roundedBorder)
+                Text(">")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                TextField(
+                    "",
+                    text: $commandText
+                )
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .monospaced))
+                    .focused($commandFieldFocused)
                     .onSubmit { sendCommand() }
-                Button("server.console.send".localized()) { sendCommand() }
-                    .disabled(commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            Button("") { sendInterrupt() }
+                .keyboardShortcut("c", modifiers: [.control])
+                .frame(width: 0, height: 0)
+                .hidden()
+            Button("") { clearConsole() }
+                .keyboardShortcut("l", modifiers: [.control])
+                .frame(width: 0, height: 0)
+                .hidden()
         }
     }
 
@@ -105,6 +228,8 @@ struct ServerConsoleView: View {
         let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commandText = ""
+        appendHistory(text)
+        historyIndex = nil
         if isRemoteServer {
             sendRemoteDirectCommand(text)
             return
@@ -129,8 +254,70 @@ struct ServerConsoleView: View {
         remoteLogText = ""
         localLogText = ""
         rconOutputText = ""
-        lastRemotePolledText = ""
-        lastLocalPolledText = ""
+        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
+        if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
+            Task { @MainActor in
+                if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {
+                    lastRemotePolledText = filterNoisyRconLifecycleLogs(snapshot).trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    lastRemotePolledText = ""
+                }
+            }
+        } else {
+            lastRemotePolledText = ""
+        }
+    }
+
+    private func sendInterrupt() {
+        let isForce = true
+        let hint = "[SCSL] 强制停止中..."
+        if isRemoteServer {
+            if remoteLogText.isEmpty {
+                remoteLogText = hint
+            } else {
+                remoteLogText += "\n" + hint
+            }
+        } else {
+            if localLogText.isEmpty {
+                localLogText = hint
+            } else {
+                localLogText += "\n" + hint
+            }
+        }
+        if isRemoteServer {
+            guard let node = resolvedRemoteNode(nodeId: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.sendRemoteInterrupt(node: node, serverName: server.name, force: isForce)
+                    await MainActor.run {
+                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                        ServerStatusManager.shared.setServerLaunching(serverId: server.id, isLaunching: false)
+                    }
+                } catch {
+                    GlobalErrorHandler.shared.handle(error)
+                }
+            }
+            return
+        }
+        if ServerProcessManager.shared.getProcess(for: server.id) != nil {
+            _ = ServerProcessManager.shared.stopProcess(for: server.id)
+            return
+        }
+        if LocalServerDirectService.isDirectModeAvailable(server: server) {
+            Task {
+                do {
+                    _ = try await Task.detached(priority: .userInitiated) {
+                        try LocalServerDirectService.sendInterrupt(server: server, force: isForce)
+                    }.value
+                    await MainActor.run {
+                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                        ServerStatusManager.shared.setServerLaunching(serverId: server.id, isLaunching: false)
+                    }
+                } catch {
+                    GlobalErrorHandler.shared.handle(error)
+                }
+            }
+        }
     }
 
     private var isRemoteServer: Bool {
@@ -163,23 +350,164 @@ struct ServerConsoleView: View {
     private var consoleLines: [String] {
         let text = consoleText
         if text.isEmpty { return [] }
+        let lines = text.components(separatedBy: "\n")
+        if lines.count <= renderLineLimit {
+            return lines
+        }
+        return Array(lines.suffix(renderLineLimit))
+    }
+
+    private var allConsoleLines: [String] {
+        let text = consoleText
+        guard !text.isEmpty else { return [] }
         return text.components(separatedBy: "\n")
     }
 
     private var attributedConsoleText: AttributedString {
-        var result = AttributedString()
-        let lines = consoleLines
-        for (idx, line) in lines.enumerated() {
-            var segment = AttributedString(line)
-            var container = AttributeContainer()
-            container.foregroundColor = colorForLine(line)
-            segment.mergeAttributes(container)
-            result.append(segment)
-            if idx < lines.count - 1 {
-                result.append(AttributedString("\n"))
+        renderedConsoleText
+    }
+
+    private func refreshRenderedConsole() {
+        renderTask?.cancel()
+        isRenderingConsole = true
+        renderTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            if Task.isCancelled { return }
+            let lines = consoleLines
+            var result = AttributedString()
+            for (idx, line) in lines.enumerated() {
+                if Task.isCancelled { return }
+                result.append(styledLine(line))
+                if idx < lines.count - 1 {
+                    result.append(AttributedString("\n"))
+                }
+            }
+            renderedConsoleText = result
+            console.setRenderedText(serverId: server.id, text: result)
+            isRenderingConsole = false
+        }
+    }
+
+    private func scheduleProgressiveRenderIfNeeded() {
+        progressiveRenderTask?.cancel()
+        let lines = allConsoleLines
+        let target = targetRenderLineLimit(from: lines)
+        guard target > renderLineLimit else { return }
+        progressiveRenderTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 32_000_000)
+                if Task.isCancelled { return }
+                let shouldContinue = await MainActor.run { () -> Bool in
+                    guard renderLineLimit < target else { return false }
+                    renderLineLimit = min(renderLineLimit + 1, target)
+                    refreshRenderedConsole()
+                    return renderLineLimit < target
+                }
+                if !shouldContinue { return }
             }
         }
+    }
+
+    private func targetRenderLineLimit(from lines: [String]) -> Int {
+        let base = 100
+        guard !lines.isEmpty else { return base }
+        let startMarkers = [
+            "Starting net.minecraft.server.Main",
+            "[SCSL] 服务器启动中",
+            "[SCSL] server starting",
+        ]
+        let markerIndexes = lines.indices.filter { idx in
+            let line = lines[idx]
+            return startMarkers.contains { line.contains($0) }
+        }
+        if markerIndexes.count >= 2, let secondLast = markerIndexes.dropLast().last {
+            return max(base, lines.count - secondLast)
+        }
+        if let only = markerIndexes.last {
+            return max(base, lines.count - only)
+        }
+        return max(base, lines.count)
+    }
+
+    private func styledLine(_ line: String) -> AttributedString {
+        if !generalSettings.enableConsoleColoredOutput {
+            var plain = AttributedString(line)
+            plain.foregroundColor = .primary
+            return plain
+        }
+        let baseColor: Color = .primary
+        let ns = line as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        var colors = Array(repeating: baseColor, count: ns.length)
+
+        func paint(_ regex: NSRegularExpression, color: Color) {
+            for m in regex.matches(in: line, range: full) {
+                guard m.range.length > 0 else { continue }
+                for i in m.range.location..<(m.range.location + m.range.length) {
+                    colors[i] = color
+                }
+            }
+        }
+
+        if let bracketRegex = try? NSRegularExpression(pattern: #"[\[\]]"#) {
+            paint(bracketRegex, color: .primary)
+        }
+        if let timeRegex = try? NSRegularExpression(pattern: #"\b\d{2}:\d{2}:\d{2}\b"#) {
+            paint(timeRegex, color: .blue)
+        }
+        if let componentRegex = try? NSRegularExpression(pattern: #"\[([^\]/\]]+)\]"#) {
+            for m in componentRegex.matches(in: line, range: full) {
+                guard m.range.length > 2 else { continue }
+                let inner = ns.substring(with: NSRange(location: m.range.location + 1, length: m.range.length - 2))
+                if inner.range(of: #"^\d{2}:\d{2}:\d{2}$"#, options: .regularExpression) != nil {
+                    continue
+                }
+                for i in (m.range.location + 1)..<(m.range.location + m.range.length - 1) {
+                    colors[i] = .purple
+                }
+            }
+        }
+        if let infoRegex = try? NSRegularExpression(pattern: #"\bINFO\b"#, options: [.caseInsensitive]) {
+            paint(infoRegex, color: .green)
+        }
+        if let warnRegex = try? NSRegularExpression(pattern: #"\bWARN\b"#, options: [.caseInsensitive]) {
+            paint(warnRegex, color: .yellow)
+        }
+        if let errorRegex = try? NSRegularExpression(pattern: #"\bERROR\b"#, options: [.caseInsensitive]) {
+            paint(errorRegex, color: .red)
+        }
+
+        var result = AttributedString()
+        if ns.length == 0 { return result }
+        var start = 0
+        var current = colors[0]
+        for i in 1..<ns.length {
+            if colors[i] != current {
+                let part = ns.substring(with: NSRange(location: start, length: i - start))
+                appendStyledSegment(part, color: current, isBold: false, to: &result)
+                start = i
+                current = colors[i]
+            }
+        }
+        let tail = ns.substring(with: NSRange(location: start, length: ns.length - start))
+        appendStyledSegment(tail, color: current, isBold: false, to: &result)
         return result
+    }
+
+    private func currentLocalLogSnapshot(serverName: String) -> String {
+        let serverDir = AppPaths.serverDirectory(serverName: serverName)
+        let candidates = [
+            serverDir.appendingPathComponent("logs/latest.log"),
+            serverDir.appendingPathComponent("latest.log"),
+            serverDir.appendingPathComponent("scsl-server.log"),
+            serverDir.appendingPathComponent("server.log"),
+        ]
+        for file in candidates where FileManager.default.fileExists(atPath: file.path) {
+            if let text = try? String(contentsOf: file, encoding: .utf8), !text.isEmpty {
+                return text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
+            }
+        }
+        return ""
     }
 
     private func startRemoteLogPollingIfNeeded() {
@@ -387,47 +715,215 @@ struct ServerConsoleView: View {
     }
 
     private func filterNoisyRconLifecycleLogs(_ raw: String) -> String {
-        raw
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-            .map { line in
-                line.replacingOccurrences(
-                    of: "\\u{001B}\\[[0-9;]*m",
-                    with: "",
-                    options: .regularExpression
-                )
+        let normalized = raw
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+        var kept: [String] = []
+        kept.reserveCapacity(lines.count)
+
+        for line in lines {
+            let sanitized = line.unicodeScalars
+                .filter { scalar in
+                    scalar.value == 9 || scalar.value == 27 || scalar.value >= 32
+                }
+                .map(String.init)
+                .joined()
+
+            let trimmed = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if trimmed == ">" { continue }
+            if trimmed.allSatisfy({ $0 == ">" || $0 == " " }) { continue }
+            if trimmed.range(of: #"^>+$"#, options: .regularExpression) != nil { continue }
+            if sanitized.contains("RCON Client /127.0.0.1"),
+               (sanitized.contains("started") || sanitized.contains("shutting down")) {
+                continue
             }
-            .filter { line in
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { return false }
-                if trimmed == ">" { return false }
-                if trimmed.allSatisfy({ $0 == ">" || $0 == " " }) { return false }
-                return !(line.contains("RCON Client /127.0.0.1") &&
-                  (line.contains("started") || line.contains("shutting down")))
-            }
-            .joined(separator: "\n")
+            kept.append(sanitized)
+        }
+
+        return kept.joined(separator: "\n")
     }
 
     private func colorForLine(_ line: String) -> Color {
-        if line.contains("[ERROR]") || line.contains("Exception") || line.contains("❌") {
+        let upper = line.uppercased()
+        if upper.contains("ERROR") || line.contains("❌") || line.contains("Exception") {
             return .red
         }
-        if line.contains("[WARN]") || line.contains("WARN") || line.contains("⚠️") {
-            return .orange
+        if upper.contains("WARN") || line.contains("⚠️") {
+            return .yellow
         }
-        if line.contains("[INFO]") || line.contains("INFO") || line.contains("ℹ️") {
-            return .primary
-        }
-        if line.contains("Starting") || line.contains("Done (") || line.contains("RCON running on") || line.contains("✅") {
+        if upper.contains("INFO") || line.contains("ℹ️") {
             return .green
         }
-        if line.contains("🔍") || line.contains("[DEBUG]") {
-            return .secondary
-        }
-        if line.hasPrefix("[RCON]") || line.contains("SCSL") {
+        if line.range(of: #"\b\d{2}:\d{2}:\d{2}\b"#, options: .regularExpression) != nil {
             return .blue
         }
+        if line.contains("[") && line.contains("]") {
+            return .primary
+        }
+        if upper.contains("PLUGIN")
+            || upper.contains("PAPER")
+            || upper.contains("FABRIC")
+            || upper.contains("FORGE") {
+            return .purple
+        }
+        if line.hasPrefix("[SCSL]") || line.hasPrefix("[RCON]") {
+            return .cyan
+        }
         return .primary
+    }
+
+    private func ansiStyledAttributedText(from text: String) -> AttributedString {
+        let normalized = normalizeANSIText(text)
+        var result = AttributedString()
+        var currentColor: Color = .primary
+        var isBold = false
+        var buffer = ""
+        let chars = Array(normalized)
+        var index = 0
+
+        while index < chars.count {
+            if chars[index] == "\u{001B}", index + 1 < chars.count, chars[index + 1] == "[" {
+                if !buffer.isEmpty {
+                    appendStyledSegment(buffer, color: currentColor, isBold: isBold, to: &result)
+                    buffer = ""
+                }
+                index += 2
+                var codeBuffer = ""
+                while index < chars.count, chars[index] != "m" {
+                    codeBuffer.append(chars[index])
+                    index += 1
+                }
+                if index < chars.count, chars[index] == "m" {
+                    let codes = codeBuffer.split(separator: ";").compactMap { Int($0) }
+                    let parsed = codes.isEmpty ? [0] : codes
+                    var i = 0
+                    while i < parsed.count {
+                        let code = parsed[i]
+                        switch code {
+                        case 0:
+                            currentColor = .primary
+                            isBold = false
+                        case 1:
+                            isBold = true
+                        case 22:
+                            isBold = false
+                        case 30...37, 90...97:
+                            currentColor = ansiColor(code) ?? currentColor
+                        case 39:
+                            currentColor = .primary
+                        case 38:
+                            if i + 2 < parsed.count, parsed[i + 1] == 5 {
+                                currentColor = ansi256Color(parsed[i + 2])
+                                i += 2
+                            } else if i + 4 < parsed.count, parsed[i + 1] == 2 {
+                                let r = parsed[i + 2]
+                                let g = parsed[i + 3]
+                                let b = parsed[i + 4]
+                                currentColor = Color(
+                                    red: Double(max(0, min(255, r))) / 255.0,
+                                    green: Double(max(0, min(255, g))) / 255.0,
+                                    blue: Double(max(0, min(255, b))) / 255.0
+                                )
+                                i += 4
+                            }
+                        default:
+                            break
+                        }
+                        i += 1
+                    }
+                }
+            } else {
+                buffer.append(chars[index])
+            }
+            index += 1
+        }
+
+        if !buffer.isEmpty {
+            appendStyledSegment(buffer, color: currentColor, isBold: isBold, to: &result)
+        }
+        return result
+    }
+
+    private func normalizeANSIText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\\u001B[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\u001b[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\u{001B}[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\u{001b}[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\x1b[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\x1B[", with: "\u{001B}[")
+            .replacingOccurrences(of: "\\033[", with: "\u{001B}[")
+    }
+
+    private func containsANSISequence(_ text: String) -> Bool {
+        text.contains("\u{001B}[")
+            || text.contains("\\u001B[")
+            || text.contains("\\u001b[")
+            || text.contains("\\u{001B}[")
+            || text.contains("\\u{001b}[")
+            || text.contains("\\x1b[")
+            || text.contains("\\x1B[")
+            || text.contains("\\033[")
+    }
+
+    private func appendStyledSegment(_ text: String, color: Color, isBold: Bool, to result: inout AttributedString) {
+        guard !text.isEmpty else { return }
+        var seg = AttributedString(text)
+        var attrs = AttributeContainer()
+        attrs.foregroundColor = color
+        attrs.font = .system(.caption, design: .monospaced).weight(isBold ? .bold : .regular)
+        seg.mergeAttributes(attrs)
+        result.append(seg)
+    }
+
+    private func ansiColor(_ code: Int) -> Color? {
+        switch code {
+        case 30: return Color(nsColor: .black)
+        case 31: return Color(nsColor: .systemRed)
+        case 32: return Color(nsColor: .systemGreen)
+        case 33: return Color(nsColor: .systemYellow)
+        case 34: return Color(nsColor: .systemBlue)
+        case 35: return Color(nsColor: .systemPink)
+        case 36: return Color(nsColor: .systemTeal)
+        case 37: return Color(nsColor: .white)
+        case 90: return Color(nsColor: .systemGray)
+        case 91: return Color(nsColor: .systemRed).opacity(0.95)
+        case 92: return Color(nsColor: .systemGreen).opacity(0.95)
+        case 93: return Color(nsColor: .systemYellow).opacity(0.95)
+        case 94: return Color(nsColor: .systemBlue).opacity(0.95)
+        case 95: return Color(nsColor: .systemPink).opacity(0.95)
+        case 96: return Color(nsColor: .systemTeal).opacity(0.95)
+        case 97: return Color(nsColor: .white).opacity(0.98)
+        default: return nil
+        }
+    }
+
+    private func ansi256Color(_ code: Int) -> Color {
+        let clamped = max(0, min(255, code))
+        if clamped < 16 {
+            let base: [Color] = [
+                .black, .red, .green, .yellow, .blue, .pink, .cyan, .white,
+                .gray, .red, .green, .yellow, .blue, .pink, .cyan, .white,
+            ]
+            return base[clamped]
+        }
+        if clamped <= 231 {
+            let n = clamped - 16
+            let r = n / 36
+            let g = (n % 36) / 6
+            let b = n % 6
+            let map = [0, 95, 135, 175, 215, 255]
+            return Color(
+                red: Double(map[r]) / 255.0,
+                green: Double(map[g]) / 255.0,
+                blue: Double(map[b]) / 255.0
+            )
+        }
+        let gray = Double((clamped - 232) * 10 + 8) / 255.0
+        return Color(red: gray, green: gray, blue: gray)
     }
 
     private func shouldRetryRcon(error: Error) -> Bool {
@@ -447,5 +943,120 @@ struct ServerConsoleView: View {
             return remoteNodes.first
         }
         return nil
+    }
+
+    private func historyFileURL() -> URL {
+        let base: URL
+        if server.nodeId == ServerNode.local.id {
+            base = AppPaths.serverDirectory(serverName: server.name)
+        } else {
+            base = AppPaths.remoteNodeServersDirectory(nodeId: server.nodeId)
+                .appendingPathComponent(server.name)
+        }
+        return base.appendingPathComponent(".console_history")
+    }
+
+    private func loadCommandHistory() {
+        let url = historyFileURL()
+        if let content = try? String(contentsOf: url, encoding: .utf8) {
+            commandHistory = normalizeHistoryContent(content)
+            saveCommandHistory()
+        } else {
+            commandHistory = []
+        }
+    }
+
+    private func saveCommandHistory() {
+        let url = historyFileURL()
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let trimmed = Array(commandHistory.suffix(300))
+        let data = trimmed.joined(separator: "\n") + (trimmed.isEmpty ? "" : "\n")
+        try? data.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func appendHistory(_ command: String) {
+        guard !command.isEmpty else { return }
+        if commandHistory.last != command {
+            commandHistory.append(command)
+            saveCommandHistory()
+        }
+    }
+
+    private func navigateHistoryUp() {
+        guard !commandHistory.isEmpty else { return }
+        if let index = historyIndex {
+            historyIndex = max(0, index - 1)
+        } else {
+            historyIndex = commandHistory.count - 1
+        }
+        if let index = historyIndex {
+            commandText = commandHistory[index]
+        }
+    }
+
+    private func navigateHistoryDown() {
+        guard !commandHistory.isEmpty else { return }
+        guard let index = historyIndex else { return }
+        let next = index + 1
+        if next >= commandHistory.count {
+            historyIndex = nil
+            commandText = ""
+        } else {
+            historyIndex = next
+            commandText = commandHistory[next]
+        }
+    }
+
+    private func normalizeHistoryContent(_ content: String) -> [String] {
+        let timestampPattern = #"(\\d{10,}:)"#
+        let expanded = content.replacingOccurrences(
+            of: timestampPattern,
+            with: "\n$1",
+            options: .regularExpression
+        )
+        let lines = expanded
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        var normalized: [String] = []
+        for line in lines {
+            if line.isEmpty { continue }
+            let command: String
+            if let range = line.range(of: #"^\d{10,}:"#, options: .regularExpression) {
+                command = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                command = line
+            }
+            if command.isEmpty { continue }
+            if normalized.last != command {
+                normalized.append(command)
+            }
+        }
+        return normalized
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard commandFieldFocused else { return event }
+            switch event.keyCode {
+            case 126:
+                navigateHistoryUp()
+                return nil
+            case 125:
+                navigateHistoryDown()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 }

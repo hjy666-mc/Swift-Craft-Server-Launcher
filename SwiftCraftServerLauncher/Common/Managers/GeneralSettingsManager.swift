@@ -74,6 +74,12 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         didSet { objectWillChange.send() }
     }
 
+    /// 控制台彩色输出（默认开启）
+    @AppStorage("enableConsoleColoredOutput")
+    var enableConsoleColoredOutput: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
     // MARK: - 应用设置属性
     @AppStorage("concurrentDownloads")
     var concurrentDownloads: Int = 64 {
