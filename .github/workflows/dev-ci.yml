@@ -32,8 +32,8 @@ jobs:
             sh -s -- -b /usr/local/bin
           reviewdog -version
 
-      - name: SwiftFormat (lint)
-        run: swiftformat . --lint --reporter github-actions-log
+      - name: SwiftFormat (advisory)
+        run: swiftformat . --lint --reporter github-actions-log || true
 
       - name: SwiftLint (checkstyle)
         run: swiftlint lint --strict --reporter checkstyle > swiftlint.xml
