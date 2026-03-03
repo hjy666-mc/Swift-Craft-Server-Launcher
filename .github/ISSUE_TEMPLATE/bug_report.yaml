@@ -87,6 +87,35 @@ body:
         - 其他（说明）|Other (please specify)
     validations:
       required: true
+
+  - type: input
+    id: launcher-version
+    attributes:
+      label: 启动器版本｜Launcher Version
+      description: |
+        您当前使用的 SwiftCraftServerLauncher 版本号（例如 0.0.1 / BETA）。
+        The current SwiftCraftServerLauncher version you are using (e.g. 0.0.1 / BETA).
+      placeholder: 例如 / e.g. 0.0.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modloader
+    attributes:
+      label: 服务端类型 / 加载器｜Server Type / Mod Loader
+      description: |
+        请选择问题发生时使用的服务端类型或加载器。
+        Select the server type or mod loader used when the issue occurs.
+      multiple: false
+      options:
+        - Vanilla
+        - Fabric
+        - Forge
+        - NeoForge
+        - Paper
+        - 其他（说明）|Other (please specify)
+    validations:
+      required: true
       
   - type: textarea
     id: launcher-logs
