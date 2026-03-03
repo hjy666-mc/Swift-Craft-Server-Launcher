@@ -21,13 +21,10 @@ struct ServerConsoleView: View {
     @State private var historyIndex: Int?
     @FocusState private var commandFieldFocused: Bool
     @State private var keyMonitor: Any?
-    @State private var renderedConsoleText: AttributedString = AttributedString()
-    @State private var renderTask: Task<Void, Never>?
-    @State private var progressiveRenderTask: Task<Void, Never>?
+    @State private var initialConsoleLines: [String] = []
+    @State private var consoleEvent: ServerConsoleManager.ConsoleEvent?
     @State private var isRenderingConsole: Bool = false
-    @State private var renderLineLimit: Int = 100
-    @State private var hasNewLogsWhileBrowsingHistory: Bool = false
-    @State private var followBottom: Bool = true
+    @State private var loadOlderToken: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -55,18 +52,10 @@ struct ServerConsoleView: View {
                 commandFieldFocused = true
             }
             installKeyMonitor()
-            if let cached = console.renderedText(for: server.id), !cached.characters.isEmpty {
-                renderedConsoleText = cached
-            } else {
-                refreshRenderedConsole()
-            }
-            renderLineLimit = 100
-            hasNewLogsWhileBrowsingHistory = false
-            followBottom = true
-            scheduleProgressiveRenderIfNeeded()
+            initialConsoleLines = console.logLines(for: server.id)
+            isRenderingConsole = false
         }
         .onChange(of: server.id) { _, _ in
-            renderedConsoleText = AttributedString()
             isRenderingConsole = true
             remoteLogText = ""
             rconOutputText = ""
@@ -85,20 +74,19 @@ struct ServerConsoleView: View {
             DispatchQueue.main.async {
                 commandFieldFocused = true
             }
-            renderLineLimit = 100
-            refreshRenderedConsole()
-            scheduleProgressiveRenderIfNeeded()
+            initialConsoleLines = console.logLines(for: server.id)
+            consoleEvent = nil
+            isRenderingConsole = false
         }
         .onDisappear {
             stopRemoteLogPolling()
             stopLocalLogPolling()
             removeKeyMonitor()
-            console.setRenderedText(serverId: server.id, text: renderedConsoleText)
-            renderTask?.cancel()
-            progressiveRenderTask?.cancel()
-            renderTask = nil
-            progressiveRenderTask = nil
             isRenderingConsole = false
+        }
+        .onReceive(console.$latestEvent) { event in
+            guard let event, event.serverId == server.id else { return }
+            consoleEvent = event
         }
         .onChange(of: consoleText) { _, _ in
             if !followBottom {
@@ -120,23 +108,47 @@ struct ServerConsoleView: View {
         )
     }
 
+    private var terminalSurface: some View {
+        VStack(spacing: 0) {
+            consoleOutput
+            commandInput
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.06))
+        )
+    }
+
     private var consoleOutput: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                Text(attributedConsoleText)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .id("console_end")
-            }
-            .frame(minHeight: 220)
-            .onChange(of: consoleText) { _, _ in
-                guard followBottom else { return }
-                withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo("console_end", anchor: .bottom)
+        NativeTerminalRepresentable(
+            initialLines: initialConsoleLines,
+            event: consoleEvent,
+            enableColor: generalSettings.enableConsoleColoredOutput,
+            loadOlderToken: loadOlderToken
+        )
+        .frame(minHeight: 220)
+        .overlay(alignment: .topTrailing) {
+            if initialConsoleLines.count > 2_000 {
+                Button("加载更早历史") {
+                    loadOlderToken += 1
                 }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .padding(8)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if isRenderingConsole {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在渲染日志...")
+                }
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.regularMaterial, in: Capsule())
+                .padding(10)
             }
             .onChange(of: renderedConsoleText) { _, _ in
                 guard followBottom else { return }
@@ -200,14 +212,14 @@ struct ServerConsoleView: View {
             }
             HStack(spacing: 8) {
                 Text(">")
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
                     .foregroundStyle(.secondary)
                 TextField(
                     "",
                     text: $commandText
                 )
                     .textFieldStyle(.plain)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
                     .focused($commandFieldFocused)
                     .onSubmit { sendCommand() }
             }
@@ -251,9 +263,6 @@ struct ServerConsoleView: View {
 
     private func clearConsole() {
         console.clear(serverId: server.id)
-        remoteLogText = ""
-        localLogText = ""
-        rconOutputText = ""
         lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
         if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
             Task { @MainActor in
@@ -271,19 +280,7 @@ struct ServerConsoleView: View {
     private func sendInterrupt() {
         let isForce = true
         let hint = "[SCSL] 强制停止中..."
-        if isRemoteServer {
-            if remoteLogText.isEmpty {
-                remoteLogText = hint
-            } else {
-                remoteLogText += "\n" + hint
-            }
-        } else {
-            if localLogText.isEmpty {
-                localLogText = hint
-            } else {
-                localLogText += "\n" + hint
-            }
-        }
+        console.appendExternal(serverId: server.id, text: "\(hint)\n")
         if isRemoteServer {
             guard let node = resolvedRemoteNode(nodeId: server.nodeId) else { return }
             Task {
@@ -332,166 +329,20 @@ struct ServerConsoleView: View {
         isRemoteServer && isRconMode
     }
 
-    private var consoleText: String {
-        let localSystem = console.logText(for: server.id)
-        if isRemoteServer {
-            return [localSystem, remoteLogText]
-                .filter { !$0.isEmpty }
-                .joined(separator: "\n")
-        }
-        if !localLogText.isEmpty {
-            return [localSystem, localLogText, rconOutputText]
-                .filter { !$0.isEmpty }
-                .joined(separator: "\n")
-        }
-        return localSystem
-    }
-
-    private var consoleLines: [String] {
-        let text = consoleText
-        if text.isEmpty { return [] }
-        let lines = text.components(separatedBy: "\n")
-        if lines.count <= renderLineLimit {
-            return lines
-        }
-        return Array(lines.suffix(renderLineLimit))
-    }
-
-    private var allConsoleLines: [String] {
-        let text = consoleText
-        guard !text.isEmpty else { return [] }
-        return text.components(separatedBy: "\n")
-    }
-
-    private var attributedConsoleText: AttributedString {
-        renderedConsoleText
-    }
-
-    private func refreshRenderedConsole() {
-        renderTask?.cancel()
-        isRenderingConsole = true
-        renderTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            if Task.isCancelled { return }
-            let lines = consoleLines
-            var result = AttributedString()
-            for (idx, line) in lines.enumerated() {
-                if Task.isCancelled { return }
-                result.append(styledLine(line))
-                if idx < lines.count - 1 {
-                    result.append(AttributedString("\n"))
-                }
-            }
-            renderedConsoleText = result
-            console.setRenderedText(serverId: server.id, text: result)
-            isRenderingConsole = false
-        }
-    }
-
-    private func scheduleProgressiveRenderIfNeeded() {
-        progressiveRenderTask?.cancel()
-        let lines = allConsoleLines
-        let target = targetRenderLineLimit(from: lines)
-        guard target > renderLineLimit else { return }
-        progressiveRenderTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 32_000_000)
-                if Task.isCancelled { return }
-                let shouldContinue = await MainActor.run { () -> Bool in
-                    guard renderLineLimit < target else { return false }
-                    renderLineLimit = min(renderLineLimit + 1, target)
-                    refreshRenderedConsole()
-                    return renderLineLimit < target
-                }
-                if !shouldContinue { return }
-            }
-        }
-    }
-
-    private func targetRenderLineLimit(from lines: [String]) -> Int {
-        let base = 100
-        guard !lines.isEmpty else { return base }
-        let startMarkers = [
-            "Starting net.minecraft.server.Main",
-            "[SCSL] 服务器启动中",
-            "[SCSL] server starting",
+    private func currentLocalLogSnapshot(serverName: String) -> String {
+        let serverDir = AppPaths.serverDirectory(serverName: serverName)
+        let candidates = [
+            serverDir.appendingPathComponent("logs/latest.log"),
+            serverDir.appendingPathComponent("latest.log"),
+            serverDir.appendingPathComponent("scsl-server.log"),
+            serverDir.appendingPathComponent("server.log"),
         ]
-        let markerIndexes = lines.indices.filter { idx in
-            let line = lines[idx]
-            return startMarkers.contains { line.contains($0) }
-        }
-        if markerIndexes.count >= 2, let secondLast = markerIndexes.dropLast().last {
-            return max(base, lines.count - secondLast)
-        }
-        if let only = markerIndexes.last {
-            return max(base, lines.count - only)
-        }
-        return max(base, lines.count)
-    }
-
-    private func styledLine(_ line: String) -> AttributedString {
-        if !generalSettings.enableConsoleColoredOutput {
-            var plain = AttributedString(line)
-            plain.foregroundColor = .primary
-            return plain
-        }
-        let baseColor: Color = .primary
-        let ns = line as NSString
-        let full = NSRange(location: 0, length: ns.length)
-        var colors = Array(repeating: baseColor, count: ns.length)
-
-        func paint(_ regex: NSRegularExpression, color: Color) {
-            for m in regex.matches(in: line, range: full) {
-                guard m.range.length > 0 else { continue }
-                for i in m.range.location..<(m.range.location + m.range.length) {
-                    colors[i] = color
-                }
+        for file in candidates where FileManager.default.fileExists(atPath: file.path) {
+            if let text = try? String(contentsOf: file, encoding: .utf8), !text.isEmpty {
+                return text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
             }
         }
-
-        if let bracketRegex = try? NSRegularExpression(pattern: #"[\[\]]"#) {
-            paint(bracketRegex, color: .primary)
-        }
-        if let timeRegex = try? NSRegularExpression(pattern: #"\b\d{2}:\d{2}:\d{2}\b"#) {
-            paint(timeRegex, color: .blue)
-        }
-        if let componentRegex = try? NSRegularExpression(pattern: #"\[([^\]/\]]+)\]"#) {
-            for m in componentRegex.matches(in: line, range: full) {
-                guard m.range.length > 2 else { continue }
-                let inner = ns.substring(with: NSRange(location: m.range.location + 1, length: m.range.length - 2))
-                if inner.range(of: #"^\d{2}:\d{2}:\d{2}$"#, options: .regularExpression) != nil {
-                    continue
-                }
-                for i in (m.range.location + 1)..<(m.range.location + m.range.length - 1) {
-                    colors[i] = .purple
-                }
-            }
-        }
-        if let infoRegex = try? NSRegularExpression(pattern: #"\bINFO\b"#, options: [.caseInsensitive]) {
-            paint(infoRegex, color: .green)
-        }
-        if let warnRegex = try? NSRegularExpression(pattern: #"\bWARN\b"#, options: [.caseInsensitive]) {
-            paint(warnRegex, color: .yellow)
-        }
-        if let errorRegex = try? NSRegularExpression(pattern: #"\bERROR\b"#, options: [.caseInsensitive]) {
-            paint(errorRegex, color: .red)
-        }
-
-        var result = AttributedString()
-        if ns.length == 0 { return result }
-        var start = 0
-        var current = colors[0]
-        for i in 1..<ns.length {
-            if colors[i] != current {
-                let part = ns.substring(with: NSRange(location: start, length: i - start))
-                appendStyledSegment(part, color: current, isBold: false, to: &result)
-                start = i
-                current = colors[i]
-            }
-        }
-        let tail = ns.substring(with: NSRange(location: start, length: ns.length - start))
-        appendStyledSegment(tail, color: current, isBold: false, to: &result)
-        return result
+        return ""
     }
 
     private func currentLocalLogSnapshot(serverName: String) -> String {
@@ -562,11 +413,7 @@ struct ServerConsoleView: View {
                 let current = text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
                 let delta = incrementalDelta(previous: lastLocalPolledText, current: current)
                 if !delta.isEmpty {
-                    if localLogText.isEmpty {
-                        localLogText = delta
-                    } else {
-                        localLogText += "\n" + delta
-                    }
+                    console.appendExternal(serverId: server.id, text: delta + "\n")
                 }
                 lastLocalPolledText = current
                 return
@@ -578,11 +425,7 @@ struct ServerConsoleView: View {
     private func loadRemoteLog(nodeId: String, serverName: String) async {
         guard let node = resolvedRemoteNode(nodeId: nodeId) else {
             let line = "[SCSL] \("server.console.remote_node_missing".localized())"
-            if remoteLogText.isEmpty {
-                remoteLogText = line
-            } else if !remoteLogText.contains(line) {
-                remoteLogText += "\n" + line
-            }
+            console.appendExternal(serverId: server.id, text: line + "\n")
             return
         }
         do {
@@ -592,11 +435,7 @@ struct ServerConsoleView: View {
             if !current.isEmpty {
                 let delta = incrementalDelta(previous: lastRemotePolledText, current: current)
                 if !delta.isEmpty {
-                    if remoteLogText.isEmpty {
-                        remoteLogText = delta
-                    } else {
-                        remoteLogText += "\n" + delta
-                    }
+                    console.appendExternal(serverId: server.id, text: delta + "\n")
                 }
                 lastRemotePolledText = current
             }
@@ -605,11 +444,7 @@ struct ServerConsoleView: View {
             let message = error.localizedDescription
             if message != lastRemoteLogError {
                 let line = "[SCSL] \(message)"
-                if remoteLogText.isEmpty {
-                    remoteLogText = line
-                } else {
-                    remoteLogText += "\n" + line
-                }
+                console.appendExternal(serverId: server.id, text: line + "\n")
             }
             lastRemoteLogError = message
         }
@@ -703,7 +538,7 @@ struct ServerConsoleView: View {
                 )
                 await MainActor.run {
                     if !output.isEmpty {
-                        rconOutputText += "\n[RCON] \(output)\n"
+                        console.appendExternal(serverId: server.id, text: "[RCON] \(output)\n")
                     }
                 }
             } catch {
@@ -1057,6 +892,254 @@ struct ServerConsoleView: View {
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
+        }
+    }
+}
+
+private struct NativeTerminalRepresentable: NSViewRepresentable {
+    let initialLines: [String]
+    let event: ServerConsoleManager.ConsoleEvent?
+    let enableColor: Bool
+    let loadOlderToken: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.horizontalScrollElasticity = .automatic
+
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return scrollView
+        }
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = true
+        textView.drawsBackground = false
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textContainerInset = NSSize(width: 8, height: 6)
+        textView.textColor = .textColor
+        textView.insertionPointColor = .textColor
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.frame = NSRect(x: 0, y: 0, width: 640, height: 220)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.lineBreakMode = .byWordWrapping
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.containerSize = NSSize(
+            width: scrollView.contentSize.width,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.isVerticallyResizable = true
+        textView.maxSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        context.coordinator.scrollView = scrollView
+        context.coordinator.enableColor = enableColor
+        context.coordinator.setInitial(lines: initialLines)
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.enableColor = enableColor
+        if let textView = context.coordinator.textView {
+            textView.maxSize = NSSize(width: nsView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            textView.textContainer?.containerSize = NSSize(
+                width: nsView.contentSize.width,
+                height: CGFloat.greatestFiniteMagnitude
+            )
+        }
+        context.coordinator.updateInitialIfNeeded(lines: initialLines)
+        context.coordinator.apply(event: event)
+        context.coordinator.loadOlderIfNeeded(token: loadOlderToken)
+    }
+
+    final class Coordinator {
+        weak var textView: NSTextView?
+        weak var scrollView: NSScrollView?
+        var enableColor: Bool = true
+        private var lines: [String] = []
+        private var olderLines: [String] = []
+        private var lastSequence: Int = 0
+        private var lastLoadOlderToken: Int = 0
+        private let maxRealtimeLines = 2_000
+        private let olderBatchSize = 500
+
+        func setInitial(lines: [String]) {
+            let filtered = lines.compactMap(normalizeLogLine)
+            if filtered.count > maxRealtimeLines {
+                let splitIndex = filtered.count - maxRealtimeLines
+                olderLines = Array(filtered[..<splitIndex])
+                self.lines = Array(filtered[splitIndex...])
+            } else {
+                olderLines = []
+                self.lines = filtered
+            }
+            redrawAll(keepAtBottom: true)
+        }
+
+        func updateInitialIfNeeded(lines: [String]) {
+            guard lastSequence == 0 else { return }
+            setInitial(lines: lines)
+        }
+
+        func apply(event: ServerConsoleManager.ConsoleEvent?) {
+            guard let event, event.sequence != lastSequence else { return }
+            lastSequence = event.sequence
+            switch event.kind {
+            case .clear:
+                olderLines.removeAll()
+                lines.removeAll()
+                textView?.textStorage?.setAttributedString(NSAttributedString())
+            case .append:
+                append(text: event.text)
+            }
+        }
+
+        func loadOlderIfNeeded(token: Int) {
+            guard token != lastLoadOlderToken else { return }
+            lastLoadOlderToken = token
+            guard !olderLines.isEmpty else { return }
+            let take = min(olderBatchSize, olderLines.count)
+            let start = olderLines.count - take
+            let batch = Array(olderLines[start...])
+            olderLines.removeSubrange(start...)
+            lines = batch + lines
+            redrawAll(keepAtBottom: false)
+        }
+
+        private func append(text: String) {
+            guard !text.isEmpty else { return }
+            let incomingLines = splitChunkIntoCandidateLines(text)
+                .compactMap(normalizeLogLine)
+            guard !incomingLines.isEmpty else { return }
+            lines.append(contentsOf: incomingLines)
+            if lines.count > maxRealtimeLines {
+                lines.removeFirst(lines.count - maxRealtimeLines)
+                redrawAll(keepAtBottom: true)
+                return
+            }
+            guard let storage = textView?.textStorage else { return }
+            if storage.length > 0 {
+                storage.append(NSAttributedString(string: "\n"))
+            }
+            storage.append(styledText(incomingLines.joined(separator: "\n")))
+            scrollToBottom()
+        }
+
+        private func splitChunkIntoCandidateLines(_ raw: String) -> [String] {
+            // 某些日志源会把多条记录粘在一行，这里在时间戳头部前强制断行
+            let withSplitMarkers = raw.replacingOccurrences(
+                of: #"(?<=\S)(?=\[\d{2}[:.]\d{2}[:.]\d{2}\])"#,
+                with: "\n",
+                options: .regularExpression
+            )
+            return withSplitMarkers.components(separatedBy: .newlines)
+        }
+
+        private func normalizeLogLine(_ raw: String) -> String? {
+            // 1) 去 ANSI 序列
+            let noAnsi = raw.replacingOccurrences(
+                of: #"\u{001B}\[[0-9;?]*[ -/]*[@-~]"#,
+                with: "",
+                options: .regularExpression
+            )
+            // 某些日志源会丢失 ESC 字符，仅残留如 [33m / [0m，单独再清洗一次
+            let noAnsiFragments = noAnsi.replacingOccurrences(
+                of: #"\[[0-9;]{1,}(m|K|J|H|f)"#,
+                with: "",
+                options: .regularExpression
+            )
+            // 2) 去不可见控制字符（保留 tab）
+            let cleaned = noAnsiFragments.unicodeScalars
+                .filter { scalar in
+                    scalar.value == 9 || scalar.value >= 32
+                }
+                .map(String.init)
+                .joined()
+            // 3) 收尾空白
+            let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return nil }
+            // 4) 过滤 MC 提示符噪声
+            if trimmed.range(of: #"^>+\s*$"#, options: .regularExpression) != nil {
+                return nil
+            }
+            // 5) 过滤纯 0 噪声行（常见于异常控制字符清洗后的残留）
+            if trimmed.range(of: #"^0+$"#, options: .regularExpression) != nil {
+                return nil
+            }
+            return trimmed
+        }
+
+        private func redrawAll(keepAtBottom: Bool) {
+            guard let storage = textView?.textStorage else { return }
+            storage.setAttributedString(styledText(lines.joined(separator: "\n")))
+            if keepAtBottom {
+                scrollToBottom()
+            }
+        }
+
+        private func scrollToBottom() {
+            guard let textView else { return }
+            textView.scrollToEndOfDocument(nil)
+        }
+
+        private func styledText(_ text: String) -> NSAttributedString {
+            let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            guard enableColor else {
+                return NSAttributedString(string: text, attributes: [
+                    .font: font,
+                    .foregroundColor: NSColor.textColor,
+                ])
+            }
+            let result = NSMutableAttributedString()
+            let splitLines = text.components(separatedBy: .newlines)
+            for (index, line) in splitLines.enumerated() {
+                result.append(styledLine(line, font: font))
+                if index < splitLines.count - 1 {
+                    result.append(NSAttributedString(string: "\n", attributes: [.font: font]))
+                }
+            }
+            return result
+        }
+
+        private func styledLine(_ line: String, font: NSFont) -> NSAttributedString {
+            let attributed = NSMutableAttributedString(string: line, attributes: [
+                .font: font,
+                .foregroundColor: NSColor.textColor,
+            ])
+            let ns = line as NSString
+            let fullRange = NSRange(location: 0, length: ns.length)
+
+            func paint(_ pattern: String, color: NSColor, options: NSRegularExpression.Options = []) {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+                for match in regex.matches(in: line, range: fullRange) {
+                    attributed.addAttribute(.foregroundColor, value: color, range: match.range)
+                }
+            }
+
+            paint(#"\b\d{2}[:.]\d{2}[:.]\d{2}\b"#, color: .systemBlue)
+            paint(#"\bINFO\b"#, color: .systemGreen, options: [.caseInsensitive])
+            paint(#"\bWARN\b"#, color: .systemYellow, options: [.caseInsensitive])
+            paint(#"\bERROR\b"#, color: .systemRed, options: [.caseInsensitive])
+
+            if let componentRegex = try? NSRegularExpression(pattern: #"\[([^\]/\]]+)\]"#) {
+                for match in componentRegex.matches(in: line, range: fullRange) where match.range.length > 2 {
+                    let inner = ns.substring(with: NSRange(location: match.range.location + 1, length: match.range.length - 2))
+                    if inner.range(of: #"^\d{2}[:.]\d{2}[:.]\d{2}(\s+(INFO|WARN|ERROR)(/(INFO|WARN|ERROR))?)?$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+                        continue
+                    }
+                    let innerRange = NSRange(location: match.range.location + 1, length: match.range.length - 2)
+                    attributed.addAttribute(.foregroundColor, value: NSColor.systemPurple, range: innerRange)
+                }
+            }
+            return attributed
         }
     }
 }

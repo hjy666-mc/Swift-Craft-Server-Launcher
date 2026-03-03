@@ -8,21 +8,6 @@ final class ServerLaunchUseCase: ObservableObject {
             serverId: server.id,
             message: "server.console.message.server_starting".localized()
         )
-        if server.javaPath == "java" {
-            if let remoteNode = await resolveRemoteNodeForLaunch(server: server) {
-                await launchRemoteServer(server: server, node: remoteNode)
-            } else {
-                GlobalErrorHandler.shared.handle(
-                    GlobalError.validation(
-                        chineseMessage: "未找到可用的远程节点，请先检查节点连接与服务器目录",
-                        i18nKey: "error.validation.server_not_selected",
-                        level: .notification
-                    )
-                )
-            }
-            return
-        }
-
         if server.nodeId != ServerNode.local.id {
             if let remoteNode = await resolveRemoteNodeForLaunch(server: server) {
                 await launchRemoteServer(server: server, node: remoteNode)

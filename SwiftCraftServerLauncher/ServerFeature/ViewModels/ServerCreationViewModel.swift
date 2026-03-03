@@ -121,6 +121,8 @@ class ServerCreationViewModel: ObservableObject {
                     }
                     defer { url.stopAccessingSecurityScopedResource() }
                     serverJar = try serverSetupService.copyCustomJar(from: url, to: serverDir)
+                    // 自定义 Jar 不强依赖版本元数据，延迟到启动时再解析/回退 Java。
+                    javaPath = ""
                 } else {
                     serverJar = try await ServerDownloadService.downloadServerJar(
                         serverType: selectedServerType,
@@ -128,10 +130,10 @@ class ServerCreationViewModel: ObservableObject {
                         loaderVersion: selectedLoaderVersion,
                         serverDir: serverDir
                     )
+                    let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
+                    javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
                 }
                 try serverSetupService.acceptEula(in: serverDir)
-                let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
-                javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
 
                 if selectedServerType == .forge {
                     let tempServer = ServerInstance(

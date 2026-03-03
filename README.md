@@ -25,14 +25,6 @@
 > 注：本项目尚未有Release
 在 Xcode 中打开 `SwiftCraftServerLauncher` 后运行。
 
-## 文档入口
-
-- 贡献指南（中文）：[CONTRIBUTING.md](CONTRIBUTING.md)
-- Contributing Guide (English): [doc/CONTRIBUTING_en.md](doc/CONTRIBUTING_en.md)
-- 附加归因条款（中文）：[doc/ADDITIONAL_TERMS.md](doc/ADDITIONAL_TERMS.md)
-- Additional Terms (English): [doc/ADDITIONAL_TERMS_en.md](doc/ADDITIONAL_TERMS_en.md)
-- Additional Terms (繁體中文): [doc/ADDITIONAL_TERMS_zh-TW.md](doc/ADDITIONAL_TERMS_zh-TW.md)
-
 ## 开源协议与归因
 
 本项目遵循 **GNU AGPL v3.0**，并包含附加归因条款。

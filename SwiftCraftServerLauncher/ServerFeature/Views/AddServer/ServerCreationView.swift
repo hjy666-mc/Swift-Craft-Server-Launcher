@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct ServerCreationView: View {
     @StateObject private var viewModel: ServerCreationViewModel
@@ -11,6 +12,7 @@ struct ServerCreationView: View {
     private let triggerCancel: Binding<Bool>
 
     @State private var showJarPicker = false
+    @State private var isJarDropTargeted = false
 
     init(
         isDownloading: Binding<Bool>,
@@ -195,7 +197,7 @@ struct ServerCreationView: View {
                 .foregroundColor(.primary)
             HStack(spacing: 8) {
                 Button {
-                    showJarPicker = true
+                    chooseCustomJar()
                 } label: {
                     Text("server.form.custom.jar.select".localized())
                 }
@@ -208,6 +210,64 @@ struct ServerCreationView: View {
                         .foregroundColor(.secondary)
                 }
             }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        isJarDropTargeted ? Color.accentColor : Color.secondary.opacity(0.35),
+                        style: StrokeStyle(lineWidth: isJarDropTargeted ? 2 : 1, dash: [6, 4])
+                    )
+            )
+            .onDrop(of: [UTType.fileURL], isTargeted: $isJarDropTargeted) { providers in
+                handleJarDrop(providers: providers)
+            }
         }
+    }
+
+    private func chooseCustomJar() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "jar") ?? .data]
+        panel.title = "server.form.custom.jar.select".localized()
+        if panel.runModal() == .OK, let url = panel.url {
+            guard url.pathExtension.lowercased() == "jar" else {
+                viewModel.customJarURL = nil
+                GlobalErrorHandler.shared.handle(
+                    GlobalError.validation(
+                        chineseMessage: "请选择 .jar 文件",
+                        i18nKey: "error.validation.invalid_file_type",
+                        level: .notification
+                    )
+                )
+                return
+            }
+            viewModel.customJarURL = url
+        }
+    }
+
+    private func handleJarDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            guard let data = item as? Data,
+                  let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                return
+            }
+            Task { @MainActor in
+                guard url.pathExtension.lowercased() == "jar" else {
+                    GlobalErrorHandler.shared.handle(
+                        GlobalError.validation(
+                            chineseMessage: "请选择 .jar 文件",
+                            i18nKey: "error.validation.invalid_file_type",
+                            level: .notification
+                        )
+                    )
+                    return
+                }
+                viewModel.customJarURL = url
+            }
+        }
+        return true
     }
 }

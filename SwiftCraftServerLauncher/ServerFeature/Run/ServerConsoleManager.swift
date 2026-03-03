@@ -3,11 +3,24 @@ import Combine
 
 @MainActor
 final class ServerConsoleManager: ObservableObject {
+    struct ConsoleEvent: Equatable {
+        enum Kind: Equatable {
+            case append
+            case clear
+        }
+        let sequence: Int
+        let serverId: String
+        let text: String
+        let kind: Kind
+    }
+
     static let shared = ServerConsoleManager()
 
     @Published private(set) var logs: [String: [String]] = [:]
+    @Published private(set) var latestEvent: ConsoleEvent?
     private var inputPipes: [String: Pipe] = [:]
     private var renderedCache: [String: AttributedString] = [:]
+    private var nextSequence: Int = 0
 
     private init() {}
 
@@ -42,6 +55,7 @@ final class ServerConsoleManager: ObservableObject {
     func clear(serverId: String) {
         logs[serverId] = []
         renderedCache[serverId] = nil
+        publishEvent(serverId: serverId, text: "", kind: .clear)
     }
 
     func appendSystemMessage(serverId: String, message: String) {
@@ -63,6 +77,15 @@ final class ServerConsoleManager: ObservableObject {
         return lines.joined()
     }
 
+    func logLines(for serverId: String) -> [String] {
+        let chunks = logs[serverId] ?? []
+        return chunks.joined().components(separatedBy: .newlines)
+    }
+
+    func appendExternal(serverId: String, text: String) {
+        append(serverId: serverId, text: text)
+    }
+
     func renderedText(for serverId: String) -> AttributedString? {
         renderedCache[serverId]
     }
@@ -76,5 +99,16 @@ final class ServerConsoleManager: ObservableObject {
             logs[serverId] = []
         }
         logs[serverId]?.append(text)
+        publishEvent(serverId: serverId, text: text, kind: .append)
+    }
+
+    private func publishEvent(serverId: String, text: String, kind: ConsoleEvent.Kind) {
+        nextSequence += 1
+        latestEvent = ConsoleEvent(
+            sequence: nextSequence,
+            serverId: serverId,
+            text: text,
+            kind: kind
+        )
     }
 }
