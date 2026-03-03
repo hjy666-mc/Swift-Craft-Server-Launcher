@@ -2,6 +2,13 @@ import Foundation
 import Darwin
 
 enum ServerPortChecker {
+    struct PortProcessInfo: Identifiable {
+        let id = UUID()
+        let pid: Int
+        let command: String
+        let user: String
+    }
+
     static func isPortAvailable(_ port: Int) -> Bool {
         return canBind(port: port, family: AF_INET) && canBind(port: port, family: AF_INET6)
     }
@@ -49,5 +56,43 @@ enum ServerPortChecker {
 
         close(sock)
         return result == 0
+    }
+
+    static func localPortProcesses(_ port: Int) -> [PortProcessInfo] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        process.arguments = ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let text = String(data: data, encoding: .utf8) else { return [] }
+            let lines = text.split(separator: "\n").map(String.init)
+            guard lines.count > 1 else { return [] }
+            return lines.dropFirst().compactMap { line in
+                let parts = line.split { character in character == " " || character == "\t" }.map(String.init)
+                guard parts.count >= 3, let pid = Int(parts[1]) else { return nil }
+                return PortProcessInfo(pid: pid, command: parts[0], user: parts[2])
+            }
+        } catch {
+            return []
+        }
+    }
+
+    @discardableResult
+    static func killLocalProcess(pid: Int) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/kill")
+        process.arguments = ["-TERM", "\(pid)"]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 }

@@ -41,6 +41,9 @@ struct AddServerNodeSheet: View {
                         .textFieldStyle(.roundedBorder)
                     TextField("node.add.host".localized(), text: $host)
                         .textFieldStyle(.roundedBorder)
+                        .onChange(of: host) { _, newValue in
+                            applyHostPortAutofill(from: newValue)
+                        }
                     TextField("node.add.port".localized(), text: $port)
                         .textFieldStyle(.roundedBorder)
                     TextField("node.add.username".localized(), text: $username)
@@ -132,6 +135,39 @@ struct AddServerNodeSheet: View {
         data[nodeId] = password
         if let encoded = try? JSONEncoder().encode(data) {
             try? encoded.write(to: storageURL, options: .atomic)
+        }
+    }
+
+    private func applyHostPortAutofill(from input: String) {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if trimmed.hasPrefix("["),
+           let rightBracket = trimmed.firstIndex(of: "]"),
+           trimmed.index(after: rightBracket) < trimmed.endIndex,
+           trimmed[trimmed.index(after: rightBracket)] == ":" {
+            let hostPart = String(trimmed[trimmed.startIndex...rightBracket])
+            let portPart = String(trimmed[trimmed.index(rightBracket, offsetBy: 2)...])
+            if Int(portPart) != nil {
+                if host != hostPart {
+                    host = hostPart
+                }
+                if port != portPart {
+                    port = portPart
+                }
+            }
+            return
+        }
+
+        guard let colonIndex = trimmed.lastIndex(of: ":") else { return }
+        let hostPart = String(trimmed[..<colonIndex])
+        let portPart = String(trimmed[trimmed.index(after: colonIndex)...])
+        guard !hostPart.isEmpty, Int(portPart) != nil else { return }
+        if host != hostPart {
+            host = hostPart
+        }
+        if port != portPart {
+            port = portPart
         }
     }
 }

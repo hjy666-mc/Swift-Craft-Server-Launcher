@@ -1,0 +1,93 @@
+import Foundation
+
+enum LocalServerDirectService {
+    static func start(server: ServerInstance, launchCommand: String) throws {
+        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let escapedServerDir = escapeSingleQuotes(serverDir.path)
+        let escapedLaunchCommand = escapeSingleQuotes(launchCommand)
+        let command = """
+        cd '\(escapedServerDir)' && \
+        if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then \
+          echo __SCSL_ALREADY_RUNNING__; \
+        else \
+          rm -f .scsl.pid .scsl.stdin; \
+          mkfifo .scsl.stdin && \
+          nohup /bin/sh -lc 'tail -f .scsl.stdin | \(escapedLaunchCommand)' >> scsl-server.log 2>&1 & \
+          echo $! > .scsl.pid; \
+          sleep 1; \
+          if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; fi; \
+        fi
+        """
+        let output = try runLocalShell(command)
+        if output.contains("__SCSL_ALREADY_RUNNING__") {
+            throw GlobalError.validation(
+                chineseMessage: "服务器已在运行",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+        guard output.contains("__SCSL_STARTED__") else {
+            throw GlobalError.validation(
+                chineseMessage: "本地启动失败，请检查控制台日志",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+    }
+
+    static func stop(server: ServerInstance) throws {
+        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let escapedServerDir = escapeSingleQuotes(serverDir.path)
+        let escapedJar = escapeSingleQuotes(server.serverJar)
+        let command = """
+        cd '\(escapedServerDir)' && \
+        if test -f .scsl.pid; then kill $(cat .scsl.pid) 2>/dev/null || true; rm -f .scsl.pid; fi && \
+        rm -f .scsl.stdin && \
+        pkill -f '\(escapedJar)' || true
+        """
+        _ = try runLocalShell(command)
+    }
+
+    static func sendCommand(server: ServerInstance, command: String) throws {
+        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let fifo = serverDir.appendingPathComponent(".scsl.stdin").path
+        let escapedCommand = escapeSingleQuotes(command)
+        let shell = "test -p '\(escapeSingleQuotes(fifo))' && printf '%s\\n' '\(escapedCommand)' > '\(escapeSingleQuotes(fifo))'"
+        _ = try runLocalShell(shell)
+    }
+
+    static func isDirectModeAvailable(server: ServerInstance) -> Bool {
+        let fifo = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(".scsl.stdin").path
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: fifo, isDirectory: &isDir), !isDir.boolValue {
+            return true
+        }
+        return false
+    }
+
+    private static func runLocalShell(_ command: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", command]
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        try process.run()
+        process.waitUntilExit()
+        let out = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let err = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if process.terminationStatus != 0 {
+            throw GlobalError.validation(
+                chineseMessage: "本地命令执行失败: \((out + err).trimmingCharacters(in: .whitespacesAndNewlines))",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+        return out + err
+    }
+
+    private static func escapeSingleQuotes(_ text: String) -> String {
+        text.replacingOccurrences(of: "'", with: "'\"'\"'")
+    }
+}

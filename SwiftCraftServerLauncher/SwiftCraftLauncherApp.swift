@@ -117,7 +117,5 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }
-
-        appWindowGroups()
     }
 }

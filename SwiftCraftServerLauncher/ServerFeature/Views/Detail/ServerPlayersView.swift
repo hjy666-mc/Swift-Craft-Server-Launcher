@@ -287,6 +287,6 @@ struct ServerPlayersView: View {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(entries) else { return "[]\n" }
-        return String(decoding: data, as: UTF8.self) + "\n"
+        return (String(bytes: data, encoding: .utf8) ?? "[]") + "\n"
     }
 }

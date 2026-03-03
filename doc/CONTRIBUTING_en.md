@@ -32,31 +32,12 @@ When you find a bug or have a suggestion:
 
 ## 3. Submitting Code (Pull Requests) 🚀
 
-1. **Fork** the repository and sync your fork with the latest `dev` branch.
-2. **Create a feature branch** from `dev`:
+Contribution flow:
 
-   ```
-   dev → feature/short-description
-   ```
-
-   Example: `feature/fix-java-path` or `feature/add-mod-support`
-3. Make your changes in that branch. Keep changes focused and small.
-4. Write clear commit messages:
-
-   * Start with a verb: “Fix …”, “Add …”, “Improve …”
-   * Example: `Fix Java detection on macOS`
-5. Test locally to ensure nothing is broken.
-6. Push the branch to your fork.
-7. Open a **Pull Request**:
-
-   * **Base repository**: original SwiftCraftServerLauncher repo
-   * **Base branch**: `dev`
-   * **Compare branch**: your feature branch
-8. In your PR description, include:
-
-   * Motivation: why this change is needed
-   * Summary: what has changed
-   * Screenshots/logs if relevant
+Fork `dev` branch → create a feature branch (naming: `feat/...`, `fix/...`, `docs/...`, `chore/...`) →
+if remote `dev` has new commits, merge `origin/dev` into your feature branch first, resolve conflicts, then continue →
+open a PR with base branch `dev`, and describe both change details and validation steps →
+merge only after `dev` CI/checks pass.
 
 ---
 
@@ -71,15 +52,76 @@ When you find a bug or have a suggestion:
 
 ---
 
-## 5. Branching Rules 🌲
+## 5. Commit Convention 📝
 
-* `dev`: the main development branch (all features merge here)
-* Always create feature branches from `dev`
+Commit messages contain `Header`, `Body`, and `Footer`:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+`Header` is required. `Body/Footer` are optional.
+Keep each line within 72 chars when possible, max 100 chars.
+
+`Header` format:
+
+`<type>(<scope>): <subject>`
+
+Allowed `type` values:
+
+* `feat` new feature
+* `fix` bug fix
+* `docs` docs only
+* `style` formatting only (no runtime change)
+* `refactor` refactor
+* `test` tests
+* `chore` build/tooling changes
+
+`scope` is optional (for example: `cli`, `tui`, `log`, `server`).
+
+`subject` rules:
+
+* Start with a verb in present tense (for example `change`, not `changed`)
+* Lowercase first letter
+* No trailing period
+* Prefer <= 50 chars
+
+`Footer` is used only for:
+
+* Breaking changes: `BREAKING CHANGE: <reason>`
+* Closing issues: `Closes #123` or `Closes #123, #245`
+
+Revert format:
+
+```
+revert: <original header>
+
+This reverts commit <hash>.
+```
+
+Optional Commitizen setup:
+
+```bash
+npm install -g commitizen
+commitizen init cz-conventional-changelog --save --save-exact
+```
+
+---
+
+## 6. Branching Rules 🌲
+
+* `dev`: main development branch for daily feature/fix integration
+* `main`: stable branch, updated only for releases
+* Always create feature branches from `dev` (`feat/...`, `fix/...`, `docs/...`, `chore/...`)
 * All PRs should target `dev` as the base branch
 
 ---
 
-## 6. Local Development Setup 💻
+## 7. Local Development Setup 💻
 
 * Use the latest stable **Xcode** (version specified by project)
 * Ensure your Swift version matches project requirements
@@ -88,15 +130,15 @@ When you find a bug or have a suggestion:
 
 ---
 
-## 7. Merging & Releases 📦
+## 8. Merging & Releases 📦
 
-* Maintainers will review PRs before merging into `dev`
-* Stable versions are tagged and released from `dev`
+* Maintainers review PRs before merging into `dev`
+* For a stable release, merge `dev` into `main`, then create release tags on `main`
 * Releases are tested to confirm no major bugs remain
 
 ---
 
-## 8. Thank You! 💖
+## 9. Thank You! 💖
 
 Every issue, PR, or suggestion makes this project better.
 We deeply appreciate your time and effort in contributing.

@@ -17,7 +17,7 @@ class ServerCreationViewModel: ObservableObject {
 
     @Published var customJarURL: URL?
     @Published var hasAcceptedEula: Bool = false
-    @Published var consoleMode: ServerConsoleMode = .rcon
+    @Published var consoleMode: ServerConsoleMode = .direct
     @Published var rconPortText: String = "25575"
     @Published var rconPassword: String = ""
     @Published private(set) var isRemoteNode: Bool = false
@@ -71,10 +71,6 @@ class ServerCreationViewModel: ObservableObject {
     private func computeIsFormValid() -> Bool {
         if !serverNameValidator.isFormValid { return false }
         if !hasAcceptedEula { return false }
-        if isRemoteNode && consoleMode == .rcon {
-            guard !rconPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-            guard let port = Int(rconPortText), port > 0, port <= 65535 else { return false }
-        }
         switch selectedServerType {
         case .custom:
             return customJarURL != nil

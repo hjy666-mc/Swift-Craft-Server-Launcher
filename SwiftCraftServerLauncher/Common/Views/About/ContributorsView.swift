@@ -58,7 +58,7 @@ public struct ContributorsView: View {
     // MARK: - Static Contributors List
     private var staticContributorsList: some View {
         VStack(spacing: 0) {
-            Text("contributors.core_contributors")
+            Text("contributors.core_contributors".localized())
                 .font(.title3)
                 .fontWeight(.semibold)
                 .padding(.horizontal)
@@ -81,7 +81,7 @@ public struct ContributorsView: View {
     private var contributorsList: some View {
         VStack(spacing: 0) {
             // GitHub贡献者标题
-            Text("contributors.github_contributors")
+            Text("contributors.github_contributors".localized())
                 .font(.title3)
                 .fontWeight(.semibold)
                 .padding(.horizontal)

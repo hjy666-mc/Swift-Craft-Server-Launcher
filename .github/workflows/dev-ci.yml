@@ -1,0 +1,82 @@
+name: Dev CI
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    name: Lint and Format
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install linters
+        run: brew install swiftlint swiftformat reviewdog
+
+      - name: SwiftFormat (lint)
+        run: swiftformat . --lint --reporter github-actions-log
+
+      - name: SwiftLint (checkstyle)
+        run: swiftlint lint --strict --reporter checkstyle > swiftlint.xml
+
+      - name: Reviewdog (PR comments)
+        if: github.event_name == 'pull_request'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reviewdog \
+            -f=checkstyle \
+            -name="swiftlint" \
+            -reporter=github-pr-review \
+            -filter-mode=added \
+            -fail-level=warning \
+            < swiftlint.xml
+
+      - name: Reviewdog (PR checks)
+        if: github.event_name != 'pull_request'
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reviewdog \
+            -f=checkstyle \
+            -name="swiftlint" \
+            -reporter=github-check \
+            -fail-level=warning \
+            < swiftlint.xml
+
+  build:
+    name: Build Validation
+    runs-on: macos-15
+    needs: quality
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project SwiftCraftServerLauncher.xcodeproj \
+            -scheme SwiftCraftLauncher \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -skipPackagePluginValidation \
+            build

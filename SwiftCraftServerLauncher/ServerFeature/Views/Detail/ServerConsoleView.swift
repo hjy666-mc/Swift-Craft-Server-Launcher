@@ -10,14 +10,26 @@ struct ServerConsoleView: View {
     @State private var remoteLogTask: Task<Void, Never>?
     @State private var localLogTask: Task<Void, Never>?
     @State private var localLogText: String = ""
+    @State private var lastRemotePolledText: String = ""
+    @State private var lastLocalPolledText: String = ""
     @State private var rconPort: String = "25575"
     @State private var rconPassword: String = ""
     @State private var lastRemoteLogError: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("server.console.title".localized())
-                .font(.headline)
+            HStack {
+                Text("server.console.title".localized())
+                    .font(.headline)
+                Spacer()
+                Button {
+                    clearConsole()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .help("common.clear".localized())
+            }
             consoleOutput
             commandInput
         }
@@ -31,6 +43,8 @@ struct ServerConsoleView: View {
             remoteLogText = ""
             rconOutputText = ""
             localLogText = ""
+            lastRemotePolledText = ""
+            lastLocalPolledText = ""
             stopRemoteLogPolling()
             stopLocalLogPolling()
             rconPort = String(server.rconPort)
@@ -91,11 +105,7 @@ struct ServerConsoleView: View {
         let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commandText = ""
-        if isRemoteServer && isRconMode {
-            sendRemoteRCONCommand(text)
-            return
-        }
-        if isRemoteServer && !isRconMode {
+        if isRemoteServer {
             sendRemoteDirectCommand(text)
             return
         }
@@ -103,7 +113,24 @@ struct ServerConsoleView: View {
             console.send(serverId: server.id, command: text)
             return
         }
+        if LocalServerDirectService.isDirectModeAvailable(server: server) {
+            do {
+                try LocalServerDirectService.sendCommand(server: server, command: text)
+            } catch {
+                GlobalErrorHandler.shared.handle(error)
+            }
+            return
+        }
         sendLocalRCONCommand(text)
+    }
+
+    private func clearConsole() {
+        console.clear(serverId: server.id)
+        remoteLogText = ""
+        localLogText = ""
+        rconOutputText = ""
+        lastRemotePolledText = ""
+        lastLocalPolledText = ""
     }
 
     private var isRemoteServer: Bool {
@@ -111,17 +138,17 @@ struct ServerConsoleView: View {
     }
 
     private var isRconMode: Bool {
-        server.consoleMode == .rcon
+        false
     }
 
     private var shouldShowRconInputs: Bool {
-        (isRemoteServer && isRconMode) || (!isRemoteServer && ServerProcessManager.shared.getProcess(for: server.id) == nil)
+        isRemoteServer && isRconMode
     }
 
     private var consoleText: String {
         let localSystem = console.logText(for: server.id)
         if isRemoteServer {
-            return [localSystem, remoteLogText, rconOutputText]
+            return [localSystem, remoteLogText]
                 .filter { !$0.isEmpty }
                 .joined(separator: "\n")
         }
@@ -204,7 +231,16 @@ struct ServerConsoleView: View {
         ]
         for file in candidates where FileManager.default.fileExists(atPath: file.path) {
             if let text = try? String(contentsOf: file, encoding: .utf8), !text.isEmpty {
-                localLogText = text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
+                let current = text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
+                let delta = incrementalDelta(previous: lastLocalPolledText, current: current)
+                if !delta.isEmpty {
+                    if localLogText.isEmpty {
+                        localLogText = delta
+                    } else {
+                        localLogText += "\n" + delta
+                    }
+                }
+                lastLocalPolledText = current
                 return
             }
         }
@@ -212,96 +248,85 @@ struct ServerConsoleView: View {
 
     @MainActor
     private func loadRemoteLog(nodeId: String, serverName: String) async {
-        guard let node = serverNodeRepository.getNode(by: nodeId) else { return }
+        guard let node = resolvedRemoteNode(nodeId: nodeId) else {
+            let line = "[SCSL] \("server.console.remote_node_missing".localized())"
+            if remoteLogText.isEmpty {
+                remoteLogText = line
+            } else if !remoteLogText.contains(line) {
+                remoteLogText += "\n" + line
+            }
+            return
+        }
         do {
             let text = try await SSHNodeService.fetchRemoteServerLog(node: node, serverName: serverName)
             let filtered = filterNoisyRconLifecycleLogs(text)
-            if !filtered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                remoteLogText = filtered
+            let current = filtered.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !current.isEmpty {
+                let delta = incrementalDelta(previous: lastRemotePolledText, current: current)
+                if !delta.isEmpty {
+                    if remoteLogText.isEmpty {
+                        remoteLogText = delta
+                    } else {
+                        remoteLogText += "\n" + delta
+                    }
+                }
+                lastRemotePolledText = current
             }
             lastRemoteLogError = ""
         } catch {
             let message = error.localizedDescription
+            if message != lastRemoteLogError {
+                let line = "[SCSL] \(message)"
+                if remoteLogText.isEmpty {
+                    remoteLogText = line
+                } else {
+                    remoteLogText += "\n" + line
+                }
+            }
             lastRemoteLogError = message
         }
     }
 
-    private func sendRemoteRCONCommand(_ command: String) {
-        guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
-        guard let port = UInt16(rconPort.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        let password = rconPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !password.isEmpty else {
+    private func incrementalDelta(previous: String, current: String) -> String {
+        if previous.isEmpty { return current }
+        if current == previous { return "" }
+        if current.hasPrefix(previous) {
+            return String(current.dropFirst(previous.count)).trimmingCharacters(in: .newlines)
+        }
+
+        let previousLines = previous.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let currentLines = current.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let maxOverlap = min(previousLines.count, currentLines.count)
+
+        var overlap = 0
+        if maxOverlap > 0 {
+            for count in stride(from: maxOverlap, through: 1, by: -1)
+                where Array(previousLines.suffix(count)) == Array(currentLines.prefix(count)) {
+                overlap = count
+                break
+            }
+        }
+
+        let newLines = currentLines.dropFirst(overlap)
+        return newLines.joined(separator: "\n").trimmingCharacters(in: .newlines)
+    }
+
+    private func sendRemoteDirectCommand(_ command: String) {
+        guard let node = resolvedRemoteNode(nodeId: server.nodeId) else {
             GlobalErrorHandler.shared.handle(
                 GlobalError.validation(
-                    chineseMessage: "请先输入 RCON 密码",
-                    i18nKey: "error.validation.server_not_selected",
+                    chineseMessage: "未找到远程节点，请重新选择节点后重试",
+                    i18nKey: "server.console.remote_node_missing",
                     level: .notification
                 )
             )
             return
         }
         Task {
-            var lastError: Error?
-            for attempt in 1...8 {
-                do {
-                    let output: String
-                    do {
-                        output = try await RCONService.execute(
-                            host: node.host,
-                            port: port,
-                            password: password,
-                            command: command
-                        )
-                    } catch {
-                        output = try await SSHNodeService.executeRemoteRCON(
-                            node: node,
-                            serverName: server.name,
-                            port: Int(port),
-                            password: password,
-                            command: command
-                        )
-                    }
-                    await MainActor.run {
-                        if !output.isEmpty {
-                            rconOutputText += "\n[RCON] \(output)\n"
-                        } else {
-                            rconOutputText += "\n[RCON] OK\n"
-                        }
-                    }
-                    return
-                } catch {
-                    lastError = error
-                    if attempt < 8 && shouldRetryRcon(error: error) {
-                        try? await Task.sleep(nanoseconds: 700_000_000)
-                        continue
-                    }
-                    break
-                }
-            }
-            if let lastError {
-                await MainActor.run {
-                    GlobalErrorHandler.shared.handle(lastError)
-                }
-            }
-        }
-    }
-
-    private func sendRemoteDirectCommand(_ command: String) {
-        guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
-        Task {
             do {
                 try await SSHNodeService.sendRemoteDirectCommand(node: node, serverName: server.name, command: command)
             } catch {
-                do {
-                    _ = try await RCONService.execute(
-                        host: node.host,
-                        port: UInt16(server.rconPort),
-                        password: server.rconPassword,
-                        command: command
-                    )
-                } catch {
-                    GlobalErrorHandler.shared.handle(error)
-                }
+                GlobalErrorHandler.shared.handle(error)
             }
         }
     }
@@ -365,8 +390,19 @@ struct ServerConsoleView: View {
         raw
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
+            .map { line in
+                line.replacingOccurrences(
+                    of: "\\u{001B}\\[[0-9;]*m",
+                    with: "",
+                    options: .regularExpression
+                )
+            }
             .filter { line in
-                !(line.contains("RCON Client /127.0.0.1") &&
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { return false }
+                if trimmed == ">" { return false }
+                if trimmed.allSatisfy({ $0 == ">" || $0 == " " }) { return false }
+                return !(line.contains("RCON Client /127.0.0.1") &&
                   (line.contains("started") || line.contains("shutting down")))
             }
             .joined(separator: "\n")
@@ -400,5 +436,16 @@ struct ServerConsoleView: View {
             || text.contains("timed out")
             || text.contains("eof")
             || text.contains("连接失败")
+    }
+
+    private func resolvedRemoteNode(nodeId: String) -> ServerNode? {
+        if let node = serverNodeRepository.getNode(by: nodeId), !node.isLocal {
+            return node
+        }
+        let remoteNodes = serverNodeRepository.nodes.filter { !$0.isLocal }
+        if remoteNodes.count == 1 {
+            return remoteNodes.first
+        }
+        return nil
     }
 }

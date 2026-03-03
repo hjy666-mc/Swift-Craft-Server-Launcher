@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 final class ServerLaunchUseCase: ObservableObject {
     @MainActor
@@ -71,22 +72,9 @@ final class ServerLaunchUseCase: ObservableObject {
             javaPath: resolvedJavaPath
         )
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: launchPath)
-        process.arguments = args
-        process.currentDirectoryURL = serverDir
-
-        let inputPipe = Pipe()
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardInput = inputPipe
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
         do {
-            try process.run()
-            ServerProcessManager.shared.storeProcess(serverId: server.id, process: process)
-            ServerConsoleManager.shared.attach(serverId: server.id, input: inputPipe, output: outputPipe, error: errorPipe)
+            let shellCommand = buildLocalShellCommand(launchPath: launchPath, args: args)
+            try LocalServerDirectService.start(server: server, launchCommand: shellCommand)
             ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: true)
             ServerConsoleManager.shared.appendSystemMessage(
                 serverId: server.id,
@@ -108,6 +96,7 @@ final class ServerLaunchUseCase: ObservableObject {
             await stopRemoteServer(server: server)
             return
         }
+        try? LocalServerDirectService.stop(server: server)
         _ = ServerProcessManager.shared.stopProcess(for: server.id)
         ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
         ServerConsoleManager.shared.detach(serverId: server.id)
@@ -127,6 +116,7 @@ final class ServerLaunchUseCase: ObservableObject {
         do {
             try await SSHNodeService.ensureRemoteJava21(node: node)
             try await SSHNodeService.updateRemoteServerProperties(node: node, server: server)
+            try await ensureRemoteAvailablePort(server: server, node: node)
             try await SSHNodeService.startRemoteServer(node: node, server: server, launchCommand: launchCommand)
             ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: true)
             ServerConsoleManager.shared.appendSystemMessage(
@@ -211,6 +201,16 @@ final class ServerLaunchUseCase: ObservableObject {
         try await ForgeInstallerService.install(server: server, serverDir: serverDir)
     }
 
+    private func buildLocalShellCommand(launchPath: String, args: [String]) -> String {
+        if launchPath == "/bin/zsh", args.count >= 2, args[0] == "-lc" {
+            return args[1]
+        }
+        let escaped = ([launchPath] + args).map { value in
+            "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+        }
+        return escaped.joined(separator: " ")
+    }
+
     private func buildForgeLaunchCommand(
         serverDir: URL,
         resolvedJavaPath: String
@@ -235,25 +235,57 @@ final class ServerLaunchUseCase: ObservableObject {
         do {
             let propertiesURL = serverDir.appendingPathComponent("server.properties")
             guard FileManager.default.fileExists(atPath: propertiesURL.path) else { return }
-            var properties = try ServerPropertiesService.readProperties(serverDir: serverDir)
+            let properties = try ServerPropertiesService.readProperties(serverDir: serverDir)
             let portString = properties["server-port"] ?? "25565"
             let port = Int(portString) ?? 25565
-            if ServerPortChecker.isPortAvailable(port) { return }
-
-            if let newPort = ServerPortChecker.findAvailablePort(startingAt: port + 1) {
-                properties["server-port"] = String(newPort)
-                try ServerPropertiesService.writeProperties(serverDir: serverDir, properties: properties)
-                GlobalErrorHandler.shared.handle(
-                    GlobalError.validation(
-                        chineseMessage: "端口 \(port) 被占用，已自动改为 \(newPort)",
-                        i18nKey: "error.validation.port_in_use",
-                        level: .notification
-                    )
-                )
+            if ServerPortChecker.isPortAvailable(port) {
+                return
+            }
+            let processes = ServerPortChecker.localPortProcesses(port)
+            let shouldKill = await promptPortConflict(
+                title: "本地端口被占用",
+                port: port,
+                details: processes.map { "PID \($0.pid)  \($0.user)  \($0.command)" }
+            )
+            if shouldKill {
+                for process in processes {
+                    _ = ServerPortChecker.killLocalProcess(pid: process.pid)
+                }
             }
         } catch {
             GlobalErrorHandler.shared.handle(error)
         }
+    }
+
+    private func ensureRemoteAvailablePort(server: ServerInstance, node: ServerNode) async throws {
+        let properties = try await SSHNodeService.readRemoteServerProperties(node: node, serverName: server.name)
+        let port = Int(properties["server-port"] ?? "25565") ?? 25565
+        let processes = try await SSHNodeService.remotePortProcesses(node: node, port: port)
+        if processes.isEmpty {
+            return
+        }
+        let shouldKill = await promptPortConflict(
+            title: "远程端口被占用",
+            port: port,
+            details: processes.map { "PID \($0.pid)  \($0.user)  \($0.command)" }
+        )
+        if shouldKill {
+            for process in processes {
+                try await SSHNodeService.killRemoteProcess(node: node, pid: process.pid)
+            }
+        }
+    }
+
+    @MainActor
+    private func promptPortConflict(title: String, port: Int, details: [String]) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        let body = details.isEmpty ? "端口 \(port) 已被占用" : "端口 \(port) 已被占用\n" + details.joined(separator: "\n")
+        alert.informativeText = body
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "结束进程")
+        alert.addButton(withTitle: "忽略")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func loadServerNode(nodeId: String) -> ServerNode? {
@@ -357,9 +389,9 @@ final class ServerLaunchUseCase: ObservableObject {
 
     private func applyLocalConsoleProperties(server: ServerInstance, serverDir: URL) throws {
         var properties = try ServerPropertiesService.readProperties(serverDir: serverDir)
-        properties["enable-rcon"] = server.consoleMode == .rcon ? "true" : "false"
+        properties["enable-rcon"] = "false"
         properties["rcon.port"] = String(server.rconPort)
-        if server.consoleMode == .rcon {
+        if !server.rconPassword.isEmpty {
             properties["rcon.password"] = server.rconPassword
         }
         try ServerPropertiesService.writeProperties(serverDir: serverDir, properties: properties)

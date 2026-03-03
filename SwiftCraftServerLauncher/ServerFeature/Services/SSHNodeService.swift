@@ -1,8 +1,16 @@
 import Foundation
 
+// swiftlint:disable type_body_length
 enum SSHNodeService {
     struct ConnectionResult {
         let output: String
+    }
+
+    struct PortProcessInfo: Identifiable {
+        let id = UUID()
+        let pid: Int
+        let command: String
+        let user: String
     }
 
     static func testConnectionAndPrepareDirectories(node: ServerNode, password: String) async throws -> ConnectionResult {
@@ -67,32 +75,45 @@ enum SSHNodeService {
         let password = try loadPassword(for: node)
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(server.name)"
-        let startCommand: String
-        if server.consoleMode == .direct {
-            let piped = "rm -f .scsl.stdin; mkfifo .scsl.stdin; tail -f .scsl.stdin | \(launchCommand)"
-            startCommand = "nohup /bin/sh -lc '\(escapeSingleQuotes(piped))' >> scsl-server.log 2>&1 & echo $! > .scsl.pid"
-        } else {
-            startCommand = "nohup /bin/sh -lc '\(escapeSingleQuotes(launchCommand))' >> scsl-server.log 2>&1 & echo $! > .scsl.pid"
-        }
-        let command = """
+        let helper = "\(root)/.scsl/scsl-helper.sh"
+        let helperCommand = """
         cd '\(escapeSingleQuotes(serverDir))' && \
+        (test -f eula.txt || printf "eula=true\\n" > eula.txt) && \
+        '\(escapeSingleQuotes(helper))' start '\(escapeSingleQuotes(serverDir))' '\(escapeSingleQuotes(launchCommand))'
+        """
+        let fallbackCommand = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        (test -f eula.txt || printf "eula=true\\n" > eula.txt) && \
         if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then \
           echo __SCSL_ALREADY_RUNNING__; \
         else \
-          if test -f .scsl.pid && ! kill -0 $(cat .scsl.pid) 2>/dev/null; then rm -f .scsl.pid; fi; \
-          (test -f eula.txt || printf "eula=true\\n" > eula.txt) && \
-          \(startCommand) && \
-          sleep 1 && \
-          if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; tail -n 120 scsl-server.log 2>/dev/null || true; fi; \
+          rm -f .scsl.pid .scsl.stdin; \
+          mkfifo .scsl.stdin && \
+          nohup /bin/sh -lc 'tail -f .scsl.stdin | \(escapeSingleQuotes(launchCommand))' >> scsl-server.log 2>&1 & \
+          echo $! > .scsl.pid; \
+          sleep 1; \
+          if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; fi; \
         fi
         """
-        let output = try await runExpectSSH(
-            host: node.host,
-            port: node.port,
-            username: node.username,
-            password: password,
-            remoteCommand: command
-        )
+        let output: String
+        do {
+            try await ensureRemoteHelper(node: node, password: password)
+            output = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand
+            )
+        } catch {
+            output = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: fallbackCommand
+            )
+        }
         if output.contains("__SCSL_ALREADY_RUNNING__") {
             throw GlobalError.validation(
                 chineseMessage: "服务器已在运行，请先停止当前实例或直接查看控制台",
@@ -116,16 +137,33 @@ enum SSHNodeService {
         let password = try loadPassword(for: node)
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(server.name)"
-        let command = """
-        cd '\(escapeSingleQuotes(serverDir))' && if test -f .scsl.pid; then kill $(cat .scsl.pid) 2>/dev/null || true; rm -f .scsl.pid; fi && pkill -f '\(escapeSingleQuotes(server.serverJar))' || true && echo __SCSL_STOPPED__
+        let helper = "\(root)/.scsl/scsl-helper.sh"
+        let helperCommand = """
+        '\(escapeSingleQuotes(helper))' stop '\(escapeSingleQuotes(serverDir))' '\(escapeSingleQuotes(server.serverJar))' && echo __SCSL_STOPPED__
         """
-        _ = try await runExpectSSH(
-            host: node.host,
-            port: node.port,
-            username: node.username,
-            password: password,
-            remoteCommand: command
-        )
+        let fallbackCommand = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        if test -f .scsl.pid; then kill $(cat .scsl.pid) 2>/dev/null || true; rm -f .scsl.pid; fi && \
+        rm -f .scsl.stdin && pkill -f '\(escapeSingleQuotes(server.serverJar))' || true && echo __SCSL_STOPPED__
+        """
+        do {
+            try await ensureRemoteHelper(node: node, password: password)
+            _ = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand
+            )
+        } catch {
+            _ = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: fallbackCommand
+            )
+        }
     }
 
     static func remoteServerDirectoryExists(node: ServerNode, serverName: String) async throws -> Bool {
@@ -153,7 +191,11 @@ enum SSHNodeService {
         let password = try loadPassword(for: node)
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"
-        let command = """
+        let helper = "\(root)/.scsl/scsl-helper.sh"
+        let helperCommand = """
+        '\(escapeSingleQuotes(helper))' log '\(escapeSingleQuotes(serverDir))' '\(maxLines)'
+        """
+        let fallbackCommand = """
         if cd '\(escapeSingleQuotes(serverDir))' 2>/dev/null; then \
           if test -f scsl-server.log && test -s scsl-server.log; then \
             tail -n \(maxLines) scsl-server.log; \
@@ -170,20 +212,30 @@ enum SSHNodeService {
           echo "__SCSL_LOG_DIR_MISSING__"; \
         fi
         """
-        return try await runExpectSSH(
-            host: node.host,
-            port: node.port,
-            username: node.username,
-            password: password,
-            remoteCommand: command
-        )
+        do {
+            return try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand
+            )
+        } catch {
+            return try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: fallbackCommand
+            )
+        }
     }
 
     static func updateRemoteServerProperties(node: ServerNode, server: ServerInstance) async throws {
         let password = try loadPassword(for: node)
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(server.name)"
-        let enableRcon = server.consoleMode == .rcon ? "true" : "false"
+        let enableRcon = "false"
         let command = """
         cd '\(escapeSingleQuotes(serverDir))' && touch server.properties && \
         if grep -q '^enable-rcon=' server.properties; then sed -i.bak 's/^enable-rcon=.*/enable-rcon=\(enableRcon)/' server.properties; else echo 'enable-rcon=\(enableRcon)' >> server.properties; fi && \
@@ -302,6 +354,32 @@ enum SSHNodeService {
         _ = try await execute(node: node, remoteCommand: command)
     }
 
+    static func remotePortProcesses(node: ServerNode, port: Int) async throws -> [PortProcessInfo] {
+        let command = """
+        if command -v lsof >/dev/null 2>&1; then
+          lsof -nP -iTCP:\(port) -sTCP:LISTEN | awk 'NR>1 {print $2 "|" $1 "|" $3}'
+        elif command -v ss >/dev/null 2>&1; then
+          ss -ltnp 'sport = :\(port)' | sed -n 's/.*pid=\\([0-9][0-9]*\\),fd=[0-9][0-9]*.*/\\1|unknown|unknown/p'
+        else
+          echo ""
+        fi
+        """
+        let output = try await execute(node: node, remoteCommand: command)
+        return output
+            .split(separator: "\n")
+            .map(String.init)
+            .compactMap { line in
+                let parts = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                guard parts.count >= 3, let pid = Int(parts[0]) else { return nil }
+                return PortProcessInfo(pid: pid, command: parts[1], user: parts[2])
+            }
+    }
+
+    static func killRemoteProcess(node: ServerNode, pid: Int) async throws {
+        let command = "kill -TERM \(pid) 2>/dev/null || kill -9 \(pid) 2>/dev/null || true"
+        _ = try await execute(node: node, remoteCommand: command)
+    }
+
     static func listRemoteWorlds(node: ServerNode, serverName: String) async throws -> [String] {
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"
@@ -333,11 +411,47 @@ enum SSHNodeService {
     }
 
     static func sendRemoteDirectCommand(node: ServerNode, serverName: String, command: String) async throws {
+        let password = try loadPassword(for: node)
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"
-        let cmd = command.replacingOccurrences(of: "'", with: "'\"'\"'")
-        let remote = "cd '\(escapeSingleQuotes(serverDir))' && test -p .scsl.stdin && printf '%s\\n' '\(cmd)' >> .scsl.stdin"
-        _ = try await execute(node: node, remoteCommand: remote)
+        let helper = "\(root)/.scsl/scsl-helper.sh"
+        let helperCommand = "'\(escapeSingleQuotes(helper))' send '\(escapeSingleQuotes(serverDir))' '\(escapeSingleQuotes(command))'"
+        let fallbackCommand = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        if test -p .scsl.stdin; then printf '%s\\n' '\(escapeSingleQuotes(command))' > .scsl.stdin && echo __SCSL_SENT__; else echo __SCSL_STDIN_MISSING__; fi
+        """
+        do {
+            try await ensureRemoteHelper(node: node, password: password)
+            let output = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand
+            )
+            guard output.contains("__SCSL_SENT__") else {
+                throw GlobalError.validation(
+                    chineseMessage: "远程控制台未连接到运行中的服务器进程，请先启动服务器",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                )
+            }
+        } catch {
+            let output = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: fallbackCommand
+            )
+            guard output.contains("__SCSL_SENT__") else {
+                throw GlobalError.validation(
+                    chineseMessage: "远程控制台未连接到运行中的服务器进程，请先启动服务器",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                )
+            }
+        }
     }
 
     static func executeRemoteRCON(
@@ -585,22 +699,16 @@ enum SSHNodeService {
 
             let wrappedCommand = wrapRemoteCommand(remoteCommand)
             let script = """
-            log_user 0
+            log_user 1
             set timeout \(timeoutSeconds)
-            match_max 2000000
-            set output ""
             spawn ssh -tt -p \(port) -o LogLevel=ERROR -o ConnectTimeout=10 -o ConnectionAttempts=1 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \(username)@\(host) "\(escapeDoubleQuotes(wrappedCommand))"
             expect {
                 -re {.*yes/no.*} { send "yes\\r"; exp_continue }
                 -re {.*[Pp]assword:.*} { send "\(escapeExpectString(password))\\r"; exp_continue }
-                -re {.*Permission denied.*} { append output $expect_out(0,string); puts $output; exit 255 }
-                -re {.+} { append output $expect_out(0,string); exp_continue }
-                timeout { puts $output; exit 124 }
-                eof {
-                    catch { append output $expect_out(buffer) }
-                }
+                -re {.*密码[:：].*} { send "\(escapeExpectString(password))\\r"; exp_continue }
+                timeout { send_user "__SCSL_EXPECT_TIMEOUT__\\n"; exit 124 }
+                eof { }
             }
-            puts $output
             catch wait result
             set code [lindex $result 3]
             exit $code
@@ -612,6 +720,8 @@ enum SSHNodeService {
             let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let out = String(data: outData, encoding: .utf8) ?? ""
             let err = String(data: errData, encoding: .utf8) ?? ""
+            let rawCombined = sanitizeSSHClientNoise(out + (err.isEmpty ? "" : "\n" + err))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             let outOnly = sanitizeSSHClientNoise(out).trimmingCharacters(in: .whitespacesAndNewlines)
             let merged = sanitizeSSHClientNoise(out + (err.isEmpty ? "" : "\n" + err))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -627,8 +737,16 @@ enum SSHNodeService {
             if process.terminationStatus == 0 {
                     continuation.resume(returning: outOnly)
             } else {
+                    let detail: String
+                    if !merged.isEmpty {
+                        detail = merged
+                    } else if !rawCombined.isEmpty {
+                        detail = rawCombined
+                    } else {
+                        detail = "无输出（可能是 SSH 认证失败、远程禁止 root 登录、或远程 shell 不可用）"
+                    }
                     continuation.resume(throwing: GlobalError.validation(
-                        chineseMessage: "SSH 执行失败(exit=\(process.terminationStatus)): \((merged.isEmpty ? "无输出" : merged))",
+                        chineseMessage: "SSH 执行失败(exit=\(process.terminationStatus)): \(detail)",
                         i18nKey: "error.validation.server_not_selected",
                         level: .notification
                     ))
@@ -755,10 +873,103 @@ enum SSHNodeService {
             .filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty { return true }
+                if trimmed.hasPrefix("spawn ssh ") { return false }
+                if trimmed.contains("'s password:") { return false }
+                if trimmed.hasPrefix("Warning: Permanently added") { return false }
                 if trimmed.hasPrefix("Connection to ") && trimmed.hasSuffix(" closed.") { return false }
                 if trimmed.hasPrefix("Connection to ") && trimmed.hasSuffix(" closed") { return false }
                 return true
             }
             .joined(separator: "\n")
     }
+
+    private static func ensureRemoteHelper(node: ServerNode, password: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let helperDir = "\(root)/.scsl"
+        let helperPath = "\(helperDir)/scsl-helper.sh"
+        let script = """
+        #!/bin/sh
+        set -eu
+        action="$1"
+        server_dir="${2:-}"
+        case "$action" in
+          start)
+            launch_cmd="${3:-}"
+            cd "$server_dir"
+            if test -f .scsl.pid && kill -0 "$(cat .scsl.pid)" 2>/dev/null; then
+              echo "__SCSL_ALREADY_RUNNING__"; exit 0
+            fi
+            rm -f .scsl.pid .scsl.stdin
+            mkfifo .scsl.stdin
+            nohup /bin/sh -lc "tail -f .scsl.stdin | $launch_cmd" >> scsl-server.log 2>&1 &
+            echo $! > .scsl.pid
+            sleep 1
+            if test -f .scsl.pid && kill -0 "$(cat .scsl.pid)" 2>/dev/null; then
+              echo "__SCSL_STARTED__"
+            else
+              echo "__SCSL_START_FAILED__"
+              tail -n 120 scsl-server.log 2>/dev/null || true
+            fi
+            ;;
+          stop)
+            jar_hint="${3:-}"
+            cd "$server_dir"
+            if test -f .scsl.pid; then kill "$(cat .scsl.pid)" 2>/dev/null || true; rm -f .scsl.pid; fi
+            rm -f .scsl.stdin
+            if test -n "$jar_hint"; then pkill -f "$jar_hint" || true; fi
+            ;;
+          send)
+            cmd="${3:-}"
+            cd "$server_dir"
+            if test -p .scsl.stdin; then
+              printf '%s\\n' "$cmd" > .scsl.stdin
+              echo "__SCSL_SENT__"
+            else
+              echo "__SCSL_STDIN_MISSING__"
+              exit 3
+            fi
+            ;;
+          log)
+            lines="${3:-300}"
+            cd "$server_dir" 2>/dev/null || { echo "__SCSL_LOG_DIR_MISSING__"; exit 0; }
+            if test -f scsl-server.log && test -s scsl-server.log; then
+              tail -n "$lines" scsl-server.log
+            elif test -f logs/latest.log; then
+              tail -n "$lines" logs/latest.log
+            elif test -f latest.log; then
+              tail -n "$lines" latest.log
+            elif test -f server.log; then
+              tail -n "$lines" server.log
+            else
+              echo ""
+            fi
+            ;;
+          *)
+            exit 2
+            ;;
+        esac
+        """
+        let base64 = Data(script.utf8).base64EncodedString()
+        let command = """
+        mkdir -p '\(escapeSingleQuotes(helperDir))' && \
+        printf '%s' '\(base64)' | base64 -d > '\(escapeSingleQuotes(helperPath))' && \
+        chmod +x '\(escapeSingleQuotes(helperPath))' && \
+        if test -x '\(escapeSingleQuotes(helperPath))'; then echo __SCSL_HELPER_OK__; else echo __SCSL_HELPER_FAIL__; fi
+        """
+        let output = try await runExpectSSH(
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            password: password,
+            remoteCommand: command
+        )
+        guard output.contains("__SCSL_HELPER_OK__") else {
+            throw GlobalError.validation(
+                chineseMessage: "远程 helper 安装失败",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+    }
 }
+// swiftlint:enable type_body_length

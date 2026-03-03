@@ -82,15 +82,6 @@ struct ServerCreationView: View {
             .onChange(of: viewModel.hasAcceptedEula) { _, _ in
                 viewModel.updateParentState()
             }
-            .onChange(of: viewModel.consoleMode) { _, _ in
-                viewModel.updateParentState()
-            }
-            .onChange(of: viewModel.rconPortText) { _, _ in
-                viewModel.updateParentState()
-            }
-            .onChange(of: viewModel.rconPassword) { _, _ in
-                viewModel.updateParentState()
-            }
             .onChange(of: triggerConfirm.wrappedValue) { _, newValue in
                 if newValue {
                     viewModel.handleConfirm()
@@ -152,37 +143,6 @@ struct ServerCreationView: View {
                 Text("server.form.eula.description".localized())
                     .font(.caption)
                     .foregroundColor(.secondary)
-            }
-
-            if viewModel.isRemoteNode {
-                FormSection {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("server.form.console.mode".localized())
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Picker("", selection: $viewModel.consoleMode) {
-                            Text("server.form.console.mode.rcon".localized()).tag(ServerConsoleMode.rcon)
-                            Text("server.form.console.mode.direct".localized()).tag(ServerConsoleMode.direct)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                    }
-
-                    if viewModel.consoleMode == .rcon {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("server.form.console.rcon".localized())
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
-                            HStack(spacing: 8) {
-                                TextField("server.console.rcon.port".localized(), text: $viewModel.rconPortText)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 140)
-                                SecureField("server.console.rcon.password".localized(), text: $viewModel.rconPassword)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                        }
-                    }
-                }
             }
         }
     }
