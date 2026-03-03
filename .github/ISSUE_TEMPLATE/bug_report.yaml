@@ -115,7 +115,7 @@ body:
         - Paper
         - 其他（说明）|Other (please specify)
     validations:
-      required: true
+      required: false
       
   - type: textarea
     id: launcher-logs
