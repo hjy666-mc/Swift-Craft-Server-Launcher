@@ -8,6 +8,7 @@ final class ServerConsoleManager: ObservableObject {
             case append
             case clear
         }
+
         let sequence: Int
         let serverId: String
         let text: String

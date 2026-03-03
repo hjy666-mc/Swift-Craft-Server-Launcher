@@ -88,24 +88,6 @@ struct ServerConsoleView: View {
             guard let event, event.serverId == server.id else { return }
             consoleEvent = event
         }
-        .onChange(of: consoleText) { _, _ in
-            if !followBottom {
-                hasNewLogsWhileBrowsingHistory = true
-            }
-            refreshRenderedConsole()
-            scheduleProgressiveRenderIfNeeded()
-        }
-    }
-
-    private var terminalSurface: some View {
-        VStack(spacing: 0) {
-            consoleOutput
-            commandInput
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.06))
-        )
     }
 
     private var terminalSurface: some View {
@@ -149,51 +131,6 @@ struct ServerConsoleView: View {
                 .padding(.vertical, 6)
                 .background(.regularMaterial, in: Capsule())
                 .padding(10)
-            }
-            .onChange(of: renderedConsoleText) { _, _ in
-                guard followBottom else { return }
-                withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo("console_end", anchor: .bottom)
-                }
-            }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    guard followBottom else { return }
-                    proxy.scrollTo("console_end", anchor: .bottom)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if isRenderingConsole {
-                    HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("正在渲染日志...")
-                    }
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(10)
-                } else if hasNewLogsWhileBrowsingHistory {
-                    Button {
-                        followBottom = true
-                        hasNewLogsWhileBrowsingHistory = false
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo("console_end", anchor: .bottom)
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down.to.line")
-                            Text("到底部")
-                        }
-                        .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.regularMaterial, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(10)
-                }
             }
         }
     }
@@ -327,22 +264,6 @@ struct ServerConsoleView: View {
 
     private var shouldShowRconInputs: Bool {
         isRemoteServer && isRconMode
-    }
-
-    private func currentLocalLogSnapshot(serverName: String) -> String {
-        let serverDir = AppPaths.serverDirectory(serverName: serverName)
-        let candidates = [
-            serverDir.appendingPathComponent("logs/latest.log"),
-            serverDir.appendingPathComponent("latest.log"),
-            serverDir.appendingPathComponent("scsl-server.log"),
-            serverDir.appendingPathComponent("server.log"),
-        ]
-        for file in candidates where FileManager.default.fileExists(atPath: file.path) {
-            if let text = try? String(contentsOf: file, encoding: .utf8), !text.isEmpty {
-                return text.components(separatedBy: .newlines).suffix(300).joined(separator: "\n")
-            }
-        }
-        return ""
     }
 
     private func currentLocalLogSnapshot(serverName: String) -> String {
@@ -572,7 +493,7 @@ struct ServerConsoleView: View {
             if trimmed.allSatisfy({ $0 == ">" || $0 == " " }) { continue }
             if trimmed.range(of: #"^>+$"#, options: .regularExpression) != nil { continue }
             if sanitized.contains("RCON Client /127.0.0.1"),
-               (sanitized.contains("started") || sanitized.contains("shutting down")) {
+               sanitized.contains("started") || sanitized.contains("shutting down") {
                 continue
             }
             kept.append(sanitized)
