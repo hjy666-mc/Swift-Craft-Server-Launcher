@@ -1,0 +1,135 @@
+name: 错误报告|Bug Report
+description: 报告一个错误或问题｜Report a bug or issue
+title: "[错误 Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您花时间填写这个错误报告！请尽可能提供详细信息，帮助我们快速识别和修复问题。
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us quickly identify and fix the issue.
+        
+        **提交前，请确保：**
+        - 您正在使用最新版本的 SwiftCraftServerLauncher
+        - 您已搜索现有问题以确认这不是重复报告
+        - 您已尝试重启启动器和游戏
+        **Before submitting, please make sure:**
+        - You are using the latest version of SwiftCraftServerLauncher
+        - You have searched existing Issues to confirm this isn't a duplicate
+        - You have tried restarting the launcher and game
+  
+  - type: input
+    id: contact
+    attributes:
+      label: 可选联系方式｜Contact Details (Optional)
+      description: 如果我们需要更多信息，如何联系您？How can we get in touch with you if we need more info?
+      placeholder: email@example.com
+    validations:
+      required: false
+      
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: 错误描述｜Bug Description
+      description: |
+        清楚简洁地描述错误是什么。
+        A clear and concise description of what the bug is.
+      placeholder: 发生了什么... what happened...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 预期行为｜Expected Behavior
+      description: |
+        清楚简洁地描述您期望发生什么。
+        A clear and concise description of what you expected to happen.
+      placeholder: 描述正常情况下应该发生什么 Describe what should happen normally
+    validations:
+      required: true
+      
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 重现步骤|Steps to Reproduce
+      description: |
+        提供详细的步骤来重现问题。
+        Provide detailed steps to reproduce the issue.
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: mac-architecture
+    attributes:
+      label: Mac 架构|Mac Architecture
+      description: 您使用的是哪种 Mac 架构？Which Mac architecture are you using?
+      multiple: false
+      options:
+        - Apple Silicon (M1/M2/M3/……)
+        - Intel (x86_64)
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: macos-version
+    attributes:
+      label: macOS
+      description: 您运行的是哪个版本的 macOS？Which version of macOS are you running?
+      options:
+        - macOS Sequoia 15.x
+        - macOS Sonoma 14.x
+        - 其他（说明）|Other (please specify)
+    validations:
+      required: true
+      
+  - type: textarea
+    id: launcher-logs
+    attributes:
+      label: SCSL 日志｜SCSL Logs
+      description: |
+        请粘贴相关的启动器日志输出。可以在启动器日志窗口或日志文件中找到。
+        Please paste relevant launcher log output. It can be found in the launcher's log window or log files.
+      placeholder:
+      render: shell
+    validations:
+      required: false
+      
+  - type: textarea
+    id: game-logs
+    attributes:
+      label: 游戏日志（如适用）|Game Logs (if applicable)
+      description: 如果问题与游戏执行相关，请粘贴游戏的 latest.log 或崩溃报告If the issue is related to game execution, please paste the game's latest.log or crash report
+      placeholder:
+      render: shell
+    validations:
+      required: false
+      
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 附加信息|Additional Context
+      description: 在此添加关于问题的任何其他信息，如截图、视频链接等。Add any other context about the problem here, such as screenshots, video links, etc.
+      placeholder:
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 检查清单Checklist
+      description: 请确认以下内容Please confirm the following
+      options:
+        - label: 我已搜索现有问题以确认这不是重复报告 I have searched existing Issues to confirm this is not a duplicate report
+          required: true
+        - label: 我已尝试重启启动器和游戏 I have tried restarting the launcher and game
+          required: true
+        - label: 我正在使用最新版本的启动器 I am using the latest version of the launcher (or have specified the exact version)
+          required: true
+        - label: 我已提供足够的信息来重现此问题 I have provided enough information to reproduce this issue
+          required: true
