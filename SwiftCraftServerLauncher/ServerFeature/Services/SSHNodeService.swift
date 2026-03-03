@@ -1,6 +1,6 @@
 import Foundation
 
-// swiftlint:disable type_body_length
+// swiftlint:disable type_body_length file_length
 enum SSHNodeService {
     struct ConnectionResult {
         let output: String
