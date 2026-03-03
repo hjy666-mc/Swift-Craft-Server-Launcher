@@ -1,0 +1,106 @@
+name: 功能请求｜Feature Request
+description: 为 SwiftCraftServerLauncher 建议新功能或改进｜Suggest a new feature or improvement for SwiftCraftServerLauncher
+title: "[功能 Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您花时间建议新功能！请尽可能提供详细信息，帮助我们理解您的请求。
+        Thanks for taking the time to suggest a new feature! Please provide as much detail as possible to help us understand your request.
+        
+        **提交前，请确保：**
+        - 您熟悉当前版本的 SwiftCraftServerLauncher
+        - 您已搜索现有问题以确认这不是重复请求
+        - 这是功能请求而不是错误报告（错误请使用错误报告模板）
+        **Before submitting, please make sure:**
+        - You are familiar with the current version of SwiftCraftServerLauncher
+        - You have searched existing Issues to confirm this isn't a duplicate request
+        - This is a feature request and not a bug report (use Bug Report template for bugs)
+
+  - type: input
+    id: contact
+    attributes:
+      label: 可选联系方式｜Contact Details (Optional)
+      description: 如果我们需要更多信息，如何联系您？How can we get in touch with you if we need more info?
+      placeholder: email@example.com
+    validations:
+      required: false
+      
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: 功能描述|Feature Description
+      description: |
+        清楚简洁地描述您希望看到的功能。
+        A clear and concise description of the feature you'd like to see.
+      placeholder:
+    validations:
+      required: true
+      
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: 问题或使用场景|Problem or Use Case
+      description: |
+        这个功能解决什么问题？它解决什么使用场景？
+        What problem does this feature solve? What use case does it address?
+      placeholder:
+    validations:
+      required: true
+      
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: 建议的解决方案|Proposed Solution
+      description: |
+        描述您如何设想这个功能：用户界面会是什么样子？用户如何与它交互？预期行为是什么？
+        Describe how you envision this feature working:
+        What would the user interface look like?
+        How would users interact with it?
+        What would be the expected behavior?
+      placeholder:
+    validations:
+      required: true
+      
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: 考虑的替代方案|Alternative Solutions
+      description: |
+        描述您考虑过的任何替代解决方案或变通方法。
+        Describe any alternative solutions or workarounds you've considered.
+      placeholder:
+    validations:
+      required: false
+      
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 附加信息|Additional Context
+      description: |
+        在此添加关于功能请求的任何其他信息、模型图、截图或示例。
+        Add any other context, mockups, screenshots, or examples about the feature request here.
+      placeholder:
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 检查清单|Checklist
+      description: |
+        请确认以下内容。
+        Please confirm the following.
+      options:
+        - label: 我已搜索现有问题以确认这不是重复请求 I have searched existing Issues to confirm this is not a duplicate request
+          required: true
+        - label: 这是功能请求，不是错误报告 This is a feature request, not a bug report
+          required: true
+        - label: 我已提供足够的详细信息来理解所请求的功能 I have provided enough detail to understand the requested feature
+          required: true
+        - label: 我理解这是一个建议，可能不会立即实施 I understand this is a suggestion and may not be implemented immediately
+          required: true
+
