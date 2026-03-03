@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+// swiftlint:disable file_length type_body_length
 
 struct ServerConsoleView: View {
     let server: ServerInstance
@@ -1064,3 +1065,4 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         }
     }
 }
+// swiftlint:enable file_length type_body_length
