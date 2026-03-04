@@ -9,6 +9,8 @@ class ServerCreationViewModel: ObservableObject {
     @Published var triggerCancel: Bool = false
 
     @Published var selectedServerType: ServerType = .vanilla
+    @Published var selectedServerIcon: String = "server.rack"
+    @Published var selectedServerIconURL: URL?
     @Published var selectedGameVersion: String = ""
     @Published var versionTime: String = ""
     @Published var selectedLoaderVersion: String = ""
@@ -109,8 +111,10 @@ class ServerCreationViewModel: ObservableObject {
 
             var serverJar = "server.jar"
             let javaPath: String
+            let iconImageFileName: String?
             if selectedNode.isLocal {
                 let serverDir = try serverSetupService.createServerDirectory(name: name)
+                iconImageFileName = try persistServerIconIfNeeded(serverName: name, baseDirectory: serverDir)
                 if selectedServerType == .custom, let url = customJarURL {
                     guard url.startAccessingSecurityScopedResource() else {
                         throw GlobalError.fileSystem(
@@ -148,6 +152,10 @@ class ServerCreationViewModel: ObservableObject {
                     try await ForgeInstallerService.install(server: tempServer, serverDir: serverDir)
                 }
             } else {
+                let localRemoteServerDir = AppPaths.remoteNodeServersDirectory(nodeId: selectedNode.id)
+                    .appendingPathComponent(name, isDirectory: true)
+                try? FileManager.default.createDirectory(at: localRemoteServerDir, withIntermediateDirectories: true)
+                iconImageFileName = try persistServerIconIfNeeded(serverName: name, baseDirectory: localRemoteServerDir)
                 if selectedServerType == .custom {
                     throw GlobalError.validation(
                         chineseMessage: "远程节点暂不支持上传自定义 Jar",
@@ -178,6 +186,8 @@ class ServerCreationViewModel: ObservableObject {
 
             let server = ServerInstance(
                 name: name,
+                iconName: selectedServerIcon,
+                iconImageFileName: iconImageFileName,
                 serverType: selectedServerType,
                 gameVersion: selectedGameVersion,
                 loaderVersion: selectedLoaderVersion,
@@ -200,6 +210,27 @@ class ServerCreationViewModel: ObservableObject {
             }
             GlobalErrorHandler.shared.handle(error)
         }
+    }
+
+    private func persistServerIconIfNeeded(serverName: String, baseDirectory: URL) throws -> String? {
+        guard let selectedServerIconURL else {
+            return nil
+        }
+        let didAccessSecurityScoped = selectedServerIconURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccessSecurityScoped {
+                selectedServerIconURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let ext = selectedServerIconURL.pathExtension.isEmpty ? "png" : selectedServerIconURL.pathExtension.lowercased()
+        let fileName = ".scsl-server-icon.\(ext)"
+        let destination = baseDirectory.appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.copyItem(at: selectedServerIconURL, to: destination)
+        return fileName
     }
 
     private func handleDuplicateName() {

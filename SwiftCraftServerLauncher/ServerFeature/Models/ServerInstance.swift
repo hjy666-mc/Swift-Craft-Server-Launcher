@@ -30,6 +30,8 @@ enum ServerType: String, Codable, CaseIterable, Identifiable {
 struct ServerInstance: Codable, Identifiable, Hashable {
     let id: String
     let name: String
+    let iconName: String
+    let iconImageFileName: String?
     let serverType: ServerType
     let gameVersion: String
     let loaderVersion: String
@@ -48,6 +50,8 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     init(
         id: UUID = UUID(),
         name: String,
+        iconName: String = "server.rack",
+        iconImageFileName: String? = nil,
         serverType: ServerType,
         gameVersion: String,
         loaderVersion: String = "",
@@ -65,6 +69,8 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     ) {
         self.id = id.uuidString
         self.name = name
+        self.iconName = iconName
+        self.iconImageFileName = iconImageFileName
         self.serverType = serverType
         self.gameVersion = gameVersion
         self.loaderVersion = loaderVersion
@@ -82,7 +88,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, serverType, gameVersion, loaderVersion, serverJar
+        case id, name, iconName, iconImageFileName, serverType, gameVersion, loaderVersion, serverJar
         case launchCommand, lastPlayed, javaPath, jvmArguments, xms, xmx, nodeId, consoleMode, rconPort, rconPassword
     }
 
@@ -90,6 +96,8 @@ struct ServerInstance: Codable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
+        iconName = try container.decodeIfPresent(String.self, forKey: .iconName) ?? "server.rack"
+        iconImageFileName = try container.decodeIfPresent(String.self, forKey: .iconImageFileName)
         serverType = try container.decode(ServerType.self, forKey: .serverType)
         gameVersion = try container.decode(String.self, forKey: .gameVersion)
         loaderVersion = try container.decodeIfPresent(String.self, forKey: .loaderVersion) ?? ""
@@ -104,5 +112,30 @@ struct ServerInstance: Codable, Identifiable, Hashable {
         consoleMode = try container.decodeIfPresent(ServerConsoleMode.self, forKey: .consoleMode) ?? .rcon
         rconPort = try container.decodeIfPresent(Int.self, forKey: .rconPort) ?? 25575
         rconPassword = try container.decodeIfPresent(String.self, forKey: .rconPassword) ?? ""
+    }
+
+    var resolvedIconName: String {
+        iconName.isEmpty ? "server.rack" : iconName
+    }
+
+    var iconFileURL: URL? {
+        let baseDirectory: URL = nodeId == ServerNode.local.id
+            ? AppPaths.serverDirectory(serverName: name)
+            : AppPaths.remoteNodeServersDirectory(nodeId: nodeId).appendingPathComponent(name, isDirectory: true)
+        if let iconImageFileName, !iconImageFileName.isEmpty {
+            let specificPath = baseDirectory.appendingPathComponent(iconImageFileName)
+            if FileManager.default.fileExists(atPath: specificPath.path) {
+                return specificPath
+            }
+        }
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: baseDirectory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ),
+        let matched = files.first(where: { $0.lastPathComponent.hasPrefix(".scsl-server-icon.") }) {
+            return matched
+        }
+        return nil
     }
 }

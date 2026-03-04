@@ -13,6 +13,7 @@ struct ServerCreationView: View {
 
     @State private var showJarPicker = false
     @State private var isJarDropTargeted = false
+    @State private var isIconDropTargeted = false
 
     init(
         isDownloading: Binding<Bool>,
@@ -113,15 +114,21 @@ struct ServerCreationView: View {
     private var formContentView: some View {
         VStack {
             FormSection {
-                serverTypePicker
-                if viewModel.selectedServerType != .custom {
-                    versionPicker
-                }
-                if viewModel.selectedServerType == .fabric || viewModel.selectedServerType == .forge {
-                    loaderVersionPicker
-                }
-                if viewModel.selectedServerType == .custom {
-                    customJarPicker
+                HStack(alignment: .top, spacing: 16) {
+                    serverIconPicker
+                    VStack(spacing: 10) {
+                        serverTypePicker
+                        if viewModel.selectedServerType != .custom {
+                            versionPicker
+                        }
+                        if viewModel.selectedServerType == .fabric || viewModel.selectedServerType == .forge {
+                            loaderVersionPicker
+                        }
+                        if viewModel.selectedServerType == .custom {
+                            customJarPicker
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
 
@@ -162,6 +169,87 @@ struct ServerCreationView: View {
             .labelsHidden()
             .pickerStyle(MenuPickerStyle())
         }
+    }
+
+    private var serverIconPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("server.form.icon".localized())
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            Button {
+                chooseServerIcon()
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            isIconDropTargeted ? Color.accentColor : Color.secondary.opacity(0.5),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+                        )
+                    if let image = selectedIconPreviewImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .padding(2)
+                    } else {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.green)
+                                .background(Circle().fill(Color(NSColor.windowBackgroundColor)))
+                        }
+                    }
+                    .padding(8)
+                }
+                .frame(width: 96, height: 96)
+            }
+            .buttonStyle(.plain)
+            .onDrop(of: [.fileURL], isTargeted: $isIconDropTargeted) { providers in
+                handleIconDrop(providers: providers)
+            }
+        }
+    }
+
+    private var selectedIconPreviewImage: NSImage? {
+        guard let url = viewModel.selectedServerIconURL else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
+    private func chooseServerIcon() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image]
+        panel.title = "server.form.icon".localized()
+        if panel.runModal() == .OK {
+            viewModel.selectedServerIconURL = panel.url
+        }
+    }
+
+    private func handleIconDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            guard let data = item as? Data,
+                  let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                return
+            }
+            Task { @MainActor in
+                let fileType = UTType(filenameExtension: url.pathExtension)
+                guard fileType?.conforms(to: .image) == true else {
+                    return
+                }
+                viewModel.selectedServerIconURL = url
+            }
+        }
+        return true
     }
 
     private var versionPicker: some View {

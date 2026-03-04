@@ -7,7 +7,16 @@ struct ServerDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "server.rack")
+                if let iconURL = server.iconFileURL,
+                   let iconImage = NSImage(contentsOf: iconURL) {
+                    Image(nsImage: iconImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                } else {
+                    Image(systemName: server.resolvedIconName)
+                }
                 Text(server.name)
                     .font(.title2)
                 Spacer()
