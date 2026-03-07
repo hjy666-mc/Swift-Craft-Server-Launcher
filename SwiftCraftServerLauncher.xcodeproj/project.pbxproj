@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		9023D91C2E313A67005A53F1 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 9023D91B2E313A67005A53F1 /* ZIPFoundation */; };
 		90E387022F28FB8100F5D101 /* SwiftMarkDownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 90E387012F28FB8100F5D101 /* SwiftMarkDownUI */; };
+		90F4C00131AA100100A1B2C3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 90F4C00031AA100100A1B2C3 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9023D91C2E313A67005A53F1 /* ZIPFoundation in Frameworks */,
+				90F4C00131AA100100A1B2C3 /* Sparkle in Frameworks */,
 				90E387022F28FB8100F5D101 /* SwiftMarkDownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,6 +68,7 @@
 			name = SwiftCraftLauncher;
 			packageProductDependencies = (
 				9023D91B2E313A67005A53F1 /* ZIPFoundation */,
+				90F4C00031AA100100A1B2C3 /* Sparkle */,
 				90E387012F28FB8100F5D101 /* SwiftMarkDownUI */,
 			);
 			productName = SwiftCraftLauncher;
@@ -100,6 +103,7 @@
 			packageReferences = (
 				9023D91A2E313A67005A53F1 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				033870FA2E6059570056BDB2 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
+				90F4C00231AA100100A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				90E387002F28FB8100F5D101 /* XCRemoteSwiftPackageReference "SwiftMarkDownUI" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -288,6 +292,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "2026 DCStudio.No rights reserved.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used when voice input features are enabled.";
+				INFOPLIST_KEY_SUPublicEDKey = "h0UV7EvyG2KmekjA85gkC7rKmrw/56ftuOlhlOsv/WI=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -321,6 +326,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "2026 DCStudio.No rights reserved.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used when voice input features are enabled.";
+				INFOPLIST_KEY_SUPublicEDKey = "h0UV7EvyG2KmekjA85gkC7rKmrw/56ftuOlhlOsv/WI=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -384,6 +390,14 @@
 				kind = branch;
 			};
 		};
+		90F4C00231AA100100A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -401,6 +415,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 90E387002F28FB8100F5D101 /* XCRemoteSwiftPackageReference "SwiftMarkDownUI" */;
 			productName = SwiftMarkDownUI;
+		};
+		90F4C00031AA100100A1B2C3 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 90F4C00231AA100100A1B2C3 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
