@@ -184,14 +184,9 @@ enum URLConfig {
                 architecture: String
             ) -> URL {
                 let appcastFileName = "appcast-\(architecture).xml"
-                let url = gitHubBase
-                    .appendingPathComponent(repositoryOwner)
-                    .appendingPathComponent(repositoryName)
-                    .appendingPathComponent("releases")
-                    .appendingPathComponent("latest")
-                    .appendingPathComponent("download")
-                    .appendingPathComponent(appcastFileName)
-                return URLConfig.applyGitProxyIfNeeded(url)
+                return URLConfig.url(
+                    "https://\(repositoryOwner).github.io/\(repositoryName)/\(appcastFileName)"
+                )
             }
 
             // 静态贡献者数据

@@ -1,108 +1,59 @@
 import AppKit
 import Foundation
+import Sparkle
 
-final class AppUpdateService: ObservableObject {
+@MainActor
+final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
     static let shared = AppUpdateService()
 
     @Published private(set) var isUpdating = false
 
-    private init() {}
+    private lazy var updaterController: SPUStandardUpdaterController = {
+        let controller = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: self,
+            userDriverDelegate: nil
+        )
+        _ = controller.updater.clearFeedURLFromUserDefaults()
+        return controller
+    }()
 
+    private override init() {}
+
+    /// Menu entry keeps its old name to avoid touching call sites.
     func installLatestRelease() {
+        guard !isUpdating else { return }
+
+        guard let feedURLString = architectureFeedURLString, !feedURLString.isEmpty else {
+            showAlert(
+                title: "更新配置缺失",
+                message: "当前架构的 Sparkle Appcast 地址无效。"
+            )
+            return
+        }
+
+        isUpdating = true
+        updaterController.checkForUpdates(nil)
+
+        // Sparkle manages the whole cycle; this flag only throttles rapid repeated taps.
         Task { @MainActor in
-            if isUpdating {
-                return
-            }
-            isUpdating = true
-            defer { isUpdating = false }
-
-            do {
-                try await downloadAndInstallLatestRelease()
-            } catch {
-                showAlert(
-                    title: "更新失败",
-                    message: error.localizedDescription
-                )
-            }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            isUpdating = false
         }
     }
 
-    @MainActor
-    private func downloadAndInstallLatestRelease() async throws {
-        let arch = Architecture.current.sparkleArch
-        guard let downloadURL = URL(
-            string: "https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/latest/download/SwiftCraftServerLauncher-\(arch).dmg"
-        ) else {
-            throw URLError(.badURL)
-        }
-
-        let tempRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("scsl-update-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
-
-        let dmgPath = tempRoot.appendingPathComponent("update.dmg")
-        let mountPoint = tempRoot.appendingPathComponent("mount")
-        let helperScript = tempRoot.appendingPathComponent("update-helper.sh")
-
-        let (downloadedURL, response) = try await URLSession.shared.download(from: downloadURL)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw URLError(.badServerResponse)
-        }
-        try FileManager.default.moveItem(at: downloadedURL, to: dmgPath)
-        try writeHelperScript(to: helperScript)
-
-        let appPath = Bundle.main.bundleURL.path
-        let pid = String(getpid())
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = [
-            helperScript.path,
-            appPath,
-            dmgPath.path,
-            mountPoint.path,
-            pid,
-            tempRoot.path,
-        ]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-
-        NSApp.terminate(nil)
+    private var architectureFeedURLString: String? {
+        let appcastURL = URLConfig.API.GitHub.appcastURL(
+            architecture: Architecture.current.sparkleArch
+        )
+        let feed = appcastURL.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
+        return feed.isEmpty ? nil : feed
     }
 
-    private func writeHelperScript(to scriptURL: URL) throws {
-        let script = """
-        #!/bin/zsh
-        set -e
-
-        APP_PATH="$1"
-        DMG_PATH="$2"
-        MOUNT_PATH="$3"
-        WAIT_PID="$4"
-        WORK_DIR="$5"
-        APP_NAME="SwiftCraftServerLauncher.app"
-
-        while kill -0 "$WAIT_PID" >/dev/null 2>&1; do
-          sleep 1
-        done
-
-        mkdir -p "$MOUNT_PATH"
-        hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_PATH" -nobrowse -quiet
-
-        if test -d "$MOUNT_PATH/$APP_NAME"; then
-          ditto "$MOUNT_PATH/$APP_NAME" "$APP_PATH"
-        fi
-
-        hdiutil detach "$MOUNT_PATH" -quiet || true
-        open "$APP_PATH"
-        rm -rf "$WORK_DIR"
-        """
-        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+    func feedURLString(for _: SPUUpdater) -> String? {
+        architectureFeedURLString
     }
 
-    @MainActor
     private func showAlert(title: String, message: String) {
         let alert = NSAlert()
         alert.messageText = title
