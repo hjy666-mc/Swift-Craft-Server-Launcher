@@ -305,9 +305,48 @@ jobs:
 
           echo "tool_path=$TOOL_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve release metadata
+        id: release_meta
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          SPARKLE_DOWNLOAD_URL_MODE: ${{ vars.SPARKLE_DOWNLOAD_URL_MODE }}
+        run: |
+          TAG="$RELEASE_TAG"
+          if [[ -z "$TAG" ]]; then
+            TAG="$REF_NAME"
+          fi
+          if [[ -z "$TAG" ]]; then
+            echo "❌ release tag is empty."
+            exit 1
+          fi
+
+          MODE="${SPARKLE_DOWNLOAD_URL_MODE:-tag}"
+          case "$MODE" in
+            latest)
+              DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/latest/download"
+              ;;
+            tag)
+              DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}"
+              ;;
+            *)
+              echo "❌ Invalid SPARKLE_DOWNLOAD_URL_MODE: $MODE (allowed: tag/latest)"
+              exit 1
+              ;;
+          esac
+
+          RELEASE_NOTES_URL_PREFIX="https://${REPOSITORY_OWNER}.github.io/${REPO_NAME}/release-notes/${TAG}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "download_url_prefix=$DOWNLOAD_URL_PREFIX" >> "$GITHUB_OUTPUT"
+          echo "release_notes_url_prefix=$RELEASE_NOTES_URL_PREFIX" >> "$GITHUB_OUTPUT"
+
       - name: Generate changelog from feat/fix commits
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.release_meta.outputs.tag }}
           PUBLISHED_AT: ${{ github.event.release.published_at }}
         run: |
           mkdir -p output/changelog
@@ -342,10 +381,9 @@ jobs:
 
       - name: Generate architecture appcasts
         env:
-          TAG: ${{ github.event.release.tag_name }}
-          REPOSITORY: ${{ github.repository }}
-          REPOSITORY_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
+          TAG: ${{ steps.release_meta.outputs.tag }}
+          DOWNLOAD_URL_PREFIX: ${{ steps.release_meta.outputs.download_url_prefix }}
+          RELEASE_NOTES_URL_PREFIX: ${{ steps.release_meta.outputs.release_notes_url_prefix }}
           GENERATE_APPCAST_BIN: ${{ steps.sparkle_tool.outputs.tool_path }}
           ARM_DMG: ${{ steps.dmgs.outputs.arm_dmg }}
           X86_DMG: ${{ steps.dmgs.outputs.x86_dmg }}
@@ -360,9 +398,6 @@ jobs:
 
           cp "output/changelog/${TAG}.md" "output/archives/arm64/${ARM_DMG_NAME%.dmg}.md"
           cp "output/changelog/${TAG}.md" "output/archives/x86_64/${X86_DMG_NAME%.dmg}.md"
-
-          DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}"
-          RELEASE_NOTES_URL_PREFIX="https://${REPOSITORY_OWNER}.github.io/${REPO_NAME}/release-notes/${TAG}"
 
           echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
             --ed-key-file - \
