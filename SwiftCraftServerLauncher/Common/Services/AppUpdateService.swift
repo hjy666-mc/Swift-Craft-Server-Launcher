@@ -18,7 +18,7 @@ final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         return controller
     }()
 
-    private override init() {}
+    override private init() {}
 
     /// Menu entry keeps its old name to avoid touching call sites.
     func installLatestRelease() {
