@@ -107,6 +107,7 @@ struct MainContentArea: View {
         detailState.gameId = nil
         detailState.selectedProjectId = nil
         detailState.serverId = serverId
+        detailState.serverPanelSection = "console"
     }
 
     private func handleServerToServerTransition(
@@ -117,6 +118,7 @@ struct MainContentArea: View {
             filterState.clearSearchText()
         }
         detailState.serverId = newId
+        detailState.serverPanelSection = "console"
     }
 
     private func resetToResourceDefaults() {

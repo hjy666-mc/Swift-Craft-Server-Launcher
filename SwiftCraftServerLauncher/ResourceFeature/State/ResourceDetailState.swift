@@ -15,6 +15,7 @@ public final class ResourceDetailState: ObservableObject {
     @Published public var gameId: String?
     @Published public var serverId: String?
     @Published public var gameResourcesType: String
+    @Published public var serverPanelSection: String = "console"
     @Published public var selectedProjectId: String? {
         didSet {
             if selectedProjectId != oldValue {
@@ -38,6 +39,7 @@ public final class ResourceDetailState: ObservableObject {
         self.gameId = gameId
         self.serverId = serverId
         self.gameResourcesType = gameResourcesType
+        self.serverPanelSection = "console"
         self.selectedProjectId = selectedProjectId
         self.loadedProjectDetail = loadedProjectDetail
     }

@@ -52,6 +52,9 @@ public struct DetailToolbarView: ToolbarContent {
                             )
                         }
                     }
+                    .scaleEffect(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.98 : 1.0)
+                    .opacity(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.88 : 1.0)
+                    .animation(.easeInOut(duration: 0.15), value: serverStatusManager.isServerLaunching(serverId: server.id))
                     .disabled(serverStatusManager.isServerLaunching(serverId: server.id))
                     .applyReplaceTransition()
 

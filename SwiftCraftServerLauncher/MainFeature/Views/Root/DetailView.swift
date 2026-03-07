@@ -12,6 +12,7 @@ struct DetailView: View {
     @EnvironmentObject var filterState: ResourceFilterState
     @EnvironmentObject var detailState: ResourceDetailState
     @EnvironmentObject var serverRepository: ServerRepository
+    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
 
     @ViewBuilder var body: some View {
         switch detailState.selectedItem {
@@ -59,8 +60,33 @@ struct DetailView: View {
     @ViewBuilder
     private func serverDetailView(serverId: String) -> some View {
         if let server = serverRepository.getServer(by: serverId) {
-            ServerDetailView(server: server)
-                .environmentObject(serverRepository)
+            ZStack {
+                switch detailState.serverPanelSection {
+                case "serverConfig":
+                    ServerPropertiesEditorView(server: server)
+                case "players":
+                    ServerPlayersView(server: server)
+                case "worlds":
+                    ServerWorldsManagerView(server: server)
+                case "mods":
+                    if server.serverType == .fabric || server.serverType == .forge {
+                        ServerModsManagerView(server: server)
+                    } else {
+                        ServerConsoleView(server: server)
+                    }
+                case "plugins":
+                    if server.serverType == .paper {
+                        ServerPluginsManagerView(server: server)
+                    } else {
+                        ServerConsoleView(server: server)
+                    }
+                default:
+                    ServerConsoleView(server: server)
+                }
+            }
+            .id("\(server.id)-\(detailState.serverPanelSection)")
+            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            .animation(.easeInOut(duration: 0.18), value: detailState.serverPanelSection)
         }
     }
 }

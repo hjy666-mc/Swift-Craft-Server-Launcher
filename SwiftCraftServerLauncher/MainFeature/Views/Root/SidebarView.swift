@@ -32,6 +32,7 @@ public struct SidebarView: View {
                                 if activeServerNodeId == node.id {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundColor(.accentColor)
+                                        .transition(.opacity.combined(with: .scale))
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,6 +43,7 @@ public struct SidebarView: View {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(activeServerNodeId == node.id ? Color.accentColor.opacity(0.14) : Color.clear)
                             )
+                            .animation(.easeInOut(duration: 0.15), value: activeServerNodeId)
                         }
                         .buttonStyle(.plain)
 
@@ -119,17 +121,22 @@ public struct SidebarView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 4))
                             } else {
                                 Image(systemName: server.resolvedIconName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 16, height: 16)
+                                    .foregroundStyle(.secondary)
                             }
                             Text(server.name)
                                 .lineLimit(1)
+                            Spacer()
                         }
-                        .tag(server.id)
                     }
                     .contextMenu {
                         Button(role: .destructive) {
                             serverActionManager.deleteServer(
                                 server: server,
                                 serverRepository: serverRepository,
+                                serverNodeRepository: serverNodeRepository,
                                 selectedItem: detailState.selectedItemBinding
                             )
                         } label: {
