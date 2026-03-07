@@ -41,7 +41,7 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject var gameLaunchUseCase = GameLaunchUseCase()
     @StateObject var serverLaunchUseCase = ServerLaunchUseCase()
     @StateObject private var globalErrorHandler = GlobalErrorHandler.shared
-    @StateObject private var appUpdateService = AppUpdateService.shared
+    @StateObject private var appUpdateService = AppUpdateService()
     @StateObject var generalSettingsManager = GeneralSettingsManager.shared
     @StateObject var themeManager = ThemeManager.shared
     @StateObject private var skinSelectionStore = SkinSelectionStore()
@@ -98,10 +98,15 @@ struct SwiftCraftServerLauncherApp: App {
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             }
             CommandGroup(after: .help) {
-                Button("menu.open.log".localized()) {
-                    Logger.shared.openLogFile()
+                Button(
+                    Locale.preferredLanguages.first?.hasPrefix("zh") == true
+                        ? "访问项目官网"
+                        : "Visit Project Website"
+                ) {
+                    if let url = URL(string: "https://github.com/hjy666-mc/Swift-Craft-Server-Launcher") {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
-                .keyboardShortcut("l", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .saveItem) { }

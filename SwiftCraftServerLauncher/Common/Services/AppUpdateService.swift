@@ -4,8 +4,6 @@ import Sparkle
 
 @MainActor
 final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
-    static let shared = AppUpdateService()
-
     @Published private(set) var isUpdating = false
 
     private lazy var updaterController: SPUStandardUpdaterController = {
@@ -18,7 +16,9 @@ final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         return controller
     }()
 
-    override private init() {}
+    override init() {
+        super.init()
+    }
 
     /// Menu entry keeps its old name to avoid touching call sites.
     func installLatestRelease() {
