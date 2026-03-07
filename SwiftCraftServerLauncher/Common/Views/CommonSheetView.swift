@@ -32,20 +32,20 @@ struct CommonSheetView<Header: View, BodyContent: View, Footer: View>: View {
         VStack(spacing: 0) {
             // 头部区域
             header
-                .padding(.horizontal)
-                .padding()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             Divider()
 
             // 主体区域
             bodyContent
-                .padding(.horizontal)
-                .padding()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
 
             // 底部区域
             Divider()
             footer
-                .padding(.horizontal)
-                .padding()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
         }
     }
 }

@@ -315,10 +315,12 @@ class GlobalErrorHandler: ObservableObject {
 
         case .notification:
             // 发送通知
-            NotificationManager.sendSilently(
-                title: error.notificationTitle,
-                body: error.localizedDescription
-            )
+            Task {
+                await NotificationManager.sendSilently(
+                    title: error.notificationTitle,
+                    body: error.localizedDescription
+                )
+            }
 
         case .silent:
             // 静默处理，只记录日志
