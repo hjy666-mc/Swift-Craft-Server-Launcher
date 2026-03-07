@@ -291,12 +291,15 @@ jobs:
         id: sparkle_tool
         run: |
           SPARKLE_VERSION="2.9.0"
-          curl -fL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o /tmp/Sparkle.tar.xz
-          tar -xf /tmp/Sparkle.tar.xz -C /tmp
+          WORK_DIR="$(mktemp -d)"
+          ARCHIVE_PATH="${WORK_DIR}/Sparkle.tar.xz"
+          curl -fL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o "$ARCHIVE_PATH"
+          tar -xf "$ARCHIVE_PATH" -C "$WORK_DIR"
 
-          TOOL_PATH="/tmp/Sparkle-${SPARKLE_VERSION}/bin/generate_appcast"
+          TOOL_PATH="$(find "$WORK_DIR" -type f -path '*/bin/generate_appcast' | head -n 1)"
           if [[ ! -x "$TOOL_PATH" ]]; then
-            echo "❌ generate_appcast not found: $TOOL_PATH"
+            echo "❌ generate_appcast not found after extraction."
+            find "$WORK_DIR" -maxdepth 3 -type f -print
             exit 1
           fi
 
