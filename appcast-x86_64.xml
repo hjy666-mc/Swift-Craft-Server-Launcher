@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>SwiftCraftServerLauncher</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Sat, 07 Mar 2026 05:57:27 +0000</pubDate>
+            <sparkle:version>54</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://hjy666-mc.github.io/Swift-Craft-Server-Launcher/release-notes/SwiftCraftServerLauncher-x86_64.md</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/download/SwiftCraftServerLauncher-x86_64.dmg" length="4792659" type="application/octet-stream"/>
+        </item>
+    </channel>
+</rss>
