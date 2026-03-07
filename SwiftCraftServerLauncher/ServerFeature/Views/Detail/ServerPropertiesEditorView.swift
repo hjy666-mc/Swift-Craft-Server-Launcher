@@ -11,8 +11,6 @@ private struct ServerConfigFileItem: Identifiable, Hashable {
 
 struct ServerPropertiesEditorView: View {
     let server: ServerInstance
-    @Environment(\.dismiss)
-    private var dismiss
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var properties: [String: String] = [:]
     @State private var isLoaded = false
@@ -20,6 +18,8 @@ struct ServerPropertiesEditorView: View {
     @State private var searchText: String = ""
     @State private var showOtherConfigs = false
     @State private var showRawPropertiesEditor = false
+    @State private var propertiesAutoSaveTask: Task<Void, Never>?
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         CommonSheetView(
@@ -40,6 +40,7 @@ struct ServerPropertiesEditorView: View {
                     if properties.isEmpty && isLoaded {
                         Text("server.properties.no_properties".localized())
                             .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     } else {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 8) {
@@ -47,25 +48,31 @@ struct ServerPropertiesEditorView: View {
                                     propertyRow(key: key)
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 2)
                         }
-                        .frame(minHeight: 220, maxHeight: 460)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             },
             footer: {
                 HStack {
-                    Button("common.close".localized()) { dismiss() }
                     Spacer()
-                    Button("common.reload".localized()) { load() }
-                    Button("common.save".localized()) { save() }
-                        .disabled(!isDirty)
-                        .keyboardShortcut(.defaultAction)
                 }
             }
         )
-        .frame(minWidth: 860, minHeight: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { load() }
+        .onReceive(autoRefreshTimer) { _ in
+            if !isDirty {
+                load()
+            }
+        }
+        .onDisappear {
+            propertiesAutoSaveTask?.cancel()
+            save()
+        }
         .sheet(isPresented: $showOtherConfigs) {
             ServerExtraConfigFilesView(server: server)
                 .presentationDetents([.large])
@@ -144,14 +151,35 @@ struct ServerPropertiesEditorView: View {
 
     private func propertyRow(key: String) -> some View {
         let value = properties[key] ?? ""
-        return HStack(spacing: 8) {
-            Text(key)
-                .frame(width: 160, alignment: .leading)
-            Text(localizedName(for: key))
-                .frame(width: 160, alignment: .leading)
-                .foregroundColor(.secondary)
-            valueEditor(for: key, value: value)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Text(key)
+                    .frame(width: 160, alignment: .leading)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(localizedName(for: key))
+                    .frame(width: 160, alignment: .leading)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                valueEditor(for: key, value: value)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(key)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(localizedName(for: key))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                valueEditor(for: key, value: value)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -163,7 +191,7 @@ struct ServerPropertiesEditorView: View {
                     get: { normalized == "true" },
                     set: { newValue in
                         properties[key] = newValue ? "true" : "false"
-                        isDirty = true
+                        markPropertiesDirtyAndAutoSave()
                     }
                 ))
                 .labelsHidden()
@@ -174,11 +202,23 @@ struct ServerPropertiesEditorView: View {
                 get: { properties[key] ?? "" },
                 set: { newValue in
                     properties[key] = newValue
-                    isDirty = true
+                    markPropertiesDirtyAndAutoSave()
                 }
             ))
             .textFieldStyle(.roundedBorder)
         )
+    }
+
+    private func markPropertiesDirtyAndAutoSave() {
+        isDirty = true
+        propertiesAutoSaveTask?.cancel()
+        propertiesAutoSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                save()
+            }
+        }
     }
 
     private func localizedName(for key: String) -> String {
@@ -235,6 +275,7 @@ private struct ServerExtraConfigFilesView: View {
     @State private var files: [ServerConfigFileItem] = []
     @State private var searchText = ""
     @State private var selectedFile: ServerConfigFileItem?
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     private let allowedExtensions = Set(["yml", "yaml", "toml", "json", "conf", "cfg", "ini"])
 
@@ -244,7 +285,6 @@ private struct ServerExtraConfigFilesView: View {
                 Text("server.extra_configs.title".localized())
                     .font(.headline)
                 Spacer()
-                Button("common.reload".localized()) { loadFiles() }
                 Button("common.close".localized()) { dismiss() }
             }
 
@@ -274,6 +314,9 @@ private struct ServerExtraConfigFilesView: View {
         }
         .padding()
         .onAppear { loadFiles() }
+        .onReceive(autoRefreshTimer) { _ in
+            loadFiles()
+        }
         .sheet(item: $selectedFile) { item in
             ServerExtraConfigEditorView(server: server, item: item)
                 .environmentObject(serverNodeRepository)
@@ -352,6 +395,8 @@ private struct ServerExtraConfigEditorView: View {
     @State private var content = ""
     @State private var isLoaded = false
     @State private var isDirty = false
+    @State private var contentAutoSaveTask: Task<Void, Never>?
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -359,28 +404,53 @@ private struct ServerExtraConfigEditorView: View {
                 Text(item.fileName)
                     .font(.headline)
                 Spacer()
-                Button("common.reload".localized()) { load() }
-                Button("common.save".localized()) { save() }
-                    .disabled(!isDirty)
+                Text(isDirty ? "自动保存中…" : "已保存")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("common.close".localized()) { dismiss() }
             }
 
             if !isLoaded {
                 ProgressView()
             } else {
-                LineNumberedTextEditor(text: Binding(
-                    get: { content },
-                    set: { newValue in
-                        content = newValue
-                        isDirty = true
-                    }
-                ))
+                LineNumberedTextEditor(
+                    text: Binding(
+                        get: { content },
+                        set: { newValue in
+                            content = newValue
+                            markContentDirtyAndAutoSave()
+                        }
+                    ),
+                    onSaveRequested: save,
+                    syntaxKind: syntaxKind
+                )
                 .frame(minWidth: 980, minHeight: 680)
             }
         }
         .padding()
         .frame(minWidth: 1080, minHeight: 760)
         .onAppear { load() }
+        .onReceive(autoRefreshTimer) { _ in
+            if !isDirty {
+                load()
+            }
+        }
+        .onDisappear {
+            contentAutoSaveTask?.cancel()
+            save()
+        }
+    }
+
+    private func markContentDirtyAndAutoSave() {
+        isDirty = true
+        contentAutoSaveTask?.cancel()
+        contentAutoSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                save()
+            }
+        }
     }
 
     private func load() {
@@ -438,13 +508,37 @@ private struct ServerExtraConfigEditorView: View {
             GlobalErrorHandler.shared.handle(error)
         }
     }
+
+    private var syntaxKind: SyntaxKind {
+        switch URL(fileURLWithPath: item.relativePath).pathExtension.lowercased() {
+        case "json":
+            return .json
+        case "yaml", "yml":
+            return .yaml
+        case "toml":
+            return .toml
+        case "ini", "cfg", "conf":
+            return .ini
+        default:
+            if item.relativePath.lowercased().hasSuffix("server.properties") {
+                return .properties
+            }
+            return .plain
+        }
+    }
 }
 
 private struct LineNumberedTextEditor: View {
     @Binding var text: String
+    var onSaveRequested: (() -> Void)?
+    var syntaxKind: SyntaxKind = .plain
 
     var body: some View {
-        LineNumberedTextEditorRepresentable(text: $text)
+        LineNumberedTextEditorRepresentable(
+            text: $text,
+            onSaveRequested: onSaveRequested,
+            syntaxKind: syntaxKind
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.25), lineWidth: 1)
@@ -455,6 +549,8 @@ private struct LineNumberedTextEditor: View {
 
 private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
     @Binding var text: String
+    var onSaveRequested: (() -> Void)?
+    var syntaxKind: SyntaxKind = .plain
 
     func makeNSView(context: Context) -> LineNumberEditorContainer {
         let view = LineNumberEditorContainer()
@@ -464,11 +560,15 @@ private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
             }
             text = newValue
         }
+        view.onSaveRequested = onSaveRequested
+        view.syntaxKind = syntaxKind
         view.setText(text)
         return view
     }
 
     func updateNSView(_ nsView: LineNumberEditorContainer, context: Context) {
+        nsView.onSaveRequested = onSaveRequested
+        nsView.syntaxKind = syntaxKind
         if nsView.text != text {
             context.coordinator.isUpdatingFromSwiftUI = true
             nsView.setText(text)
@@ -488,9 +588,18 @@ private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
 private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
     private let numberView = LineNumberGutterView()
     private let textScrollView = NSScrollView()
-    private let textView = NSTextView()
+    private let textView = CommandAwareTextView()
     private var boundsObserver: NSObjectProtocol?
+    private var isApplyingHighlight = false
     var onTextChange: ((String) -> Void)?
+    var onSaveRequested: (() -> Void)? {
+        didSet {
+            textView.onSaveRequested = onSaveRequested
+        }
+    }
+    var syntaxKind: SyntaxKind = .plain {
+        didSet { applySyntaxHighlighting() }
+    }
 
     var text: String { textView.string }
 
@@ -515,6 +624,7 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
     func setText(_ value: String) {
         textView.string = value
         syncLineNumbers()
+        applySyntaxHighlighting()
     }
 
     private func setupViews() {
@@ -529,6 +639,9 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
         textView.isAutomaticDataDetectionEnabled = false
         textView.isAutomaticLinkDetectionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
+        textView.allowsUndo = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.textColor = NSColor.labelColor
         textView.textContainerInset = NSSize(width: 6, height: 6)
@@ -594,8 +707,187 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         syncLineNumbers()
+        applySyntaxHighlighting()
         onTextChange?(textView.string)
     }
+
+    private func applySyntaxHighlighting() {
+        guard !isApplyingHighlight else { return }
+        guard let storage = textView.textStorage else { return }
+
+        isApplyingHighlight = true
+        defer { isApplyingHighlight = false }
+
+        let fullRange = NSRange(location: 0, length: storage.length)
+        let selectedRanges = textView.selectedRanges
+        let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+
+        storage.beginEditing()
+        storage.setAttributes([
+            .foregroundColor: NSColor.labelColor,
+            .font: font,
+        ], range: fullRange)
+
+        highlightStrings(in: storage.string, storage: storage)
+        highlightNumbers(in: storage.string, storage: storage)
+        highlightBooleans(in: storage.string, storage: storage)
+        highlightKeys(in: storage.string, storage: storage)
+        // Keep comments last so comment text is excluded from other color rules.
+        highlightComments(in: storage.string, storage: storage)
+
+        storage.endEditing()
+        textView.selectedRanges = selectedRanges
+    }
+
+    private func highlightComments(in text: String, storage: NSTextStorage) {
+        let pattern: String
+        switch syntaxKind {
+        case .json:
+            return
+        case .yaml, .toml, .properties, .ini:
+            pattern = #"(?m)^\s*[#;].*$|(?m)^\s*//.*$"#
+        case .plain:
+            pattern = #"(?m)^\s*[#;].*$|(?m)^\s*//.*$"#
+        }
+        applyRegex(pattern, color: NSColor.systemGray, text: text, storage: storage)
+    }
+
+    private func highlightStrings(in text: String, storage: NSTextStorage) {
+        let pattern = #""([^"\\]|\\.)*"|'([^'\\]|\\.)*'"#
+        applyRegex(pattern, color: NSColor.systemRed, text: text, storage: storage)
+    }
+
+    private func highlightNumbers(in text: String, storage: NSTextStorage) {
+        let pattern = #"\b\d+(\.\d+)?\b"#
+        applyRegex(pattern, color: NSColor.systemOrange, text: text, storage: storage)
+    }
+
+    private func highlightBooleans(in text: String, storage: NSTextStorage) {
+        let pattern = #"\b(true|false|null|yes|no|on|off)\b"#
+        applyRegex(pattern, color: NSColor.systemPink, text: text, storage: storage, options: [.caseInsensitive])
+    }
+
+    private func highlightKeys(in text: String, storage: NSTextStorage) {
+        let pattern: String
+        let captureGroup: Int
+
+        switch syntaxKind {
+        case .json:
+            pattern = #"(?m)^\s*"([^"]+)"\s*:"#
+            captureGroup = 1
+        case .yaml, .toml:
+            pattern = #"(?m)^\s*([A-Za-z0-9_.-]+)\s*[:=]"#
+            captureGroup = 1
+        case .properties, .ini:
+            pattern = #"(?m)^\s*([^#;\s][^=:\n]*?)\s*[:=]"#
+            captureGroup = 1
+        case .plain:
+            pattern = #"(?m)^\s*([A-Za-z0-9_.-]+)\s*[:=]"#
+            captureGroup = 1
+        }
+
+        applyRegex(
+            pattern,
+            color: NSColor.systemTeal,
+            text: text,
+            storage: storage,
+            options: [],
+            captureGroup: captureGroup
+        )
+    }
+
+    private func applyRegex(
+        _ pattern: String,
+        color: NSColor,
+        text: String,
+        storage: NSTextStorage,
+        options: NSRegularExpression.Options = [],
+        captureGroup: Int? = nil
+    ) {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        regex.matches(in: text, range: range).forEach { match in
+            let targetRange: NSRange
+            if let captureGroup, match.numberOfRanges > captureGroup {
+                targetRange = match.range(at: captureGroup)
+            } else {
+                targetRange = match.range
+            }
+            guard targetRange.location != NSNotFound else { return }
+            storage.addAttribute(.foregroundColor, value: color, range: targetRange)
+        }
+    }
+}
+
+private final class CommandAwareTextView: NSTextView {
+    var onSaveRequested: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        if handleFindShortcuts(event) {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if handleFindShortcuts(event) {
+            return true
+        }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.contains(.command),
+              let key = event.charactersIgnoringModifiers?.lowercased() else {
+            return super.performKeyEquivalent(with: event)
+        }
+        if key == "s" {
+            onSaveRequested?()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    private func handleFindShortcuts(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return false }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.contains(.command),
+              let key = event.charactersIgnoringModifiers?.lowercased() else {
+            return false
+        }
+
+        let hasShift = modifiers.contains(.shift)
+        switch key {
+        case "f":
+            showFindPanel()
+            return true
+        case "g":
+            jumpFindResult(previous: hasShift)
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func showFindPanel() {
+        window?.makeFirstResponder(self)
+        let item = NSMenuItem()
+        item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
+        performFindPanelAction(item)
+    }
+
+    private func jumpFindResult(previous: Bool) {
+        window?.makeFirstResponder(self)
+        let item = NSMenuItem()
+        item.tag = Int(previous ? NSFindPanelAction.previous.rawValue : NSFindPanelAction.next.rawValue)
+        performFindPanelAction(item)
+    }
+}
+
+private enum SyntaxKind {
+    case plain
+    case json
+    case yaml
+    case toml
+    case properties
+    case ini
 }
 
 private final class LineNumberGutterView: NSView {

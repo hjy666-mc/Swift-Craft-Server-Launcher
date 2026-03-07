@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ServerPlayersView: View {
     let server: ServerInstance
-    @Environment(\.dismiss)
-    private var dismiss
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @StateObject private var serverStatusManager = ServerStatusManager.shared
     @State private var whitelist: [ServerPlayerListService.PlayerEntry] = []
@@ -13,6 +11,9 @@ struct ServerPlayersView: View {
 
     @State private var newName: String = ""
     @State private var selectedList: String = "whitelist"
+    @State private var expandedSections: Set<String> = []
+    private let collapsedPreviewCount = 4
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         CommonSheetView(
@@ -33,60 +34,173 @@ struct ServerPlayersView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    HStack(spacing: 6) {
-                        TextField("server.players.name_placeholder".localized(), text: $newName)
-                            .textFieldStyle(.roundedBorder)
-                        Picker("", selection: $selectedList) {
-                            Text("server.players.list.whitelist".localized()).tag("whitelist")
-                            Text("server.players.list.ops".localized()).tag("ops")
-                            Text("server.players.list.banned_players".localized()).tag("bannedPlayers")
-                            Text("server.players.list.banned_ips".localized()).tag("bannedIps")
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.badge.plus")
+                                .foregroundStyle(.secondary)
+                            Text("快速添加")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Spacer()
                         }
-                        .pickerStyle(.menu)
-                        Button("common.add".localized()) { addEntry() }
+
+                        HStack(spacing: 8) {
+                            TextField(
+                                selectedList == "bannedIps" ? "输入玩家名或 IP" : "server.players.name_placeholder".localized(),
+                                text: $newName
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { addEntry() }
+
+                            Menu {
+                                Button("server.players.list.whitelist".localized()) { selectedList = "whitelist" }
+                                Button("server.players.list.ops".localized()) { selectedList = "ops" }
+                                Button("server.players.list.banned_players".localized()) { selectedList = "bannedPlayers" }
+                                Button("server.players.list.banned_ips".localized()) { selectedList = "bannedIps" }
+                            } label: {
+                                Label(selectedListTitle, systemImage: selectedListIcon)
+                                    .frame(minWidth: 150, alignment: .leading)
+                            }
+
+                            Button {
+                                addEntry()
+                            } label: {
+                                Label("common.add".localized(), systemImage: "plus")
+                            }
+                            .buttonStyle(.borderedProminent)
                             .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button("common.reload".localized()) { loadAll() }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.gray.opacity(0.08))
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if selectedList == "bannedIps" {
+                        Text("提示：可输入玩家名或直接输入 IP。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
 
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            playerList(title: "server.players.list.whitelist".localized(), entries: whitelist) { removeEntry(from: "whitelist", entry: $0) }
-                            playerList(title: "server.players.list.ops".localized(), entries: ops) { removeEntry(from: "ops", entry: $0) }
-                            playerList(title: "server.players.list.banned_players".localized(), entries: bannedPlayers) { removeEntry(from: "bannedPlayers", entry: $0) }
-                            playerList(title: "server.players.list.banned_ips".localized(), entries: bannedIps) { removeEntry(from: "bannedIps", entry: $0) }
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            playerList(sectionKey: "whitelist", title: "server.players.list.whitelist".localized(), entries: whitelist) { removeEntry(from: "whitelist", entry: $0) }
+                            playerList(sectionKey: "ops", title: "server.players.list.ops".localized(), entries: ops) { removeEntry(from: "ops", entry: $0) }
+                            playerList(sectionKey: "bannedPlayers", title: "server.players.list.banned_players".localized(), entries: bannedPlayers) { removeEntry(from: "bannedPlayers", entry: $0) }
+                            playerList(sectionKey: "bannedIps", title: "server.players.list.banned_ips".localized(), entries: bannedIps) { removeEntry(from: "bannedIps", entry: $0) }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 2)
                     }
-                    .frame(minHeight: 220, maxHeight: 360)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             },
             footer: {
                 HStack(spacing: 8) {
-                    Button("common.close".localized()) { dismiss() }
                     Spacer()
-                    Button("common.reload".localized()) { loadAll() }
                 }
             }
         )
-        .frame(minWidth: 760, minHeight: 440)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { loadAll() }
+        .onReceive(autoRefreshTimer) { _ in
+            loadAll()
+        }
     }
 
-    private func playerList(title: String, entries: [ServerPlayerListService.PlayerEntry], onRemove: @escaping (ServerPlayerListService.PlayerEntry) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func playerList(
+        sectionKey: String,
+        title: String,
+        entries: [ServerPlayerListService.PlayerEntry],
+        onRemove: @escaping (ServerPlayerListService.PlayerEntry) -> Void
+    ) -> some View {
+        let isExpanded = expandedSections.contains(sectionKey)
+        let shouldCollapse = entries.count > collapsedPreviewCount
+        let shownEntries = shouldCollapse && !isExpanded ? Array(entries.prefix(collapsedPreviewCount)) : entries
+
+        return VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.subheadline)
+                .fontWeight(.semibold)
             if entries.isEmpty {
                 Text("common.empty".localized())
                     .foregroundColor(.secondary)
+                    .padding(.vertical, 6)
             } else {
-                ForEach(entries, id: \.self) { entry in
+                ForEach(shownEntries, id: \.self) { entry in
                     HStack {
                         Text(entry.name)
                         Spacer()
                         Button("common.remove".localized()) { onRemove(entry) }
                     }
+                    if entry != shownEntries.last {
+                        Divider()
+                    }
+                }
+                if shouldCollapse {
+                    Divider()
+                    Button {
+                        toggleExpand(sectionKey: sectionKey)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(isExpanded ? "收起" : "更多 (\(entries.count - collapsedPreviewCount))")
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.gray.opacity(0.08))
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func toggleExpand(sectionKey: String) {
+        if expandedSections.contains(sectionKey) {
+            expandedSections.remove(sectionKey)
+        } else {
+            expandedSections.insert(sectionKey)
+        }
+    }
+
+    private var selectedListTitle: String {
+        switch selectedList {
+        case "whitelist":
+            return "server.players.list.whitelist".localized()
+        case "ops":
+            return "server.players.list.ops".localized()
+        case "bannedPlayers":
+            return "server.players.list.banned_players".localized()
+        case "bannedIps":
+            return "server.players.list.banned_ips".localized()
+        default:
+            return "server.players.list.whitelist".localized()
+        }
+    }
+
+    private var selectedListIcon: String {
+        switch selectedList {
+        case "whitelist":
+            return "checkmark.shield"
+        case "ops":
+            return "person.crop.circle.badge.checkmark"
+        case "bannedPlayers":
+            return "person.crop.circle.badge.xmark"
+        case "bannedIps":
+            return "network.slash"
+        default:
+            return "checkmark.shield"
         }
     }
 

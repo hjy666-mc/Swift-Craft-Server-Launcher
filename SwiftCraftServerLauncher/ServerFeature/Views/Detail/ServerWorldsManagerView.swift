@@ -4,12 +4,11 @@ import UniformTypeIdentifiers
 
 struct ServerWorldsManagerView: View {
     let server: ServerInstance
-    @Environment(\.dismiss)
-    private var dismiss
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var folders: [URL] = []
     @State private var remoteFolders: [String] = []
     @State private var showImporter = false
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         CommonSheetView(
@@ -51,14 +50,15 @@ struct ServerWorldsManagerView: View {
             },
             footer: {
                 HStack {
-                    Button("common.close".localized()) { dismiss() }
                     Spacer()
-                    Button("common.reload".localized()) { loadFolders() }
                 }
             }
         )
         .frame(minWidth: 760, minHeight: 520)
         .onAppear { loadFolders() }
+        .onReceive(autoRefreshTimer) { _ in
+            loadFolders()
+        }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.folder],

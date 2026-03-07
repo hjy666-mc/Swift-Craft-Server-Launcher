@@ -42,6 +42,7 @@ struct ServerConsoleView: View {
             }
             terminalSurface
         }
+        .padding(12)
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
@@ -95,10 +96,7 @@ struct ServerConsoleView: View {
             consoleOutput
             commandInput
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.06))
-        )
+        .padding(10)
     }
 
     private var consoleOutput: some View {
@@ -117,6 +115,7 @@ struct ServerConsoleView: View {
                 .buttonStyle(.plain)
                 .font(.caption)
                 .padding(8)
+                .transition(.opacity)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -131,8 +130,11 @@ struct ServerConsoleView: View {
                 .padding(.vertical, 6)
                 .background(.regularMaterial, in: Capsule())
                 .padding(10)
+                .transition(.opacity.combined(with: .scale))
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: isRenderingConsole)
+        .animation(.easeInOut(duration: 0.18), value: initialConsoleLines.count > 2_000)
     }
 
     private var commandInput: some View {
@@ -362,7 +364,16 @@ struct ServerConsoleView: View {
             }
             lastRemoteLogError = ""
         } catch {
-            let message = error.localizedDescription
+            let message = GlobalError.from(error).chineseMessage
+            if message == "error.validation.server_not_selected" {
+                // Ignore generic key-only errors from transient SSH polling failures.
+                return
+            }
+            if message.contains("SSH 执行失败(exit=255)") {
+                // SSH polling can flap while the remote server is actually running.
+                // Do not spam console with transient transport errors.
+                return
+            }
             if message != lastRemoteLogError {
                 let line = "[SCSL] \(message)"
                 console.appendExternal(serverId: server.id, text: line + "\n")
@@ -830,7 +841,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.horizontalScrollElasticity = .automatic
@@ -850,7 +861,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.frame = NSRect(x: 0, y: 0, width: 640, height: 220)
         textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.lineBreakMode = .byWordWrapping
+        textView.textContainer?.lineBreakMode = .byCharWrapping
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.containerSize = NSSize(
             width: scrollView.contentSize.width,

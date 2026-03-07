@@ -3,12 +3,11 @@ import UniformTypeIdentifiers
 
 struct ServerModsManagerView: View {
     let server: ServerInstance
-    @Environment(\.dismiss)
-    private var dismiss
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @State private var files: [URL] = []
     @State private var remoteFiles: [String] = []
     @State private var showImporter = false
+    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
         CommonSheetView(
@@ -49,14 +48,15 @@ struct ServerModsManagerView: View {
             },
             footer: {
                 HStack {
-                    Button("common.close".localized()) { dismiss() }
                     Spacer()
-                    Button("common.reload".localized()) { loadFiles() }
                 }
             }
         )
         .frame(minWidth: 760, minHeight: 520)
         .onAppear { loadFiles() }
+        .onReceive(autoRefreshTimer) { _ in
+            loadFiles()
+        }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [UTType(filenameExtension: "jar") ?? .data],
