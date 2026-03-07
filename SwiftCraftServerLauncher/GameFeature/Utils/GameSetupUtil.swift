@@ -143,7 +143,7 @@ class GameSetupUtil: ObservableObject {
             ModScanner.shared.scanGameModsDirectorySync(game: gameInfo)
 
             // 发送通知
-            NotificationManager.sendSilently(
+            await NotificationManager.sendSilently(
                 title: "notification.download.complete.title".localized(),
                 body: String(format: "notification.download.complete.body".localized(), gameInfo.gameName, gameInfo.gameVersion, gameInfo.modLoader)
             )

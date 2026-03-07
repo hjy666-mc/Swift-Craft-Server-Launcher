@@ -86,7 +86,21 @@ class ServerCreationViewModel: ObservableObject {
     private func performConfirmAction() async {
         if isSubmitting { return }
         isSubmitting = true
-        defer { isSubmitting = false }
+        let spinnerWatchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 45_000_000_000)
+            await MainActor.run {
+                guard let self, self.isSubmitting else { return }
+                self.serverSetupService.downloadState.reset()
+                self.serverSetupService.downloadState.isDownloading = false
+                self.isSubmitting = false
+                self.updateParentState()
+                Logger.shared.warning("服务器创建超时，自动结束加载状态")
+            }
+        }
+        defer {
+            spinnerWatchdog.cancel()
+            isSubmitting = false
+        }
 
         guard let serverRepository = serverRepository else { return }
         let name = serverNameValidator.serverName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -103,10 +117,9 @@ class ServerCreationViewModel: ObservableObject {
                 serverSetupService.downloadState.isDownloading = true
             }
             defer {
-                Task { @MainActor in
-                    self.serverSetupService.downloadState.reset()
-                    self.serverSetupService.downloadState.isDownloading = false
-                }
+                self.serverSetupService.downloadState.reset()
+                self.serverSetupService.downloadState.isDownloading = false
+                self.updateParentState()
             }
 
             var serverJar = "server.jar"
@@ -175,11 +188,36 @@ class ServerCreationViewModel: ObservableObject {
                     gameVersion: selectedGameVersion,
                     loaderVersion: selectedLoaderVersion
                 )
-                try await SSHNodeService.prepareRemoteServerDirectoryAndDownload(
+                let alreadyPrepared = await SSHNodeService.waitForRemoteServerJar(
                     node: selectedNode,
                     serverName: name,
-                    target: target
+                    expectedJarName: target.fileName,
+                    timeoutSeconds: 4,
+                    pollIntervalSeconds: 2
                 )
+
+                if !alreadyPrepared {
+                    _ = await prepareRemoteServerWithTimeout(
+                        node: selectedNode,
+                        serverName: name,
+                        target: target
+                    )
+                }
+
+                let hasJar = await SSHNodeService.waitForRemoteServerJar(
+                    node: selectedNode,
+                    serverName: name,
+                    expectedJarName: target.fileName,
+                    timeoutSeconds: 12,
+                    pollIntervalSeconds: 2
+                )
+                guard hasJar else {
+                    throw GlobalError.validation(
+                        chineseMessage: "远程目录未检测到 Jar，请检查节点路径与下载权限",
+                        i18nKey: "error.validation.server_not_selected",
+                        level: .notification
+                    )
+                }
                 serverJar = target.fileName
                 javaPath = "java"
             }
@@ -231,6 +269,47 @@ class ServerCreationViewModel: ObservableObject {
         }
         try FileManager.default.copyItem(at: selectedServerIconURL, to: destination)
         return fileName
+    }
+
+    private func prepareRemoteServerWithTimeout(
+        node: ServerNode,
+        serverName: String,
+        target: ServerDownloadService.DownloadTarget
+    ) async -> Bool {
+        let timeoutSeconds: UInt64 = 20
+        return (try? await withThrowingTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                try await SSHNodeService.prepareRemoteServerDirectoryAndDownload(
+                    node: node,
+                    serverName: serverName,
+                    target: target
+                )
+                return true
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutSeconds * 1_000_000_000)
+                throw GlobalError.validation(
+                    chineseMessage: "远程下载确认超时，已继续创建。若启动失败请检查远程目录是否已有 Jar。",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                )
+            }
+
+            do {
+                _ = try await group.next()
+                group.cancelAll()
+                return true
+            } catch {
+                group.cancelAll()
+                let message = GlobalError.from(error).chineseMessage
+                if message.contains("远程下载确认超时") {
+                    Logger.shared.warning("远程下载确认超时，转入目录检测: \(serverName)")
+                    return false
+                }
+                Logger.shared.warning("远程下载异常，转入目录检测: \(message)")
+                return false
+            }
+        }) ?? false
     }
 
     private func handleDuplicateName() {

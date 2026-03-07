@@ -41,6 +41,44 @@ enum ServerDownloadService {
         )
     }
 
+    static func resolveDownloadTargetForServer(_ server: ServerInstance) async throws -> DownloadTarget {
+        try await resolveDownloadTarget(
+            serverType: server.serverType,
+            gameVersion: server.gameVersion,
+            loaderVersion: server.loaderVersion
+        )
+    }
+
+    static func verifyLocalJarIntegrity(server: ServerInstance) async -> Bool {
+        let jarURL = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(server.serverJar)
+        guard FileManager.default.fileExists(atPath: jarURL.path) else { return false }
+        let java = server.javaPath.isEmpty ? "java" : server.javaPath
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            let cmd = "'\(java.replacingOccurrences(of: "'", with: "'\"'\"'"))' -jar '\(jarURL.path.replacingOccurrences(of: "'", with: "'\"'\"'"))' --help"
+            process.arguments = ["-lc", cmd]
+            let out = Pipe()
+            let err = Pipe()
+            process.standardOutput = out
+            process.standardError = err
+            do {
+                try process.run()
+                process.waitUntilExit()
+                let e = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let o = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let merged = (o + "\n" + e)
+                if merged.localizedCaseInsensitiveContains("invalid or corrupt jarfile") {
+                    continuation.resume(returning: false)
+                } else {
+                    continuation.resume(returning: true)
+                }
+            } catch {
+                continuation.resume(returning: false)
+            }
+        }
+    }
+
     static func fetchAvailableGameVersions(serverType: ServerType, includeSnapshots: Bool) async throws -> [String] {
         switch serverType {
         case .vanilla, .paper, .custom:

@@ -47,8 +47,133 @@ enum SSHNodeService {
         if let headers = target.headers, !headers.isEmpty {
             headerPart = headers.map { "-H '\(escapeSingleQuotes("\($0.key): \($0.value)"))'" }.joined(separator: " ")
         }
+        let doneFlag = "\(serverDir)/.scsl_download_done"
+        let failFlag = "\(serverDir)/.scsl_download_failed"
+        let startCommand = """
+        mkdir -p '\(escapeSingleQuotes(serverDir))' && rm -f '\(escapeSingleQuotes(doneFlag))' '\(escapeSingleQuotes(failFlag))' && \
+        curl -fsSL \(headerPart) '\(escapeSingleQuotes(target.url.absoluteString))' -o '\(escapeSingleQuotes("\(serverDir)/\(target.fileName)"))' && \
+        printf "eula=true\\n" > '\(escapeSingleQuotes("\(serverDir)/eula.txt"))' && \
+        touch '\(escapeSingleQuotes(doneFlag))' && \
+        printf "__SCSL_DONE__\\n"
+        """
+        do {
+            let startOutput = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: startCommand,
+                successMarker: "__SCSL_DONE__",
+                timeoutSeconds: 1800
+            )
+            guard startOutput.contains("__SCSL_DONE__") else {
+                throw GlobalError.validation(
+                    chineseMessage: "远程下载失败，请检查 SSH 输出",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                )
+            }
+            return
+        } catch {
+            _ = try? await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: "touch '\(escapeSingleQuotes(failFlag))'",
+                timeoutSeconds: 10
+            )
+            // 命令可能在落盘后 SSH 会话抖动，进入轮询兜底判断。
+            if !isRetryablePollingSSHError(error) {
+                throw error
+            }
+        }
+
+        let startTime = Date()
+        let maxWaitSeconds: TimeInterval = 1800
+        var retryablePollingErrorCount = 0
+        while Date().timeIntervalSince(startTime) < maxWaitSeconds {
+            do {
+                if try await verifyRemoteServerPrepared(
+                    node: node,
+                    password: password,
+                    serverName: serverName,
+                    jarFileName: target.fileName
+                ) {
+                    return
+                }
+                retryablePollingErrorCount = 0
+            } catch {
+                // 轮询阶段允许短暂 SSH 抖动，避免目录已创建完成但被瞬时网络错误打断。
+                if !isRetryablePollingSSHError(error) {
+                    throw error
+                }
+                retryablePollingErrorCount += 1
+                let elapsed = Date().timeIntervalSince(startTime)
+                if retryablePollingErrorCount >= 5, elapsed >= 15 {
+                    Logger.shared.warning("远程轮询连续 SSH 抖动，按已创建完成处理: \(serverName)")
+                    return
+                }
+            }
+
+            let failCheckCommand = """
+            if test -f '\(escapeSingleQuotes(failFlag))'; then printf "__SCSL_FAIL__\\n"; fi
+            """
+            do {
+                let failOutput = try await runExpectSSH(
+                    host: node.host,
+                    port: node.port,
+                    username: node.username,
+                    password: password,
+                    remoteCommand: failCheckCommand,
+                    successMarker: "__SCSL_FAIL__",
+                    timeoutSeconds: 20
+                )
+                if failOutput.contains("__SCSL_FAIL__") {
+                    throw GlobalError.validation(
+                        chineseMessage: "远程下载失败，请检查网络或镜像源",
+                        i18nKey: "error.validation.server_not_selected",
+                        level: .notification
+                    )
+                }
+            } catch {
+                if !isRetryablePollingSSHError(error) {
+                    throw error
+                }
+                retryablePollingErrorCount += 1
+            }
+
+            try await Task.sleep(nanoseconds: 3_000_000_000)
+        }
+
+        if retryablePollingErrorCount > 0 {
+            Logger.shared.warning("远程下载轮询超时且存在 SSH 抖动，按已创建完成处理: \(serverName)")
+            return
+        }
+        throw GlobalError.validation(
+            chineseMessage: "远程下载超时，请稍后在远程目录确认文件是否已完成",
+            i18nKey: "error.validation.server_not_selected",
+            level: .notification
+        )
+    }
+
+    private static func isRetryablePollingSSHError(_ error: Error) -> Bool {
+        let message = GlobalError.from(error).chineseMessage
+        return message.contains("SSH 执行失败(exit=255)")
+            || message.contains("__SCSL_EXPECT_TIMEOUT__")
+            || message.contains("远程系统正在启动中")
+    }
+
+    private static func verifyRemoteServerPrepared(
+        node: ServerNode,
+        password: String,
+        serverName: String,
+        jarFileName: String
+    ) async throws -> Bool {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
         let command = """
-        mkdir -p '\(escapeSingleQuotes(serverDir))' && curl -fL \(headerPart) '\(escapeSingleQuotes(target.url.absoluteString))' -o '\(escapeSingleQuotes("\(serverDir)/\(target.fileName)"))' && printf "eula=true\\n" > '\(escapeSingleQuotes("\(serverDir)/eula.txt"))' && echo __SCSL_DONE__
+        if test -f '\(escapeSingleQuotes("\(serverDir)/\(jarFileName)"))' || ls '\(escapeSingleQuotes(serverDir))'/*.jar >/dev/null 2>&1; then printf "__SCSL_READY__\\n"; fi
         """
         let output = try await runExpectSSH(
             host: node.host,
@@ -56,11 +181,130 @@ enum SSHNodeService {
             username: node.username,
             password: password,
             remoteCommand: command,
+            successMarker: "__SCSL_READY__",
+            timeoutSeconds: 20
+        )
+        return output.contains("__SCSL_READY__")
+    }
+
+    static func deleteRemoteServerDirectory(node: ServerNode, serverName: String) async throws {
+        let password = try loadPassword(for: node)
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = """
+        if test -d '\(escapeSingleQuotes(serverDir))'; then rm -rf '\(escapeSingleQuotes(serverDir))'; fi && echo __SCSL_DELETED__
+        """
+        let output = try await runExpectSSH(
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            password: password,
+            remoteCommand: command
+        )
+        guard output.contains("__SCSL_DELETED__") else {
+            throw GlobalError.validation(
+                chineseMessage: "远程删除服务器目录失败，请检查 SSH 输出",
+                i18nKey: "error.validation.server_not_selected",
+                level: .notification
+            )
+        }
+    }
+
+    static func waitForRemoteServerJar(
+        node: ServerNode,
+        serverName: String,
+        expectedJarName: String,
+        timeoutSeconds: Int = 30,
+        pollIntervalSeconds: Int = 3
+    ) async -> Bool {
+        guard let password = try? loadPassword(for: node) else {
+            return false
+        }
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let start = Date()
+
+        while Date().timeIntervalSince(start) < Double(timeoutSeconds) {
+            let checkCommand = """
+            if test -f '\(escapeSingleQuotes("\(serverDir)/\(expectedJarName)"))' || ls '\(escapeSingleQuotes(serverDir))'/*.jar >/dev/null 2>&1; then printf "__SCSL_READY__\\n"; fi
+            """
+            if let output = try? await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: checkCommand,
+                successMarker: "__SCSL_READY__",
+                timeoutSeconds: 15
+            ),
+            output.contains("__SCSL_READY__") {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: UInt64(pollIntervalSeconds) * 1_000_000_000)
+        }
+        return false
+    }
+
+    static func verifyRemoteJarIntegrity(
+        node: ServerNode,
+        serverName: String,
+        jarFileName: String
+    ) async throws -> Bool {
+        let password = try loadPassword(for: node)
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        if ! test -f '\(escapeSingleQuotes(jarFileName))'; then echo __SCSL_JAR_MISSING__; \
+        elif ! command -v java >/dev/null 2>&1; then echo __SCSL_JAVA_MISSING__; \
+        elif java -jar '\(escapeSingleQuotes(jarFileName))' --help >/tmp/scsl-jar-check.log 2>&1; then echo __SCSL_JAR_OK__; \
+        elif grep -qi 'Invalid or corrupt jarfile' /tmp/scsl-jar-check.log; then echo __SCSL_JAR_BAD__; \
+        else echo __SCSL_JAR_OK__; fi
+        """
+        let output = try await runExpectSSH(
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            password: password,
+            remoteCommand: command,
+            timeoutSeconds: 45
+        )
+        if output.contains("__SCSL_JAR_BAD__") || output.contains("__SCSL_JAR_MISSING__") {
+            return false
+        }
+        return true
+    }
+
+    static func redownloadRemoteServerJar(
+        node: ServerNode,
+        serverName: String,
+        target: ServerDownloadService.DownloadTarget
+    ) async throws {
+        let password = try loadPassword(for: node)
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        var headerPart = ""
+        if let headers = target.headers, !headers.isEmpty {
+            headerPart = headers.map { "-H '\(escapeSingleQuotes("\($0.key): \($0.value)"))'" }.joined(separator: " ")
+        }
+        let command = """
+        cd '\(escapeSingleQuotes(serverDir))' && \
+        rm -f '\(escapeSingleQuotes(target.fileName))' && \
+        curl -fsSL \(headerPart) '\(escapeSingleQuotes(target.url.absoluteString))' -o '\(escapeSingleQuotes(target.fileName))' && \
+        echo __SCSL_REDOWNLOADED__
+        """
+        let output = try await runExpectSSH(
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            password: password,
+            remoteCommand: command,
+            successMarker: "__SCSL_REDOWNLOADED__",
             timeoutSeconds: 1800
         )
-        guard output.contains("__SCSL_DONE__") else {
+        guard output.contains("__SCSL_REDOWNLOADED__") else {
             throw GlobalError.validation(
-                chineseMessage: "远程创建失败，请检查 SSH 输出",
+                chineseMessage: "远程重下 Jar 失败",
                 i18nKey: "error.validation.server_not_selected",
                 level: .notification
             )
@@ -213,12 +457,25 @@ enum SSHNodeService {
         fi
         """
         do {
+            let helperOutput = try await runExpectSSH(
+                host: node.host,
+                port: node.port,
+                username: node.username,
+                password: password,
+                remoteCommand: helperCommand,
+                useTTY: false
+            )
+            if !helperOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return helperOutput
+            }
+            // Helper may return empty even when Minecraft writes logs/latest.log.
             return try await runExpectSSH(
                 host: node.host,
                 port: node.port,
                 username: node.username,
                 password: password,
-                remoteCommand: helperCommand
+                remoteCommand: fallbackCommand,
+                useTTY: false
             )
         } catch {
             return try await runExpectSSH(
@@ -226,7 +483,8 @@ enum SSHNodeService {
                 port: node.port,
                 username: node.username,
                 password: password,
-                remoteCommand: fallbackCommand
+                remoteCommand: fallbackCommand,
+                useTTY: false
             )
         }
     }
@@ -740,6 +998,8 @@ enum SSHNodeService {
         username: String,
         password: String,
         remoteCommand: String,
+        successMarker: String? = nil,
+        useTTY: Bool = true,
         timeoutSeconds: Int = 60
     ) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
@@ -751,14 +1011,24 @@ enum SSHNodeService {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/expect")
 
             let wrappedCommand = wrapRemoteCommand(remoteCommand)
+            let ttyFlag = useTTY ? "-tt" : ""
+            let successMarkerExpect: String
+            if let successMarker, !successMarker.isEmpty {
+                successMarkerExpect = """
+                -re {\(successMarker)} { send_user "\(escapeExpectString(successMarker))\\n"; exit 0 }
+                """
+            } else {
+                successMarkerExpect = ""
+            }
             let script = """
             log_user 1
             set timeout \(timeoutSeconds)
-            spawn ssh -tt -p \(port) -o LogLevel=ERROR -o ConnectTimeout=10 -o ConnectionAttempts=1 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \(username)@\(host) "\(escapeDoubleQuotes(wrappedCommand))"
+            spawn ssh \(ttyFlag) -p \(port) -o LogLevel=ERROR -o ConnectTimeout=10 -o ConnectionAttempts=1 -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \(username)@\(host) "\(escapeDoubleQuotes(wrappedCommand))"
             expect {
                 -re {.*yes/no.*} { send "yes\\r"; exp_continue }
                 -re {.*[Pp]assword:.*} { send "\(escapeExpectString(password))\\r"; exp_continue }
                 -re {.*密码[:：].*} { send "\(escapeExpectString(password))\\r"; exp_continue }
+                \(successMarkerExpect)
                 timeout { send_user "__SCSL_EXPECT_TIMEOUT__\\n"; exit 124 }
                 eof { }
             }
@@ -1033,11 +1303,38 @@ enum SSHNodeService {
         esac
         """
         let base64 = Data(script.utf8).base64EncodedString()
+        let serviceName = "scsl-helper-bootstrap.service"
+        let helperDirEscaped = escapeSingleQuotes(helperDir)
+        let helperPathEscaped = escapeSingleQuotes(helperPath)
+        let serviceBody = """
+        [Unit]
+        Description=SCSL Helper Bootstrap
+        After=network.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/sh -lc 'mkdir -p '\(helperDirEscaped)' && test -f '\(helperPathEscaped)' && chmod +x '\(helperPathEscaped)' || true'
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
+        """
+        let serviceBase64 = Data(serviceBody.utf8).base64EncodedString()
         let command = """
         mkdir -p '\(escapeSingleQuotes(helperDir))' && \
         printf '%s' '\(base64)' | base64 -d > '\(escapeSingleQuotes(helperPath))' && \
         chmod +x '\(escapeSingleQuotes(helperPath))' && \
-        if test -x '\(escapeSingleQuotes(helperPath))'; then echo __SCSL_HELPER_OK__; else echo __SCSL_HELPER_FAIL__; fi
+        if test -x '\(escapeSingleQuotes(helperPath))'; then echo __SCSL_HELPER_OK__; else echo __SCSL_HELPER_FAIL__; fi && \
+        if command -v systemctl >/dev/null 2>&1; then \
+          printf '%s' '\(serviceBase64)' | base64 -d > /etc/systemd/system/\(serviceName) && \
+          systemctl daemon-reload && \
+          systemctl enable \(serviceName) >/dev/null 2>&1 || true && \
+          systemctl start \(serviceName) >/dev/null 2>&1 || true && \
+          echo __SCSL_HELPER_AUTOSTART_OK__; \
+        else \
+          (crontab -l 2>/dev/null; echo "@reboot mkdir -p '\(escapeSingleQuotes(helperDir))' && test -f '\(escapeSingleQuotes(helperPath))' && chmod +x '\(escapeSingleQuotes(helperPath))' || true") | crontab - 2>/dev/null || true && \
+          echo __SCSL_HELPER_AUTOSTART_OK__; \
+        fi
         """
         let output = try await runExpectSSH(
             host: node.host,

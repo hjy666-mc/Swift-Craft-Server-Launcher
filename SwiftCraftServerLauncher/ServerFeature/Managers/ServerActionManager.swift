@@ -26,6 +26,7 @@ class ServerActionManager: ObservableObject {
     func deleteServer(
         server: ServerInstance,
         serverRepository: ServerRepository,
+        serverNodeRepository: ServerNodeRepository,
         selectedItem: Binding<SidebarItem>? = nil
     ) {
         Task {
@@ -40,11 +41,23 @@ class ServerActionManager: ObservableObject {
                     }
                 }
 
-                let dir = AppPaths.serverDirectory(serverName: server.name)
+                let dir: URL
+                if server.nodeId == ServerNode.local.id {
+                    dir = AppPaths.serverDirectory(serverName: server.name)
+                } else {
+                    dir = AppPaths.remoteNodeServersDirectory(nodeId: server.nodeId)
+                        .appendingPathComponent(server.name, isDirectory: true)
+                }
+
                 if FileManager.default.fileExists(atPath: dir.path) {
                     try FileManager.default.removeItem(at: dir)
                 } else {
-                    Logger.shared.warning("删除服务器时未找到目录，跳过文件删除: \(dir.path)")
+                    Logger.shared.warning("删除服务器时未找到目录，跳过本地缓存删除: \(dir.path)")
+                }
+
+                if server.nodeId != ServerNode.local.id,
+                   let node = serverNodeRepository.getNode(by: server.nodeId) {
+                    try await SSHNodeService.deleteRemoteServerDirectory(node: node, serverName: server.name)
                 }
 
                 AppPaths.invalidatePaths(forServerName: server.name)
