@@ -56,7 +56,11 @@ struct ModrinthProjectDetailView: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
-                        ProgressView()
+                        SkeletonView(
+                            width: Constants.iconSize,
+                            height: Constants.iconSize,
+                            cornerRadius: Constants.cornerRadius
+                        )
                     case .success(let image):
                         image
                             .resizable()
@@ -119,11 +123,56 @@ struct ModrinthProjectDetailView: View {
 
     // MARK: - Loading View
     private var loadingView: some View {
-        VStack(spacing: Constants.spacing) {
-            ProgressView()
-                .controlSize(.small)
+        VStack(alignment: .leading, spacing: Constants.spacing) {
+            HStack(alignment: .top, spacing: Constants.spacing) {
+                SkeletonView(
+                    width: Constants.iconSize,
+                    height: Constants.iconSize,
+                    cornerRadius: Constants.cornerRadius
+                )
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonView(
+                        width: SkeletonWidth.make(base: 220, variance: 40, seed: 101),
+                        height: 22,
+                        cornerRadius: 6
+                    )
+                    SkeletonView(
+                        width: SkeletonWidth.make(base: 320, variance: 60, seed: 102),
+                        height: 14,
+                        cornerRadius: 6
+                    )
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { index in
+                            SkeletonView(
+                                width: SkeletonWidth.make(
+                                    base: 64,
+                                    variance: 12,
+                                    seed: 110 + index
+                                ),
+                                height: 18,
+                                cornerRadius: 9
+                            )
+                        }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(0..<8, id: \.self) { index in
+                    SkeletonView(
+                        width: SkeletonWidth.make(
+                            base: 360 - CGFloat(index * 18),
+                            variance: 52,
+                            seed: 130 + index
+                        ),
+                        height: 12,
+                        cornerRadius: 4
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Constants.padding)
     }
 }
