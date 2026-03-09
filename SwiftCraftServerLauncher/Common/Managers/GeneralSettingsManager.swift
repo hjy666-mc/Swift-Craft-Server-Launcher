@@ -109,6 +109,91 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         }
     }
 
+    // MARK: - 启动 / 更新
+    @AppStorage("launchAtLoginEnabled")
+    var launchAtLoginEnabled: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("updateAutoCheckEnabled")
+    var updateAutoCheckEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("updateAutoDownloadEnabled")
+    var updateAutoDownloadEnabled: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
+    // MARK: - 安全确认
+    @AppStorage("confirmDeleteServer")
+    var confirmDeleteServer: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("confirmDeleteWorld")
+    var confirmDeleteWorld: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("confirmUninstallPluginMod")
+    var confirmUninstallPluginMod: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("confirmExitWhileRunning")
+    var confirmExitWhileRunning: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    // MARK: - 备份
+    @AppStorage("backupAutoEnabled")
+    var backupAutoEnabled: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("backupIntervalMinutes")
+    var backupIntervalMinutes: Int = 60 {
+        didSet {
+            if backupIntervalMinutes < 5 {
+                backupIntervalMinutes = 5
+            }
+            objectWillChange.send()
+        }
+    }
+
+    @AppStorage("backupKeepCount")
+    var backupKeepCount: Int = 10 {
+        didSet {
+            if backupKeepCount < 1 {
+                backupKeepCount = 1
+            }
+            objectWillChange.send()
+        }
+    }
+
+    @AppStorage("backupDirectoryPath")
+    var backupDirectoryPath: String = AppPaths.launcherSupportDirectory
+        .appendingPathComponent("backups", isDirectory: true).path {
+        didSet {
+            if backupDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                backupDirectoryPath = AppPaths.launcherSupportDirectory
+                    .appendingPathComponent("backups", isDirectory: true).path
+            }
+            objectWillChange.send()
+        }
+    }
+
+    @AppStorage("backupBeforeUpdate")
+    var backupBeforeUpdate: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("backupLastTimestamp")
+    var backupLastTimestamp: Double = 0 {
+        didSet { objectWillChange.send() }
+    }
+
     private init() {
         if interfaceLayoutStyle != .focused {
             interfaceLayoutStyle = .focused

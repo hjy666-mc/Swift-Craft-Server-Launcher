@@ -64,6 +64,10 @@ final class ServerProcessManager: ObservableObject, @unchecked Sendable {
         return false
     }
 
+    func runningProcessCount() -> Int {
+        queue.sync { serverProcesses.values.filter(\.isRunning).count }
+    }
+
     func removeServerState(serverId: String) {
         queue.async { [weak self] in
             self?.serverProcesses.removeValue(forKey: serverId)
