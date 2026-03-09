@@ -40,13 +40,10 @@ final class BackupService: ObservableObject {
         let settings = GeneralSettingsManager.shared
         let fileManager = FileManager.default
 
-        let sourceRoot = URL(fileURLWithPath: settings.currentWorkingPath, isDirectory: true)
-        guard fileManager.fileExists(atPath: sourceRoot.path) else {
-            throw NSError(
-                domain: "BackupService",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "备份源目录不存在: \(sourceRoot.path)"]
-            )
+        // 仅备份 servers 目录，避免把整个工作目录都打包进去。
+        let sourceRoot = AppPaths.serverRootDirectory
+        if !fileManager.fileExists(atPath: sourceRoot.path) {
+            try fileManager.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
         }
 
         let backupRoot = resolvedBackupDirectory()
@@ -66,7 +63,7 @@ final class BackupService: ObservableObject {
         try pruneBackups(keepCount: settings.backupKeepCount, backupRoot: backupRoot)
 
         settings.backupLastTimestamp = Date().timeIntervalSince1970
-        Logger.shared.info("创建备份成功: \(outputURL.path)")
+        Logger.shared.info("创建 servers 备份成功: \(outputURL.path)")
         return outputURL
     }
 

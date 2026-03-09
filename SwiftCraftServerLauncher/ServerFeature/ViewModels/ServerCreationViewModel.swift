@@ -277,39 +277,33 @@ class ServerCreationViewModel: ObservableObject {
         target: ServerDownloadService.DownloadTarget
     ) async -> Bool {
         let timeoutSeconds: UInt64 = 20
-        return (try? await withThrowingTaskGroup(of: Bool.self) { group in
+        return await withTaskGroup(of: Bool.self) { group in
             group.addTask {
-                try await SSHNodeService.prepareRemoteServerDirectoryAndDownload(
-                    node: node,
-                    serverName: serverName,
-                    target: target
-                )
-                return true
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: timeoutSeconds * 1_000_000_000)
-                throw GlobalError.validation(
-                    chineseMessage: "远程下载确认超时，已继续创建。若启动失败请检查远程目录是否已有 Jar。",
-                    i18nKey: "error.validation.server_not_selected",
-                    level: .notification
-                )
-            }
-
-            do {
-                _ = try await group.next()
-                group.cancelAll()
-                return true
-            } catch {
-                group.cancelAll()
-                let message = GlobalError.from(error).chineseMessage
-                if message.contains("远程下载确认超时") {
-                    Logger.shared.warning("远程下载确认超时，转入目录检测: \(serverName)")
+                do {
+                    try await SSHNodeService.prepareRemoteServerDirectoryAndDownload(
+                        node: node,
+                        serverName: serverName,
+                        target: target
+                    )
+                    return true
+                } catch {
+                    let message = GlobalError.from(error).chineseMessage
+                    Logger.shared.warning("远程下载异常，转入目录检测: \(message)")
                     return false
                 }
-                Logger.shared.warning("远程下载异常，转入目录检测: \(message)")
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: timeoutSeconds * 1_000_000_000)
+                Logger.shared.warning("远程下载确认超时，转入目录检测: \(serverName)")
                 return false
             }
-        }) ?? false
+
+            if let result = await group.next() {
+                group.cancelAll()
+                return result
+            }
+            return false
+        }
     }
 
     private func handleDuplicateName() {

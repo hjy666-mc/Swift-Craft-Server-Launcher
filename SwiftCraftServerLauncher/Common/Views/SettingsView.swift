@@ -3,24 +3,45 @@ import Foundation
 
 /// 设置标签页枚举
 enum SettingsTab: Int {
-    case general = 0
-    case appearance = 1
+    case generalBasic = 0
+    case generalUpdate = 1
+    case generalSafety = 2
+    case generalBackup = 3
+    case appearance = 4
 }
 
 /// 通用设置视图
 /// 应用设置
 public struct SettingsView: View {
-    @State private var selectedTab: SettingsTab = .general
+    @State private var selectedTab: SettingsTab = .generalBasic
 
     public init() {}
 
     public var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView()
+            GeneralSettingsView(sections: [.basic])
                 .tabItem {
-                    Label("settings.general.tab".localized(), systemImage: "gearshape")
+                    Label("settings.general.basic.tab".localized(), systemImage: "gearshape")
                 }
-                .tag(SettingsTab.general)
+                .tag(SettingsTab.generalBasic)
+
+            GeneralSettingsView(sections: [.update])
+                .tabItem {
+                    Label("settings.general.update.tab".localized(), systemImage: "arrow.triangle.2.circlepath")
+                }
+                .tag(SettingsTab.generalUpdate)
+
+            GeneralSettingsView(sections: [.safety])
+                .tabItem {
+                    Label("settings.general.confirmation.tab".localized(), systemImage: "checkmark.shield")
+                }
+                .tag(SettingsTab.generalSafety)
+
+            GeneralSettingsView(sections: [.backup])
+                .tabItem {
+                    Label("settings.general.backup.tab".localized(), systemImage: "archivebox")
+                }
+                .tag(SettingsTab.generalBackup)
 
             AppearanceSettingsView()
                 .tabItem {
