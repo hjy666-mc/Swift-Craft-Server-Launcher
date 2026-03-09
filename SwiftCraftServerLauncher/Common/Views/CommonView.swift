@@ -44,8 +44,25 @@ struct DirectorySettingRow: View {
     let description: String
     let onChoose: () -> Void
     let onReset: () -> Void
+    let showsResetButton: Bool
 
     @State private var showPopover = false
+
+    init(
+        title: String,
+        path: String,
+        description: String,
+        onChoose: @escaping () -> Void,
+        onReset: @escaping () -> Void,
+        showsResetButton: Bool = true
+    ) {
+        self.title = title
+        self.path = path
+        self.description = description
+        self.onChoose = onChoose
+        self.onReset = onReset
+        self.showsResetButton = showsResetButton
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -63,8 +80,10 @@ struct DirectorySettingRow: View {
                     }
                 }
 
-                Button("common.reset".localized(), action: onReset)
-                    .padding(.leading, 8)
+                if showsResetButton {
+                    Button("common.reset".localized(), action: onReset)
+                        .padding(.leading, 8)
+                }
             }
             Text(description)
                 .font(.footnote)

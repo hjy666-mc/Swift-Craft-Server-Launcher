@@ -11,22 +11,49 @@ enum SettingsTab: Int {
 /// 应用设置
 public struct SettingsView: View {
     @State private var selectedTab: SettingsTab = .general
+    @State private var searchText = ""
 
     public init() {}
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
-            GeneralSettingsView()
-                .tabItem {
-                    Label("settings.general.tab".localized(), systemImage: "gearshape")
-                }
-                .tag(SettingsTab.general)
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
 
-            AppearanceSettingsView()
-                .tabItem {
-                    Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
+                TextField("common.search".localized(), text: $searchText)
+                    .textFieldStyle(.plain)
+
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .tag(SettingsTab.appearance)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+            )
+
+            TabView(selection: $selectedTab) {
+                GeneralSettingsView(searchText: searchText)
+                    .tabItem {
+                        Label("settings.general.tab".localized(), systemImage: "gearshape")
+                    }
+                    .tag(SettingsTab.general)
+
+                AppearanceSettingsView(searchText: searchText)
+                    .tabItem {
+                        Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
+                    }
+                    .tag(SettingsTab.appearance)
+            }
         }
         .padding()
     }
