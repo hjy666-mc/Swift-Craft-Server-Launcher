@@ -11,61 +11,24 @@ enum SettingsTab: Int {
 /// 应用设置
 public struct SettingsView: View {
     @State private var selectedTab: SettingsTab = .general
-    @State private var searchText = ""
 
     public init() {}
 
     public var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView(searchText: searchText)
+            GeneralSettingsView()
                 .tabItem {
                     Label("settings.general.tab".localized(), systemImage: "gearshape")
                 }
                 .tag(SettingsTab.general)
 
-            AppearanceSettingsView(searchText: searchText)
+            AppearanceSettingsView()
                 .tabItem {
                     Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
                 }
                 .tag(SettingsTab.appearance)
         }
         .padding()
-        .searchable(
-            text: $searchText,
-            placement: .toolbar,
-            prompt: Text("common.search".localized())
-        )
-        .onChange(of: searchText) { _, _ in
-            syncSelectedTabForSearch()
-        }
-        .onChange(of: selectedTab) { _, _ in
-            syncSelectedTabForSearch()
-        }
-    }
-
-    private var hasGeneralSearchResult: Bool {
-        GeneralSettingsView.containsMatch(for: searchText)
-    }
-
-    private var hasAppearanceSearchResult: Bool {
-        AppearanceSettingsView.containsMatch(for: searchText)
-    }
-
-    private var normalizedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    private func syncSelectedTabForSearch() {
-        guard !normalizedSearchText.isEmpty else { return }
-
-        switch selectedTab {
-        case .general where !hasGeneralSearchResult && hasAppearanceSearchResult:
-            selectedTab = .appearance
-        case .appearance where !hasAppearanceSearchResult && hasGeneralSearchResult:
-            selectedTab = .general
-        default:
-            break
-        }
     }
 }
 

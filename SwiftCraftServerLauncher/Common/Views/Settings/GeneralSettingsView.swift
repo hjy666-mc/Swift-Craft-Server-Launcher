@@ -2,38 +2,6 @@ import SwiftUI
 import AppKit
 
 public struct GeneralSettingsView: View {
-    private static let searchKeywordsBySection: [[String]] = [
-        [
-            "settings.language.picker".localized(),
-            "language",
-            "语言",
-        ],
-        [
-            "settings.launcher_working_directory".localized(),
-            "settings.working_directory.description".localized(),
-            "working directory",
-            "工作目录",
-        ],
-        [
-            "settings.concurrent_downloads.label".localized(),
-            "concurrent download",
-            "并发下载",
-        ],
-        [
-            "settings.github_proxy.label".localized(),
-            "settings.github_proxy.description".localized(),
-            "proxy",
-            "代理",
-        ],
-        [
-            "settings.resource_cache.label".localized(),
-            "cache",
-            "缓存",
-        ],
-    ]
-
-    private let searchText: String
-
     @StateObject private var generalSettings = GeneralSettingsManager.shared
     @EnvironmentObject private var gameRepository: GameRepository
     @State private var showDirectoryPicker = false
@@ -50,247 +18,205 @@ public struct GeneralSettingsView: View {
     private let defaultGitHubProxyURL = "https://gh-proxy.com"
     private let defaultEnableResourcePageCache = true
 
-    public init(searchText: String = "") {
-        self.searchText = searchText
-    }
-
-    static func containsMatch(for searchText: String) -> Bool {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return true }
-        return searchKeywordsBySection
-            .flatMap { $0 }
-            .contains { $0.lowercased().contains(query) }
-    }
+    public init() {}
 
     public var body: some View {
         Form {
-            if matchesSearch([
-                "settings.language.picker".localized(),
-                "language",
-                "语言",
-            ]) {
-                LabeledContent("settings.language.picker".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        Picker("", selection: $selectedLanguage) {
-                            ForEach(LanguageManager.shared.languages, id: \.1) { name, code in
-                                Text(name).tag(code)
-                            }
+            LabeledContent("settings.language.picker".localized()) {
+                HStack(alignment: .top, spacing: 8) {
+                    Picker("", selection: $selectedLanguage) {
+                        ForEach(LanguageManager.shared.languages, id: \.1) { name, code in
+                            Text(name).tag(code)
                         }
-                        .labelsHidden()
-                        .fixedSize()
+                    }
+                    .labelsHidden()
+                    .fixedSize()
 
-                        resetIconButton(
-                            disabled: selectedLanguage == defaultLanguage
-                        ) {
-                            selectedLanguage = defaultLanguage
-                        }
-                    }
-                    .onChange(of: selectedLanguage) { _, newValue in
-                        if newValue != LanguageManager.shared.selectedLanguage {
-                            showingRestartAlert = true
-                        }
-                    }
-                    .confirmationDialog(
-                        "settings.language.restart.title".localized(),
-                        isPresented: $showingRestartAlert,
-                        titleVisibility: .visible
+                    resetIconButton(
+                        disabled: selectedLanguage == defaultLanguage
                     ) {
-                        Button("settings.language.restart.confirm".localized(), role: .destructive) {
-                            UserDefaults.standard.set([selectedLanguage], forKey: "AppleLanguages")
-                            LanguageManager.shared.selectedLanguage = selectedLanguage
-                            restartAppSafely()
-                        }
-                        .keyboardShortcut(.defaultAction)
-                        Button("common.cancel".localized(), role: .cancel) {
-                            selectedLanguage = LanguageManager.shared.selectedLanguage
-                        }
-                    } message: {
-                        Text("settings.language.restart.message".localized())
+                        selectedLanguage = defaultLanguage
                     }
                 }
-                .labeledContentStyle(.custom)
-                .padding(.bottom, 10)
+                .onChange(of: selectedLanguage) { _, newValue in
+                    if newValue != LanguageManager.shared.selectedLanguage {
+                        showingRestartAlert = true
+                    }
+                }
+                .confirmationDialog(
+                    "settings.language.restart.title".localized(),
+                    isPresented: $showingRestartAlert,
+                    titleVisibility: .visible
+                ) {
+                    Button("settings.language.restart.confirm".localized(), role: .destructive) {
+                        UserDefaults.standard.set([selectedLanguage], forKey: "AppleLanguages")
+                        LanguageManager.shared.selectedLanguage = selectedLanguage
+                        restartAppSafely()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    Button("common.cancel".localized(), role: .cancel) {
+                        selectedLanguage = LanguageManager.shared.selectedLanguage
+                    }
+                } message: {
+                    Text("settings.language.restart.message".localized())
+                }
             }
+            .labeledContentStyle(.custom)
+            .padding(.bottom, 10)
 
-            if matchesSearch([
-                "settings.launcher_working_directory".localized(),
-                "settings.working_directory.description".localized(),
-                "working directory",
-                "工作目录",
-            ]) {
-                LabeledContent("settings.launcher_working_directory".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !workingPathOptions.isEmpty {
-                                Picker("", selection: Binding(
-                                    get: {
-                                        generalSettings.launcherWorkingDirectory.isEmpty
-                                            ? defaultWorkingDirectory
-                                            : generalSettings.launcherWorkingDirectory
-                                    },
-                                    set: { generalSettings.launcherWorkingDirectory = $0 }
-                                )) {
-                                    ForEach(workingPathOptions, id: \.path) { item in
-                                        Text(workingPathDisplayString(for: item))
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-                                            .tag(item.path)
-                                            .help(item.path)
-                                    }
+            LabeledContent("settings.launcher_working_directory".localized()) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !workingPathOptions.isEmpty {
+                            Picker("", selection: Binding(
+                                get: {
+                                    generalSettings.launcherWorkingDirectory.isEmpty
+                                        ? defaultWorkingDirectory
+                                        : generalSettings.launcherWorkingDirectory
+                                },
+                                set: { generalSettings.launcherWorkingDirectory = $0 }
+                            )) {
+                                ForEach(workingPathOptions, id: \.path) { item in
+                                    Text(workingPathDisplayString(for: item))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .tag(item.path)
+                                        .help(item.path)
                                 }
-                                .labelsHidden()
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: 320)
                             }
-                            DirectorySettingRow(
-                                title: "settings.launcher_working_directory".localized(),
-                                path: generalSettings.launcherWorkingDirectory.isEmpty
-                                    ? defaultWorkingDirectory
-                                    : generalSettings.launcherWorkingDirectory,
-                                description: "settings.working_directory.description".localized(),
-                                onChoose: { showDirectoryPicker = true },
-                                onReset: { resetWorkingDirectorySafely() },
-                                showsResetButton: false
-                            )
-                            .fixedSize()
-                            .fileImporter(
-                                isPresented: $showDirectoryPicker,
-                                allowedContentTypes: [.folder],
-                                allowsMultipleSelection: false
-                            ) { result in
-                                handleDirectoryImport(result)
-                            }
+                            .labelsHidden()
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 320)
                         }
-
-                        resetIconButton(
-                            disabled: generalSettings.launcherWorkingDirectory == defaultWorkingDirectory
-                        ) {
-                            resetWorkingDirectorySafely()
+                        DirectorySettingRow(
+                            title: "settings.launcher_working_directory".localized(),
+                            path: generalSettings.launcherWorkingDirectory.isEmpty
+                                ? defaultWorkingDirectory
+                                : generalSettings.launcherWorkingDirectory,
+                            description: "settings.working_directory.description".localized(),
+                            onChoose: { showDirectoryPicker = true },
+                            onReset: { resetWorkingDirectorySafely() },
+                            showsResetButton: false
+                        )
+                        .fixedSize()
+                        .fileImporter(
+                            isPresented: $showDirectoryPicker,
+                            allowedContentTypes: [.folder],
+                            allowsMultipleSelection: false
+                        ) { result in
+                            handleDirectoryImport(result)
                         }
                     }
+
+                    resetIconButton(
+                        disabled: generalSettings.launcherWorkingDirectory == defaultWorkingDirectory
+                    ) {
+                        resetWorkingDirectorySafely()
+                    }
                 }
-                .labeledContentStyle(.custom(alignment: .firstTextBaseline))
-                .task {
+            }
+            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+            .task {
+                workingPathOptions = await gameRepository.fetchAllWorkingPathsWithCounts()
+            }
+            .onChange(of: generalSettings.launcherWorkingDirectory) { _, _ in
+                Task {
                     workingPathOptions = await gameRepository.fetchAllWorkingPathsWithCounts()
                 }
-                .onChange(of: generalSettings.launcherWorkingDirectory) { _, _ in
-                    Task {
-                        workingPathOptions = await gameRepository.fetchAllWorkingPathsWithCounts()
-                    }
-                }
             }
 
-            if matchesSearch([
-                "settings.concurrent_downloads.label".localized(),
-                "concurrent download",
-                "并发下载",
-            ]) {
-                LabeledContent("settings.concurrent_downloads.label".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: {
-                                        Double(generalSettings.concurrentDownloads)
-                                    },
-                                    set: {
-                                        generalSettings.concurrentDownloads = Int(
-                                            $0
-                                        )
-                                    }
-                                ),
-                                in: 1...64
-                            )
-                            .controlSize(.mini)
-                            .animation(.easeOut(duration: 0.5), value: generalSettings.concurrentDownloads)
-                            Text("\(generalSettings.concurrentDownloads)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .fixedSize()
-                        }
-                        .frame(width: 200)
-                        .gridColumnAlignment(.leading)
-                        .labelsHidden()
-
-                        resetIconButton(
-                            disabled: generalSettings.concurrentDownloads == defaultConcurrentDownloads
-                        ) {
-                            generalSettings.concurrentDownloads = defaultConcurrentDownloads
-                        }
-                    }
-                }
-                .labeledContentStyle(.custom)
-            }
-
-            if matchesSearch([
-                "settings.github_proxy.label".localized(),
-                "settings.github_proxy.description".localized(),
-                "proxy",
-                "代理",
-            ]) {
-                LabeledContent("settings.github_proxy.label".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading) {
-                            HStack {
-                                Toggle(
-                                    "",
-                                    isOn: $generalSettings.enableGitHubProxy
-                                )
-                                .labelsHidden()
-                                Text("settings.github_proxy.enable".localized())
-                                    .font(.callout)
-                                    .foregroundColor(.primary)
-                            }
-                            HStack(spacing: 8) {
-                                TextField(
-                                    "",
-                                    text: $generalSettings.gitProxyURL
-                                )
-                                .labelsHidden()
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 200)
-                                .focusable(false)
-                                .disabled(!generalSettings.enableGitHubProxy)
-                                InfoIconWithPopover(text: "settings.github_proxy.description".localized())
-                            }
-                        }
-
-                        resetIconButton(
-                            disabled: generalSettings.enableGitHubProxy == defaultEnableGitHubProxy
-                                && generalSettings.gitProxyURL == defaultGitHubProxyURL
-                        ) {
-                            generalSettings.enableGitHubProxy = defaultEnableGitHubProxy
-                            generalSettings.gitProxyURL = defaultGitHubProxyURL
-                        }
-                    }
-                }
-                .labeledContentStyle(.custom(alignment: .firstTextBaseline))
-                .padding(.top, 10)
-            }
-
-            if matchesSearch([
-                "settings.resource_cache.label".localized(),
-                "cache",
-                "缓存",
-            ]) {
-                LabeledContent("settings.resource_cache.label".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        Toggle(
-                            "settings.resource_cache.enable".localized(),
-                            isOn: $generalSettings.enableResourcePageCache
+            LabeledContent("settings.concurrent_downloads.label".localized()) {
+                HStack(alignment: .top, spacing: 8) {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: {
+                                    Double(generalSettings.concurrentDownloads)
+                                },
+                                set: {
+                                    generalSettings.concurrentDownloads = Int(
+                                        $0
+                                    )
+                                }
+                            ),
+                            in: 1...64
                         )
-                        .toggleStyle(.checkbox)
+                        .controlSize(.mini)
+                        .animation(.easeOut(duration: 0.5), value: generalSettings.concurrentDownloads)
+                        Text("\(generalSettings.concurrentDownloads)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .fixedSize()
+                    }
+                    .frame(width: 200)
+                    .gridColumnAlignment(.leading)
+                    .labelsHidden()
 
-                        resetIconButton(
-                            disabled: generalSettings.enableResourcePageCache == defaultEnableResourcePageCache
-                        ) {
-                            generalSettings.enableResourcePageCache = defaultEnableResourcePageCache
-                        }
+                    resetIconButton(
+                        disabled: generalSettings.concurrentDownloads == defaultConcurrentDownloads
+                    ) {
+                        generalSettings.concurrentDownloads = defaultConcurrentDownloads
                     }
                 }
-                .labeledContentStyle(.custom)
-                .padding(.top, 6)
             }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("settings.github_proxy.label".localized()) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Toggle(
+                                "",
+                                isOn: $generalSettings.enableGitHubProxy
+                            )
+                            .labelsHidden()
+                            Text("settings.github_proxy.enable".localized())
+                                .font(.callout)
+                                .foregroundColor(.primary)
+                        }
+                        HStack(spacing: 8) {
+                            TextField(
+                                "",
+                                text: $generalSettings.gitProxyURL
+                            )
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 200)
+                            .focusable(false)
+                            .disabled(!generalSettings.enableGitHubProxy)
+                            InfoIconWithPopover(text: "settings.github_proxy.description".localized())
+                        }
+                    }
+
+                    resetIconButton(
+                        disabled: generalSettings.enableGitHubProxy == defaultEnableGitHubProxy
+                            && generalSettings.gitProxyURL == defaultGitHubProxyURL
+                    ) {
+                        generalSettings.enableGitHubProxy = defaultEnableGitHubProxy
+                        generalSettings.gitProxyURL = defaultGitHubProxyURL
+                    }
+                }
+            }
+            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+            .padding(.top, 10)
+
+            LabeledContent("settings.resource_cache.label".localized()) {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle(
+                        "settings.resource_cache.enable".localized(),
+                        isOn: $generalSettings.enableResourcePageCache
+                    )
+                    .toggleStyle(.checkbox)
+
+                    resetIconButton(
+                        disabled: generalSettings.enableResourcePageCache == defaultEnableResourcePageCache
+                    ) {
+                        generalSettings.enableResourcePageCache = defaultEnableResourcePageCache
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+            .padding(.top, 6)
         }
         .globalErrorHandler()
         .alert(
@@ -386,12 +312,6 @@ public struct GeneralSettingsView: View {
             GlobalErrorHandler.shared.handle(globalError)
             self.error = globalError
         }
-    }
-
-    private func matchesSearch(_ keywords: [String]) -> Bool {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return true }
-        return keywords.contains { $0.lowercased().contains(query) }
     }
 
     @ViewBuilder
