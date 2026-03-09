@@ -160,7 +160,6 @@ public struct GeneralSettingsView: View {
                 )
                 .toggleStyle(.checkbox)
             }.labeledContentStyle(.custom).padding(.top, 6)
-
         }
         .globalErrorHandler()
         .alert(
