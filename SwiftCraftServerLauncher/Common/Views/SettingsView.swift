@@ -2,7 +2,7 @@ import SwiftUI
 import Foundation
 
 /// 设置标签页枚举
-enum SettingsTab: Int, CaseIterable {
+enum SettingsTab: Int {
     case general = 0
     case appearance = 1
 }
@@ -16,61 +16,25 @@ public struct SettingsView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-
-                    TextField("common.search".localized(), text: $searchText)
-                        .textFieldStyle(.plain)
-
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+        TabView(selection: $selectedTab) {
+            GeneralSettingsView(searchText: searchText)
+                .tabItem {
+                    Label("settings.general.tab".localized(), systemImage: "gearshape")
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .frame(maxWidth: 300, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.primary.opacity(0.05))
-                )
+                .tag(SettingsTab.general)
 
-                Picker("", selection: $selectedTab) {
-                    Text("settings.general.tab".localized()).tag(SettingsTab.general)
-                    Text("settings.appearance.tab".localized()).tag(SettingsTab.appearance)
+            AppearanceSettingsView(searchText: searchText)
+                .tabItem {
+                    Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 340)
-
-                Spacer(minLength: 0)
-            }
-
-            if hasAnySearchResult {
-                switch selectedTab {
-                case .general:
-                    GeneralSettingsView(searchText: searchText)
-                case .appearance:
-                    AppearanceSettingsView(searchText: searchText)
-                }
-            } else {
-                ContentUnavailableView {
-                    Label("result.empty".localized(), systemImage: "magnifyingglass")
-                } description: {
-                    Text(searchText)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
+                .tag(SettingsTab.appearance)
         }
         .padding()
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: Text("common.search".localized())
+        )
         .onChange(of: searchText) { _, _ in
             syncSelectedTabForSearch()
         }
@@ -87,12 +51,6 @@ public struct SettingsView: View {
         AppearanceSettingsView.containsMatch(for: searchText)
     }
 
-    private var hasAnySearchResult: Bool {
-        let query = normalizedSearchText
-        guard !query.isEmpty else { return true }
-        return hasGeneralSearchResult || hasAppearanceSearchResult
-    }
-
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
@@ -107,17 +65,6 @@ public struct SettingsView: View {
             selectedTab = .general
         default:
             break
-        }
-    }
-}
-
-private extension SettingsTab {
-    var localizedTitle: String {
-        switch self {
-        case .general:
-            return "settings.general.tab".localized()
-        case .appearance:
-            return "settings.appearance.tab".localized()
         }
     }
 }
