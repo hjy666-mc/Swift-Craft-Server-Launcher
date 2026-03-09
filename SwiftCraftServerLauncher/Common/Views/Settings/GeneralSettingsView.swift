@@ -6,8 +6,6 @@ public struct GeneralSettingsView: View {
     @EnvironmentObject private var gameRepository: GameRepository
     @State private var showDirectoryPicker = false
     @State private var showingRestartAlert = false
-    @State private var previousLanguage: String = ""
-    @State private var isCancellingLanguageChange = false
     @State private var selectedLanguage = LanguageManager.shared.selectedLanguage
     @State private var error: GlobalError?
     /// 数据库中所有工作路径及对应游戏数量（用于快速切换）
