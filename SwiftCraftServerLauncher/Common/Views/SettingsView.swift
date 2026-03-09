@@ -4,6 +4,7 @@ import Foundation
 /// 设置标签页枚举
 enum SettingsTab: Int {
     case general = 0
+    case appearance = 1
 }
 
 /// 通用设置视图
@@ -20,6 +21,12 @@ public struct SettingsView: View {
                     Label("settings.general.tab".localized(), systemImage: "gearshape")
                 }
                 .tag(SettingsTab.general)
+
+            AppearanceSettingsView()
+                .tabItem {
+                    Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
+                }
+                .tag(SettingsTab.appearance)
         }
         .padding()
     }

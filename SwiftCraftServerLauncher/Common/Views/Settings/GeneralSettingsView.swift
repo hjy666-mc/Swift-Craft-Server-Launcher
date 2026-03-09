@@ -3,7 +3,6 @@ import AppKit
 
 public struct GeneralSettingsView: View {
     @StateObject private var generalSettings = GeneralSettingsManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
     @EnvironmentObject private var gameRepository: GameRepository
     @State private var showDirectoryPicker = false
     @State private var showingRestartAlert = false
@@ -50,11 +49,6 @@ public struct GeneralSettingsView: View {
                     Text("settings.language.restart.message".localized())
                 }
             }.labeledContentStyle(.custom).padding(.bottom, 10)
-
-            LabeledContent("settings.theme.picker".localized()) {
-                ThemeSelectorView(selectedTheme: $themeManager.themeMode)
-                    .fixedSize()
-            }.labeledContentStyle(.custom)
 
             LabeledContent("settings.launcher_working_directory".localized()) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -167,20 +161,6 @@ public struct GeneralSettingsView: View {
                 .toggleStyle(.checkbox)
             }.labeledContentStyle(.custom).padding(.top, 6)
 
-            LabeledContent("控制台彩色输出") {
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle(
-                        "启用彩色输出",
-                        isOn: $generalSettings.enableConsoleColoredOutput
-                    )
-                    .toggleStyle(.checkbox)
-                    Text("彩色输出会降低性能")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
-            .padding(.top, 6)
         }
         .globalErrorHandler()
         .alert(
