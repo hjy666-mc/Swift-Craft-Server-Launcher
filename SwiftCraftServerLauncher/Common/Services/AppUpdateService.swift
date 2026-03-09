@@ -18,6 +18,7 @@ final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
 
     override init() {
         super.init()
+        applyUserPreferences()
     }
 
     /// Menu entry keeps its old name to avoid touching call sites.
@@ -33,13 +34,29 @@ final class AppUpdateService: NSObject, ObservableObject, SPUUpdaterDelegate {
         }
 
         isUpdating = true
-        updaterController.checkForUpdates(nil)
 
-        // Sparkle manages the whole cycle; this flag only throttles rapid repeated taps.
         Task { @MainActor in
+            do {
+                _ = try await BackupService.shared.createBackupBeforeUpdateIfNeeded()
+            } catch {
+                showAlert(title: "备份失败", message: "更新前备份失败：\(error.localizedDescription)")
+                isUpdating = false
+                return
+            }
+
+            applyUserPreferences()
+            updaterController.checkForUpdates(nil)
+
+            // Sparkle manages the whole cycle; this flag only throttles rapid repeated taps.
             try? await Task.sleep(nanoseconds: 800_000_000)
             isUpdating = false
         }
+    }
+
+    func applyUserPreferences() {
+        let settings = GeneralSettingsManager.shared
+        updaterController.updater.automaticallyChecksForUpdates = settings.updateAutoCheckEnabled
+        updaterController.updater.automaticallyDownloadsUpdates = settings.updateAutoDownloadEnabled
     }
 
     private var architectureFeedURLString: String? {

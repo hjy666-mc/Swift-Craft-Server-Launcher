@@ -4,9 +4,12 @@ import UniformTypeIdentifiers
 struct ServerPluginsManagerView: View {
     let server: ServerInstance
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State private var files: [URL] = []
     @State private var remoteFiles: [String] = []
     @State private var showImporter = false
+    @State private var pendingLocalRemoveURL: URL?
+    @State private var pendingRemoteRemoveFileName: String?
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -30,7 +33,13 @@ struct ServerPluginsManagerView: View {
                                 HStack {
                                     Text(fileName)
                                     Spacer()
-                                    Button("common.remove".localized()) { removeRemoteFile(fileName) }
+                                    Button("common.remove".localized()) {
+                                        if generalSettings.confirmUninstallPluginMod {
+                                            pendingRemoteRemoveFileName = fileName
+                                        } else {
+                                            removeRemoteFile(fileName)
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -38,7 +47,13 @@ struct ServerPluginsManagerView: View {
                                 HStack {
                                     Text(url.lastPathComponent)
                                     Spacer()
-                                    Button("common.remove".localized()) { removeFile(url) }
+                                    Button("common.remove".localized()) {
+                                        if generalSettings.confirmUninstallPluginMod {
+                                            pendingLocalRemoveURL = url
+                                        } else {
+                                            removeFile(url)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -64,6 +79,39 @@ struct ServerPluginsManagerView: View {
         ) { result in
             if case .success(let urls) = result {
                 addFiles(urls)
+            }
+        }
+        .confirmationDialog(
+            "确认移除插件",
+            isPresented: Binding(
+                get: { pendingLocalRemoveURL != nil || pendingRemoteRemoveFileName != nil },
+                set: { showing in
+                    if !showing {
+                        pendingLocalRemoveURL = nil
+                        pendingRemoteRemoveFileName = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.remove".localized(), role: .destructive) {
+                if let url = pendingLocalRemoveURL {
+                    removeFile(url)
+                } else if let fileName = pendingRemoteRemoveFileName {
+                    removeRemoteFile(fileName)
+                }
+                pendingLocalRemoveURL = nil
+                pendingRemoteRemoveFileName = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingLocalRemoveURL = nil
+                pendingRemoteRemoveFileName = nil
+            }
+        } message: {
+            if let url = pendingLocalRemoveURL {
+                Text("将移除插件“\(url.lastPathComponent)”，是否继续？")
+            } else {
+                Text("将移除插件“\(pendingRemoteRemoveFileName ?? "")”，是否继续？")
             }
         }
     }

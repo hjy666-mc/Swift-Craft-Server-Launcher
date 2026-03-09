@@ -30,6 +30,9 @@ import Combine
 
 @main
 struct SwiftCraftServerLauncherApp: App {
+    @NSApplicationDelegateAdaptor(AppTerminationDelegate.self)
+    private var appTerminationDelegate
+
     @Environment(\.scenePhase)
     private var scenePhase
 
@@ -79,6 +82,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .windowOpener()
                 .onAppear {
                     appIdleManager.startMonitoring()
+                    BackupService.shared.startAutoBackupScheduler()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     appIdleManager.handleScenePhase(newPhase)

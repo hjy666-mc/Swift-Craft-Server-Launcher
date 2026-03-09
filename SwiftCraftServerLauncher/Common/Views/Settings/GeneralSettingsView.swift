@@ -4,10 +4,15 @@ import AppKit
 public struct GeneralSettingsView: View {
     @StateObject private var generalSettings = GeneralSettingsManager.shared
     @EnvironmentObject private var gameRepository: GameRepository
+    @EnvironmentObject private var appUpdateService: AppUpdateService
     @State private var showDirectoryPicker = false
+    @State private var showBackupDirectoryPicker = false
     @State private var showingRestartAlert = false
     @State private var selectedLanguage = LanguageManager.shared.selectedLanguage
     @State private var error: GlobalError?
+    @State private var backupAlertMessage = ""
+    @State private var showBackupAlert = false
+    @State private var isRunningManualBackup = false
     /// 数据库中所有工作路径及对应游戏数量（用于快速切换）
     @State private var workingPathOptions: [(path: String, count: Int)] = []
 
@@ -17,6 +22,19 @@ public struct GeneralSettingsView: View {
     private let defaultEnableGitHubProxy = true
     private let defaultGitHubProxyURL = "https://gh-proxy.com"
     private let defaultEnableResourcePageCache = true
+    private let defaultLaunchAtLoginEnabled = false
+    private let defaultUpdateAutoCheckEnabled = true
+    private let defaultUpdateAutoDownloadEnabled = false
+    private let defaultConfirmDeleteServer = true
+    private let defaultConfirmDeleteWorld = true
+    private let defaultConfirmUninstallPluginMod = true
+    private let defaultConfirmExitWhileRunning = true
+    private let defaultBackupAutoEnabled = false
+    private let defaultBackupIntervalMinutes = 60
+    private let defaultBackupKeepCount = 10
+    private let defaultBackupBeforeUpdate = true
+    private let defaultBackupDirectory = AppPaths.launcherSupportDirectory
+        .appendingPathComponent("backups", isDirectory: true).path
 
     public init() {}
 
@@ -217,6 +235,254 @@ public struct GeneralSettingsView: View {
             }
             .labeledContentStyle(.custom)
             .padding(.top, 6)
+
+            Divider().padding(.vertical, 4)
+
+            LabeledContent("启动与更新") {
+                EmptyView()
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("开机启动") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.launchAtLoginEnabled)
+                        .labelsHidden()
+                    Text(generalSettings.launchAtLoginEnabled ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.launchAtLoginEnabled == defaultLaunchAtLoginEnabled) {
+                        generalSettings.launchAtLoginEnabled = defaultLaunchAtLoginEnabled
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("自动检查更新") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.updateAutoCheckEnabled)
+                        .labelsHidden()
+                    Text(generalSettings.updateAutoCheckEnabled ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.updateAutoCheckEnabled == defaultUpdateAutoCheckEnabled) {
+                        generalSettings.updateAutoCheckEnabled = defaultUpdateAutoCheckEnabled
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("自动下载更新") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.updateAutoDownloadEnabled)
+                        .labelsHidden()
+                    Text(generalSettings.updateAutoDownloadEnabled ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.updateAutoDownloadEnabled == defaultUpdateAutoDownloadEnabled) {
+                        generalSettings.updateAutoDownloadEnabled = defaultUpdateAutoDownloadEnabled
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            Divider().padding(.vertical, 4)
+
+            LabeledContent("安全确认") {
+                EmptyView()
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("删除服务器前确认") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.confirmDeleteServer)
+                        .labelsHidden()
+                    Text(generalSettings.confirmDeleteServer ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.confirmDeleteServer == defaultConfirmDeleteServer) {
+                        generalSettings.confirmDeleteServer = defaultConfirmDeleteServer
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("删除世界前确认") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.confirmDeleteWorld)
+                        .labelsHidden()
+                    Text(generalSettings.confirmDeleteWorld ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.confirmDeleteWorld == defaultConfirmDeleteWorld) {
+                        generalSettings.confirmDeleteWorld = defaultConfirmDeleteWorld
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("卸载插件/模组前确认") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.confirmUninstallPluginMod)
+                        .labelsHidden()
+                    Text(generalSettings.confirmUninstallPluginMod ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.confirmUninstallPluginMod == defaultConfirmUninstallPluginMod) {
+                        generalSettings.confirmUninstallPluginMod = defaultConfirmUninstallPluginMod
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("退出时检查运行实例") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.confirmExitWhileRunning)
+                        .labelsHidden()
+                    Text(generalSettings.confirmExitWhileRunning ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.confirmExitWhileRunning == defaultConfirmExitWhileRunning) {
+                        generalSettings.confirmExitWhileRunning = defaultConfirmExitWhileRunning
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            Divider().padding(.vertical, 4)
+
+            LabeledContent("自动备份") {
+                EmptyView()
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("启用自动备份") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.backupAutoEnabled)
+                        .labelsHidden()
+                    Text(generalSettings.backupAutoEnabled ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled) {
+                        generalSettings.backupAutoEnabled = defaultBackupAutoEnabled
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("备份间隔（分钟）") {
+                HStack(alignment: .top, spacing: 8) {
+                    Stepper(value: $generalSettings.backupIntervalMinutes, in: 5 ... 1440) {
+                        Text("\(generalSettings.backupIntervalMinutes)")
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+
+                    resetIconButton(disabled: generalSettings.backupIntervalMinutes == defaultBackupIntervalMinutes) {
+                        generalSettings.backupIntervalMinutes = defaultBackupIntervalMinutes
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("备份保留数量") {
+                HStack(alignment: .top, spacing: 8) {
+                    Stepper(value: $generalSettings.backupKeepCount, in: 1 ... 200) {
+                        Text("\(generalSettings.backupKeepCount)")
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+
+                    resetIconButton(disabled: generalSettings.backupKeepCount == defaultBackupKeepCount) {
+                        generalSettings.backupKeepCount = defaultBackupKeepCount
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("更新前先备份") {
+                HStack(alignment: .top, spacing: 8) {
+                    Toggle("", isOn: $generalSettings.backupBeforeUpdate)
+                        .labelsHidden()
+                    Text(generalSettings.backupBeforeUpdate ? "已启用" : "已关闭")
+                        .foregroundStyle(.secondary)
+
+                    resetIconButton(disabled: generalSettings.backupBeforeUpdate == defaultBackupBeforeUpdate) {
+                        generalSettings.backupBeforeUpdate = defaultBackupBeforeUpdate
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+
+            LabeledContent("备份目录") {
+                HStack(alignment: .top, spacing: 8) {
+                    DirectorySettingRow(
+                        title: "备份目录",
+                        path: generalSettings.backupDirectoryPath,
+                        description: "备份 ZIP 文件将保存到该目录",
+                        onChoose: { showBackupDirectoryPicker = true },
+                        onReset: {
+                            generalSettings.backupDirectoryPath = defaultBackupDirectory
+                        },
+                        showsResetButton: false
+                    )
+                    .fixedSize()
+                    .fileImporter(
+                        isPresented: $showBackupDirectoryPicker,
+                        allowedContentTypes: [.folder],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        handleBackupDirectoryImport(result)
+                    }
+
+                    resetIconButton(disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory) {
+                        generalSettings.backupDirectoryPath = defaultBackupDirectory
+                    }
+                }
+            }
+            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+
+            LabeledContent("手动备份") {
+                HStack(alignment: .top, spacing: 8) {
+                    Button(isRunningManualBackup ? "备份中…" : "立即备份") {
+                        runManualBackup()
+                    }
+                    .disabled(isRunningManualBackup)
+                    .buttonStyle(.borderedProminent)
+
+                    if generalSettings.backupLastTimestamp > 0 {
+                        Text("上次: \(formattedDate(generalSettings.backupLastTimestamp))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .labeledContentStyle(.custom)
+        }
+        .onAppear {
+            applyLaunchAtLoginPreference()
+            appUpdateService.applyUserPreferences()
+            BackupService.shared.reloadAutoBackupScheduler()
+        }
+        .onChange(of: generalSettings.launchAtLoginEnabled) { _, _ in
+            applyLaunchAtLoginPreference()
+        }
+        .onChange(of: generalSettings.updateAutoCheckEnabled) { _, _ in
+            appUpdateService.applyUserPreferences()
+        }
+        .onChange(of: generalSettings.updateAutoDownloadEnabled) { _, _ in
+            appUpdateService.applyUserPreferences()
+        }
+        .onChange(of: generalSettings.backupAutoEnabled) { _, _ in
+            BackupService.shared.reloadAutoBackupScheduler()
+        }
+        .onChange(of: generalSettings.backupIntervalMinutes) { _, _ in
+            BackupService.shared.reloadAutoBackupScheduler()
+        }
+        .onChange(of: generalSettings.backupDirectoryPath) { _, _ in
+            BackupService.shared.reloadAutoBackupScheduler()
+        }
+        .onChange(of: generalSettings.backupKeepCount) { _, _ in
+            BackupService.shared.reloadAutoBackupScheduler()
         }
         .globalErrorHandler()
         .alert(
@@ -230,6 +496,11 @@ public struct GeneralSettingsView: View {
             if let error = error {
                 Text(error.localizedDescription)
             }
+        }
+        .alert("备份", isPresented: $showBackupAlert) {
+            Button("common.ok".localized(), role: .cancel) {}
+        } message: {
+            Text(backupAlertMessage)
         }
     }
 
@@ -312,6 +583,58 @@ public struct GeneralSettingsView: View {
             GlobalErrorHandler.shared.handle(globalError)
             self.error = globalError
         }
+    }
+
+    private func applyLaunchAtLoginPreference() {
+        do {
+            try LaunchAtLoginManager.shared.applyPreference(enabled: generalSettings.launchAtLoginEnabled)
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func handleBackupDirectoryImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            do {
+                let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .isReadableKey])
+                guard resourceValues.isDirectory == true, resourceValues.isReadable == true else {
+                    throw GlobalError.fileSystem(
+                        chineseMessage: "备份目录不可访问",
+                        i18nKey: "error.filesystem.invalid_directory_selected",
+                        level: .notification
+                    )
+                }
+                generalSettings.backupDirectoryPath = url.path
+                BackupService.shared.reloadAutoBackupScheduler()
+            } catch {
+                GlobalErrorHandler.shared.handle(error)
+            }
+        case .failure(let error):
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func runManualBackup() {
+        guard !isRunningManualBackup else { return }
+        isRunningManualBackup = true
+        Task { @MainActor in
+            defer { isRunningManualBackup = false }
+            do {
+                let backupURL = try await BackupService.shared.createBackup(reason: "manual")
+                backupAlertMessage = "备份成功：\(backupURL.path)"
+            } catch {
+                backupAlertMessage = "备份失败：\(error.localizedDescription)"
+            }
+            showBackupAlert = true
+        }
+    }
+
+    private func formattedDate(_ timestamp: Double) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: Date(timeIntervalSince1970: timestamp))
     }
 
     @ViewBuilder

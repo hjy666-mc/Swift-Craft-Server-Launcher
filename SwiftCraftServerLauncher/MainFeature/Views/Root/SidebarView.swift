@@ -10,9 +10,12 @@ public struct SidebarView: View {
     @AppStorage("activeServerNodeId")
     private var activeServerNodeId: String = ServerNode.local.id
     @StateObject private var serverActionManager = ServerActionManager.shared
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State private var hoveredNodeInfoId: String?
     @State private var hoveredNodePopoverId: String?
     @State private var pendingNodePopoverClose: DispatchWorkItem?
+    @State private var pendingDeleteServer: ServerInstance?
+    @State private var pendingDeleteCorruptedServerName: String?
 
     public init() {}
 
@@ -133,12 +136,16 @@ public struct SidebarView: View {
                     }
                     .contextMenu {
                         Button(role: .destructive) {
-                            serverActionManager.deleteServer(
-                                server: server,
-                                serverRepository: serverRepository,
-                                serverNodeRepository: serverNodeRepository,
-                                selectedItem: detailState.selectedItemBinding
-                            )
+                            if generalSettings.confirmDeleteServer {
+                                pendingDeleteServer = server
+                            } else {
+                                serverActionManager.deleteServer(
+                                    server: server,
+                                    serverRepository: serverRepository,
+                                    serverNodeRepository: serverNodeRepository,
+                                    selectedItem: detailState.selectedItemBinding
+                                )
+                            }
                         } label: {
                             Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
                         }
@@ -158,10 +165,14 @@ public struct SidebarView: View {
                         }
                         .contextMenu {
                             Button(role: .destructive) {
-                                serverActionManager.deleteCorruptedServer(
-                                    name: name,
-                                    serverRepository: serverRepository
-                                )
+                                if generalSettings.confirmDeleteServer {
+                                    pendingDeleteCorruptedServerName = name
+                                } else {
+                                    serverActionManager.deleteCorruptedServer(
+                                        name: name,
+                                        serverRepository: serverRepository
+                                    )
+                                }
                             } label: {
                                 Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
                             }
@@ -182,6 +193,53 @@ public struct SidebarView: View {
             if case .node(let nodeId) = newValue {
                 activeServerNodeId = nodeId
             }
+        }
+        .confirmationDialog(
+            "确认删除服务器",
+            isPresented: Binding(
+                get: { pendingDeleteServer != nil },
+                set: { showing in
+                    if !showing { pendingDeleteServer = nil }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                guard let server = pendingDeleteServer else { return }
+                serverActionManager.deleteServer(
+                    server: server,
+                    serverRepository: serverRepository,
+                    serverNodeRepository: serverNodeRepository,
+                    selectedItem: detailState.selectedItemBinding
+                )
+                pendingDeleteServer = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingDeleteServer = nil
+            }
+        } message: {
+            Text("将删除服务器“\(pendingDeleteServer?.name ?? "")”及其目录，是否继续？")
+        }
+        .confirmationDialog(
+            "确认删除损坏服务器",
+            isPresented: Binding(
+                get: { pendingDeleteCorruptedServerName != nil },
+                set: { showing in
+                    if !showing { pendingDeleteCorruptedServerName = nil }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                guard let name = pendingDeleteCorruptedServerName else { return }
+                serverActionManager.deleteCorruptedServer(name: name, serverRepository: serverRepository)
+                pendingDeleteCorruptedServerName = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingDeleteCorruptedServerName = nil
+            }
+        } message: {
+            Text("将删除损坏服务器“\(pendingDeleteCorruptedServerName ?? "")”，是否继续？")
         }
     }
 
