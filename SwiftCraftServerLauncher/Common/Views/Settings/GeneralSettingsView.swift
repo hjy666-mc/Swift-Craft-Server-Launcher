@@ -2,6 +2,36 @@ import SwiftUI
 import AppKit
 
 public struct GeneralSettingsView: View {
+    private static let searchKeywordsBySection: [[String]] = [
+        [
+            "settings.language.picker".localized(),
+            "language",
+            "语言",
+        ],
+        [
+            "settings.launcher_working_directory".localized(),
+            "settings.working_directory.description".localized(),
+            "working directory",
+            "工作目录",
+        ],
+        [
+            "settings.concurrent_downloads.label".localized(),
+            "concurrent download",
+            "并发下载",
+        ],
+        [
+            "settings.github_proxy.label".localized(),
+            "settings.github_proxy.description".localized(),
+            "proxy",
+            "代理",
+        ],
+        [
+            "settings.resource_cache.label".localized(),
+            "cache",
+            "缓存",
+        ],
+    ]
+
     private let searchText: String
 
     @StateObject private var generalSettings = GeneralSettingsManager.shared
@@ -22,6 +52,14 @@ public struct GeneralSettingsView: View {
 
     public init(searchText: String = "") {
         self.searchText = searchText
+    }
+
+    static func containsMatch(for searchText: String) -> Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return true }
+        return searchKeywordsBySection
+            .flatMap { $0 }
+            .contains { $0.lowercased().contains(query) }
     }
 
     public var body: some View {

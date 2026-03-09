@@ -1,6 +1,22 @@
 import SwiftUI
 
 public struct AppearanceSettingsView: View {
+    private static let searchKeywordsBySection: [[String]] = [
+        [
+            "settings.appearance.theme".localized(),
+            "theme",
+            "外观",
+            "主题",
+        ],
+        [
+            "settings.appearance.console_color_output".localized(),
+            "settings.appearance.console_color_output.description".localized(),
+            "console",
+            "color",
+            "控制台",
+        ],
+    ]
+
     private let searchText: String
 
     @StateObject private var themeManager = ThemeManager.shared
@@ -11,6 +27,14 @@ public struct AppearanceSettingsView: View {
 
     public init(searchText: String = "") {
         self.searchText = searchText
+    }
+
+    static func containsMatch(for searchText: String) -> Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return true }
+        return searchKeywordsBySection
+            .flatMap { $0 }
+            .contains { $0.lowercased().contains(query) }
     }
 
     public var body: some View {
