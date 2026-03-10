@@ -20,6 +20,15 @@ public struct GeneralSettingsView: View {
   @State private var backupAlertMessage = ""
   @State private var showBackupAlert = false
   @State private var isRunningManualBackup = false
+  @State private var showRestoreSheet = false
+  @State private var restoreBackups: [BackupService.BackupEntry] = []
+  @State private var selectedBackupId: BackupService.BackupEntry.ID?
+  @State private var availableRestoreServers: [String] = []
+  @State private var selectedRestoreServer = ""
+  @State private var isRestoring = false
+  @State private var showRestoreConfirm = false
+  @State private var restoreAlertMessage = ""
+  @State private var showRestoreAlert = false
   /// 数据库中所有工作路径及对应游戏数量（用于快速切换）
   @State private var workingPathOptions: [(path: String, count: Int)] = []
 
@@ -409,7 +418,8 @@ public struct GeneralSettingsView: View {
             )
             .foregroundStyle(.secondary)
 
-            resetIconButton(disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled) {
+            resetIconButton(disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled)
+            {
               generalSettings.backupAutoEnabled = defaultBackupAutoEnabled
             }
           }
@@ -489,7 +499,8 @@ public struct GeneralSettingsView: View {
               handleBackupDirectoryImport(result)
             }
 
-            resetIconButton(disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory) {
+            resetIconButton(disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory)
+            {
               generalSettings.backupDirectoryPath = defaultBackupDirectory
             }
           }
@@ -518,6 +529,17 @@ public struct GeneralSettingsView: View {
               .font(.caption)
               .foregroundStyle(.secondary)
             }
+          }
+        }
+        .labeledContentStyle(.custom)
+
+        LabeledContent("settings.general.backup.restore.title".localized()) {
+          HStack(alignment: .top, spacing: 8) {
+            Button("settings.general.backup.restore.action".localized()) {
+              loadRestoreBackups()
+              showRestoreSheet = true
+            }
+            .buttonStyle(.bordered)
           }
         }
         .labeledContentStyle(.custom)
@@ -566,6 +588,34 @@ public struct GeneralSettingsView: View {
       Button("common.ok".localized(), role: .cancel) {}
     } message: {
       Text(backupAlertMessage)
+    }
+    .alert(
+      "settings.general.backup.restore.alert.title".localized(),
+      isPresented: $showRestoreAlert
+    ) {
+      Button("common.ok".localized(), role: .cancel) {}
+    } message: {
+      Text(restoreAlertMessage)
+    }
+    .confirmationDialog(
+      "settings.general.backup.restore.confirm.title".localized(),
+      isPresented: $showRestoreConfirm,
+      titleVisibility: .visible
+    ) {
+      Button("common.confirm".localized(), role: .destructive) {
+        performRestore()
+      }
+      Button("common.cancel".localized(), role: .cancel) {}
+    } message: {
+      Text(
+        String(
+          format: "settings.general.backup.restore.confirm.message".localized(),
+          selectedRestoreServer
+        )
+      )
+    }
+    .sheet(isPresented: $showRestoreSheet) {
+      restoreSheet
     }
   }
 
@@ -711,6 +761,126 @@ public struct GeneralSettingsView: View {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     return formatter.string(from: Date(timeIntervalSince1970: timestamp))
+  }
+
+  private func loadRestoreBackups() {
+    let backups = BackupService.shared.listBackups()
+    restoreBackups = backups
+    if let first = backups.first {
+      selectedBackupId = first.id
+      availableRestoreServers = BackupService.shared.listServers(in: first.url)
+      selectedRestoreServer = availableRestoreServers.first ?? ""
+    } else {
+      selectedBackupId = nil
+      availableRestoreServers = []
+      selectedRestoreServer = ""
+    }
+  }
+
+  private func backupLabel(for entry: BackupService.BackupEntry) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    let dateString = formatter.string(from: entry.createdAt)
+    return "\(entry.url.lastPathComponent) (\(dateString))"
+  }
+
+  private func selectedBackupURL() -> URL? {
+    restoreBackups.first { $0.id == selectedBackupId }?.url
+  }
+
+  private func updateServersForSelection() {
+    guard let backupURL = selectedBackupURL() else {
+      availableRestoreServers = []
+      selectedRestoreServer = ""
+      return
+    }
+    availableRestoreServers = BackupService.shared.listServers(in: backupURL)
+    if !availableRestoreServers.contains(selectedRestoreServer) {
+      selectedRestoreServer = availableRestoreServers.first ?? ""
+    }
+  }
+
+  private func performRestore() {
+    guard let backupURL = selectedBackupURL(), !selectedRestoreServer.isEmpty else { return }
+    guard !isRestoring else { return }
+    isRestoring = true
+    Task { @MainActor in
+      defer { isRestoring = false }
+      do {
+        try BackupService.shared.restoreServer(named: selectedRestoreServer, from: backupURL)
+        restoreAlertMessage = String(
+          format: "settings.general.backup.restore.success".localized(),
+          selectedRestoreServer
+        )
+      } catch {
+        restoreAlertMessage = String(
+          format: "settings.general.backup.restore.failure".localized(),
+          error.localizedDescription
+        )
+      }
+      showRestoreAlert = true
+    }
+  }
+
+  private var restoreSheet: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Text("settings.general.backup.restore.sheet.title".localized())
+        .font(.headline)
+
+      LabeledContent("settings.general.backup.restore.backup_picker".localized()) {
+        Picker("", selection: $selectedBackupId) {
+          ForEach(restoreBackups) { entry in
+            Text(backupLabel(for: entry)).tag(entry.id as BackupService.BackupEntry.ID?)
+          }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 420)
+        .onChange(of: selectedBackupId) { _, _ in
+          updateServersForSelection()
+        }
+      }
+      .labeledContentStyle(.custom)
+
+      LabeledContent("settings.general.backup.restore.server_picker".localized()) {
+        Picker("", selection: $selectedRestoreServer) {
+          ForEach(availableRestoreServers, id: \.self) { name in
+            Text(name).tag(name)
+          }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 260)
+      }
+      .labeledContentStyle(.custom)
+
+      HStack(spacing: 12) {
+        Button("settings.general.backup.restore.refresh".localized()) {
+          loadRestoreBackups()
+        }
+
+        Spacer()
+
+        Button("common.cancel".localized()) {
+          showRestoreSheet = false
+        }
+
+        Button(
+          isRestoring
+            ? "settings.general.backup.restore.restoring".localized()
+            : "settings.general.backup.restore.confirm.action".localized()
+        ) {
+          showRestoreConfirm = true
+        }
+        .disabled(isRestoring || selectedRestoreServer.isEmpty || selectedBackupId == nil)
+        .buttonStyle(.borderedProminent)
+      }
+    }
+    .padding(20)
+    .frame(width: 680)
+    .onAppear {
+      if restoreBackups.isEmpty {
+        loadRestoreBackups()
+      }
+    }
   }
 
   @ViewBuilder
