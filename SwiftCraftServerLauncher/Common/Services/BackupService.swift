@@ -11,7 +11,6 @@ final class BackupService: ObservableObject {
     let createdAt: Date
   }
 
-
   private var timer: Timer?
   private let formatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -153,7 +152,12 @@ final class BackupService: ObservableObject {
   }
 
   func listServers(in backupURL: URL) -> [String] {
-    guard let archive = Archive(url: backupURL, accessMode: .read) else { return [] }
+    let archive: Archive
+    do {
+      archive = try Archive(url: backupURL, accessMode: .read)
+    } catch {
+      return []
+    }
     let prefix = "servers/"
     var names = Set<String>()
 
@@ -179,13 +183,7 @@ final class BackupService: ObservableObject {
   }
 
   func restoreServer(named serverName: String, from backupURL: URL) throws -> RestoreResult {
-    guard let archive = Archive(url: backupURL, accessMode: .read) else {
-      throw NSError(
-        domain: "BackupService",
-        code: 2,
-        userInfo: [NSLocalizedDescriptionKey: "无法读取备份文件"]
-      )
-    }
+    let archive = try Archive(url: backupURL, accessMode: .read)
 
     let fileManager = FileManager.default
     let tempRoot = fileManager.temporaryDirectory.appendingPathComponent(
@@ -199,9 +197,13 @@ final class BackupService: ObservableObject {
       let path = entry.path
       guard path.hasPrefix(prefix) else { continue }
       let destinationURL = tempRoot.appendingPathComponent(
-        path, isDirectory: entry.type == .directory)
+        path,
+        isDirectory: entry.type == .directory
+      )
       try fileManager.createDirectory(
-        at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: destinationURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       _ = try archive.extract(entry, to: destinationURL)
     }
 

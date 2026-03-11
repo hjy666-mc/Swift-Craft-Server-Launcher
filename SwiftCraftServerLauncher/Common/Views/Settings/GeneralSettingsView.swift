@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AppKit
 import SwiftUI
 
@@ -8,6 +9,7 @@ public enum GeneralSettingsSection: Hashable {
   case backup
 }
 
+// swiftlint:disable:next type_body_length
 public struct GeneralSettingsView: View {
   @StateObject private var generalSettings = GeneralSettingsManager.shared
   @EnvironmentObject private var gameRepository: GameRepository
@@ -421,8 +423,9 @@ public struct GeneralSettingsView: View {
             )
             .foregroundStyle(.secondary)
 
-            resetIconButton(disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled)
-            {
+            resetIconButton(
+              disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled
+            ) {
               generalSettings.backupAutoEnabled = defaultBackupAutoEnabled
             }
           }
@@ -502,8 +505,9 @@ public struct GeneralSettingsView: View {
               handleBackupDirectoryImport(result)
             }
 
-            resetIconButton(disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory)
-            {
+            resetIconButton(
+              disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory
+            ) {
               generalSettings.backupDirectoryPath = defaultBackupDirectory
             }
           }
@@ -1043,7 +1047,6 @@ private func restartApp() throws {
     NSApplication.shared.terminate(nil)
   }
 }
-
 // MARK: - Theme Selector View
 struct ThemeSelectorView: View {
   @Binding var selectedTheme: ThemeMode
