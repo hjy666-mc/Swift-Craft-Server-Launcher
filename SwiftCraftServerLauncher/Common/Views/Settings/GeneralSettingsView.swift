@@ -784,10 +784,85 @@ public struct GeneralSettingsView: View {
   }
 
   private func backupLabel(for entry: BackupService.BackupEntry) -> String {
+    if let parsed = parseBackupLabel(entry.url.lastPathComponent) {
+      return parsed
+    }
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     let dateString = formatter.string(from: entry.createdAt)
     return "\(entry.url.lastPathComponent) (\(dateString))"
+  }
+
+  private func parseBackupLabel(_ fileName: String) -> String? {
+    let baseName = (fileName as NSString).deletingPathExtension
+    let prefix = "swiftcraft-backup-"
+    guard baseName.hasPrefix(prefix) else { return nil }
+
+    let remainder = String(baseName.dropFirst(prefix.count))
+    let parts = remainder.split(separator: "-")
+    guard let reasonPart = parts.first else { return nil }
+
+    let reason = String(reasonPart)
+    let timestampPart = parts.dropFirst().joined(separator: "-")
+    guard let date = parseBackupTimestamp(timestampPart) else { return nil }
+
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    let dateString = formatter.string(from: date)
+
+    let reasonLabel: String
+    switch reason {
+    case "manual":
+      reasonLabel = "手动备份"
+    case "auto":
+      reasonLabel = "自动备份"
+    case "before-update":
+      reasonLabel = "更新前备份"
+    default:
+      reasonLabel = "备份"
+    }
+
+    return "\(reasonLabel) · \(dateString)"
+  }
+
+  private func parseBackupTimestamp(_ raw: String) -> Date? {
+    let pattern = "(\\d{8}).*?(\\d{6})"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let range = NSRange(location: 0, length: raw.utf16.count)
+    guard let match = regex.firstMatch(in: raw, range: range) else { return nil }
+    guard
+      let dateRange = Range(match.range(at: 1), in: raw),
+      let timeRange = Range(match.range(at: 2), in: raw)
+    else {
+      return nil
+    }
+
+    let dateStr = String(raw[dateRange])
+    let timeStr = String(raw[timeRange])
+    guard dateStr.count == 8, timeStr.count == 6 else { return nil }
+
+    let year = Int(dateStr.prefix(4)) ?? 0
+    let month = Int(dateStr.dropFirst(4).prefix(2)) ?? 0
+    let day = Int(dateStr.dropFirst(6).prefix(2)) ?? 0
+    var hour = Int(timeStr.prefix(2)) ?? 0
+    let minute = Int(timeStr.dropFirst(2).prefix(2)) ?? 0
+    let second = Int(timeStr.dropFirst(4).prefix(2)) ?? 0
+
+    if raw.contains("下午") || raw.lowercased().contains("pm") {
+      if hour < 12 { hour += 12 }
+    } else if raw.contains("上午") || raw.lowercased().contains("am") {
+      if hour == 12 { hour = 0 }
+    }
+
+    var components = DateComponents()
+    components.calendar = Calendar.current
+    components.year = year
+    components.month = month
+    components.day = day
+    components.hour = hour
+    components.minute = minute
+    components.second = second
+    return components.date
   }
 
   private func selectedBackupURL() -> URL? {
@@ -879,6 +954,15 @@ public struct GeneralSettingsView: View {
             .frame(maxWidth: 260)
           }
           .labeledContentStyle(.automatic)
+
+          if restoreBackups.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+              Text("settings.general.backup.restore.empty".localized())
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+          }
         }
       },
       footer: {
