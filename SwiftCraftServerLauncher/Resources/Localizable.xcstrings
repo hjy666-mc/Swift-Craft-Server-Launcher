@@ -15291,6 +15291,40 @@
         }
       }
     },
+    "settings.general.backup.restore.restart.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server “%@” was created from backup. Please restart the app to ensure it loads correctly."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已从备份创建服务器“%@”。建议重启应用以确保正常加载。"
+          }
+        }
+      }
+    },
+    "settings.general.backup.restore.restart.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart recommended"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建议重启"
+          }
+        }
+      }
+    },
     "settings.general.backup.restore.title" : {
       "extractionState" : "manual",
       "localizations" : {
