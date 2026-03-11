@@ -154,7 +154,7 @@ final class BackupService: ObservableObject {
   func listServers(in backupURL: URL) -> [String] {
     let archive: Archive
     do {
-      archive = try Archive(url: backupURL, accessMode: .read)
+      archive = try Archive(url: backupURL, accessMode: .read, pathEncoding: nil)
     } catch {
       return []
     }
@@ -183,7 +183,7 @@ final class BackupService: ObservableObject {
   }
 
   func restoreServer(named serverName: String, from backupURL: URL) throws -> RestoreResult {
-    let archive = try Archive(url: backupURL, accessMode: .read)
+    let archive = try Archive(url: backupURL, accessMode: .read, pathEncoding: nil)
 
     let fileManager = FileManager.default
     let tempRoot = fileManager.temporaryDirectory.appendingPathComponent(
