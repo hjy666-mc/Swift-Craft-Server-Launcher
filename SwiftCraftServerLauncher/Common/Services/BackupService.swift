@@ -11,6 +11,7 @@ final class BackupService: ObservableObject {
     let createdAt: Date
   }
 
+
   private var timer: Timer?
   private let formatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -81,14 +82,36 @@ final class BackupService: ObservableObject {
   }
 
   func listBackups() -> [BackupEntry] {
+    for root in backupCandidates() {
+      let entries = listBackups(in: root)
+      if !entries.isEmpty {
+        return entries
+      }
+    }
+
+    return []
+  }
+
+  private func listBackups(in backupRoot: URL) -> [BackupEntry] {
     let fileManager = FileManager.default
-    let backupRoot = resolvedBackupDirectory()
-    let urls =
-      (try? fileManager.contentsOfDirectory(
+    let path = backupRoot.path
+    guard fileManager.fileExists(atPath: path) else {
+      return []
+    }
+    guard fileManager.isReadableFile(atPath: path) else {
+      return []
+    }
+
+    let urls: [URL]
+    do {
+      urls = try fileManager.contentsOfDirectory(
         at: backupRoot,
         includingPropertiesForKeys: [.contentModificationDateKey],
         options: [.skipsHiddenFiles]
-      )) ?? []
+      )
+    } catch {
+      return []
+    }
 
     let entries: [BackupEntry] = urls.compactMap { url in
       guard url.pathExtension.lowercased() == "zip" else { return nil }
@@ -98,6 +121,35 @@ final class BackupService: ObservableObject {
     }
 
     return entries.sorted { $0.createdAt > $1.createdAt }
+  }
+
+  private func appendCandidate(_ url: URL, to list: inout [URL]) {
+    if !list.contains(where: { $0.standardizedFileURL == url.standardizedFileURL }) {
+      list.append(url)
+    }
+  }
+
+  private func backupCandidates() -> [URL] {
+    let backupRoot = resolvedBackupDirectory()
+    let defaultRoot = AppPaths.launcherSupportDirectory
+      .appendingPathComponent("backups", isDirectory: true)
+    let legacyRoot = legacyBackupDirectory()
+
+    var candidates: [URL] = []
+    for url in [backupRoot, defaultRoot, legacyRoot].compactMap({ $0 }) {
+      appendCandidate(url, to: &candidates)
+      if url.lastPathComponent.lowercased() != "backups" {
+        appendCandidate(url.appendingPathComponent("backups", isDirectory: true), to: &candidates)
+      }
+    }
+    return candidates
+  }
+
+  private func legacyBackupDirectory() -> URL? {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let legacySupport = home.appendingPathComponent("Library/Application Support", isDirectory: true)
+    return legacySupport.appendingPathComponent(Bundle.main.appName)
+      .appendingPathComponent("backups", isDirectory: true)
   }
 
   func listServers(in backupURL: URL) -> [String] {
@@ -110,16 +162,23 @@ final class BackupService: ObservableObject {
       guard path.hasPrefix(prefix) else { continue }
       let rest = String(path.dropFirst(prefix.count))
       guard !rest.isEmpty else { continue }
+      // 只识别 servers/<name>/... 这种路径，忽略 servers 下的文件。
+      guard rest.contains("/") else { continue }
       let firstComponent = rest.split(separator: "/").first.map(String.init)
-      if let name = firstComponent, !name.isEmpty {
-        names.insert(name)
-      }
+      guard let name = firstComponent, !name.isEmpty else { continue }
+      if name.hasPrefix(".") { continue }
+      if name == ".DS_Store" { continue }
+      names.insert(name)
     }
 
     return names.sorted()
   }
 
-  func restoreServer(named serverName: String, from backupURL: URL) throws {
+  struct RestoreResult {
+    let createdServer: Bool
+  }
+
+  func restoreServer(named serverName: String, from backupURL: URL) throws -> RestoreResult {
     guard let archive = Archive(url: backupURL, accessMode: .read) else {
       throw NSError(
         domain: "BackupService",
@@ -164,15 +223,53 @@ final class BackupService: ObservableObject {
     try fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
     try fileManager.moveItem(at: restoredServerPath, to: targetServerPath)
     try? fileManager.removeItem(at: tempRoot)
+
+    let createdServer = try ensureServerRecord(serverName: serverName, serverPath: targetServerPath)
+    return RestoreResult(createdServer: createdServer)
   }
 
   private func resolvedBackupDirectory() -> URL {
     let settings = GeneralSettingsManager.shared
     let rawPath = settings.backupDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+    let expandedPath = (rawPath as NSString).expandingTildeInPath
     if rawPath.isEmpty {
       return AppPaths.launcherSupportDirectory.appendingPathComponent("backups", isDirectory: true)
     }
-    return URL(fileURLWithPath: rawPath, isDirectory: true)
+    return URL(fileURLWithPath: expandedPath, isDirectory: true)
+  }
+
+  private func ensureServerRecord(serverName: String, serverPath: URL) throws -> Bool {
+    let dbPath = AppPaths.gameVersionDatabase.path
+    let workingPath = GeneralSettingsManager.shared.currentWorkingPath
+    let database = ServerDatabase(dbPath: dbPath)
+    try database.initialize()
+
+    let existing = try database.loadServers(workingPath: workingPath)
+    if existing.contains(where: { $0.name == serverName }) {
+      return false
+    }
+
+    let jarName = findServerJar(in: serverPath) ?? ""
+    let server = ServerInstance(
+      name: serverName,
+      serverType: .custom,
+      gameVersion: "unknown",
+      loaderVersion: "",
+      serverJar: jarName,
+      lastPlayed: Date()
+    )
+    try database.saveServer(server, workingPath: workingPath)
+    return true
+  }
+
+  private func findServerJar(in serverPath: URL) -> String? {
+    let files =
+      (try? FileManager.default.contentsOfDirectory(
+        at: serverPath,
+        includingPropertiesForKeys: nil,
+        options: [.skipsHiddenFiles]
+      )) ?? []
+    return files.first { $0.pathExtension.lowercased() == "jar" }?.lastPathComponent
   }
 
   private func archiveDirectory(sourceRoot: URL, outputURL: URL) async throws {

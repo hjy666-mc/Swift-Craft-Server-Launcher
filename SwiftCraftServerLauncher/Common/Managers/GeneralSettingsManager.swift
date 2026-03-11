@@ -176,9 +176,12 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
     var backupDirectoryPath: String = AppPaths.launcherSupportDirectory
         .appendingPathComponent("backups", isDirectory: true).path {
         didSet {
-            if backupDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmed = backupDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
                 backupDirectoryPath = AppPaths.launcherSupportDirectory
                     .appendingPathComponent("backups", isDirectory: true).path
+            } else {
+                backupDirectoryPath = (trimmed as NSString).expandingTildeInPath
             }
             objectWillChange.send()
         }
@@ -197,6 +200,13 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
     private init() {
         if interfaceLayoutStyle != .focused {
             interfaceLayoutStyle = .focused
+        }
+        let trimmed = backupDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            let expanded = (trimmed as NSString).expandingTildeInPath
+            if expanded != backupDirectoryPath {
+                backupDirectoryPath = expanded
+            }
         }
     }
 
