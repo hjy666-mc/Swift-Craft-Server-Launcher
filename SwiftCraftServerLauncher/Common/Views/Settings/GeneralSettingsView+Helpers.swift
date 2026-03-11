@@ -5,14 +5,14 @@ extension GeneralSettingsView {
   // MARK: - Private Methods
 
   /// 工作路径选择框展示文案：路径最后一段 + 游戏个数
-  private func workingPathDisplayString(for item: (path: String, count: Int)) -> String {
+  func workingPathDisplayString(for item: (path: String, count: Int)) -> String {
     let lastComponent = (item.path as NSString).lastPathComponent
     let countStr = String(format: "settings.working_path.game_count".localized(), item.count)
     return "\(lastComponent) (\(countStr))"
   }
 
   /// 安全地重置工作目录
-  private func resetWorkingDirectorySafely() {
+  func resetWorkingDirectorySafely() {
     do {
       let appSupportDirectory = FileManager.default.urls(
         for: .applicationSupportDirectory,
@@ -41,7 +41,7 @@ extension GeneralSettingsView {
   }
 
   /// 处理目录导入结果
-  private func handleDirectoryImport(_ result: Result<[URL], Error>) {
+  func handleDirectoryImport(_ result: Result<[URL], Error>) {
     switch result {
     case .success(let urls):
       if let url = urls.first {
@@ -78,7 +78,7 @@ extension GeneralSettingsView {
   }
 
   /// 安全地重启应用
-  private func restartAppSafely() {
+  func restartAppSafely() {
     do {
       try restartApp()
     } catch {
@@ -88,7 +88,7 @@ extension GeneralSettingsView {
     }
   }
 
-  private func applyLaunchAtLoginPreference() {
+  func applyLaunchAtLoginPreference() {
     do {
       try LaunchAtLoginManager.shared.applyPreference(enabled: generalSettings.launchAtLoginEnabled)
     } catch {
@@ -96,7 +96,7 @@ extension GeneralSettingsView {
     }
   }
 
-  private func handleBackupDirectoryImport(_ result: Result<[URL], Error>) {
+  func handleBackupDirectoryImport(_ result: Result<[URL], Error>) {
     switch result {
     case .success(let urls):
       guard let url = urls.first else { return }
@@ -119,7 +119,7 @@ extension GeneralSettingsView {
     }
   }
 
-  private func runManualBackup() {
+  func runManualBackup() {
     guard !isRunningManualBackup else { return }
     isRunningManualBackup = true
     Task { @MainActor in
@@ -141,13 +141,13 @@ extension GeneralSettingsView {
     }
   }
 
-  private func formattedDate(_ timestamp: Double) -> String {
+  func formattedDate(_ timestamp: Double) -> String {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
     return formatter.string(from: Date(timeIntervalSince1970: timestamp))
   }
 
-  private func loadRestoreBackups() {
+  func loadRestoreBackups() {
     let backups = BackupService.shared.listBackups()
     restoreBackups = backups
     hasRestorePoints = !backups.isEmpty
@@ -162,11 +162,11 @@ extension GeneralSettingsView {
     }
   }
 
-  private func refreshRestoreAvailability() {
+  func refreshRestoreAvailability() {
     hasRestorePoints = !BackupService.shared.listBackups().isEmpty
   }
 
-  private func backupLabel(for entry: BackupService.BackupEntry) -> String {
+  func backupLabel(for entry: BackupService.BackupEntry) -> String {
     if let parsed = parseBackupLabel(entry.url.lastPathComponent) {
       return parsed
     }
@@ -176,7 +176,7 @@ extension GeneralSettingsView {
     return "\(entry.url.lastPathComponent) (\(dateString))"
   }
 
-  private func parseBackupLabel(_ fileName: String) -> String? {
+  func parseBackupLabel(_ fileName: String) -> String? {
     let baseName = (fileName as NSString).deletingPathExtension
     let prefix = "swiftcraft-backup-"
     guard baseName.hasPrefix(prefix) else { return nil }
@@ -208,7 +208,7 @@ extension GeneralSettingsView {
     return "\(reasonLabel) · \(dateString)"
   }
 
-  private func parseBackupTimestamp(_ raw: String) -> Date? {
+  func parseBackupTimestamp(_ raw: String) -> Date? {
     let pattern = "(\\d{8}).*?(\\d{6})"
     guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
     let range = NSRange(location: 0, length: raw.utf16.count)
@@ -248,11 +248,11 @@ extension GeneralSettingsView {
     return components.date
   }
 
-  private func selectedBackupURL() -> URL? {
+  func selectedBackupURL() -> URL? {
     restoreBackups.first { $0.id == selectedBackupId }?.url
   }
 
-  private func updateServersForSelection() {
+  func updateServersForSelection() {
     guard let backupURL = selectedBackupURL() else {
       availableRestoreServers = []
       selectedRestoreServer = ""
@@ -264,7 +264,7 @@ extension GeneralSettingsView {
     }
   }
 
-  private func performRestore() {
+  func performRestore() {
     guard let backupURL = selectedBackupURL(), !selectedRestoreServer.isEmpty else { return }
     guard !isRestoring else { return }
     isRestoring = true
@@ -299,7 +299,7 @@ extension GeneralSettingsView {
     }
   }
 
-  private var restoreSheet: some View {
+  var restoreSheet: some View {
     CommonSheetView(
       header: {
         HStack {
@@ -393,7 +393,7 @@ extension GeneralSettingsView {
   }
 
   @ViewBuilder
-  private func resetIconButton(disabled: Bool, action: @escaping () -> Void) -> some View {
+  func resetIconButton(disabled: Bool, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Image(systemName: "arrow.counterclockwise.circle")
         .font(.title3)
@@ -407,7 +407,7 @@ extension GeneralSettingsView {
 
 /// 重启应用
 /// - Throws: GlobalError 当重启失败时
-private func restartApp() throws {
+func restartApp() throws {
   guard let appURL = Bundle.main.bundleURL as URL? else {
     throw GlobalError.configuration(
       chineseMessage: "无法获取应用路径",

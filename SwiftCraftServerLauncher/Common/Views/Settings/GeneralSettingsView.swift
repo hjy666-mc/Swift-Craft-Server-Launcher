@@ -8,54 +8,53 @@ public enum GeneralSettingsSection: Hashable {
   case backup
 }
 
-// swiftlint:disable:next type_body_length
 public struct GeneralSettingsView: View {
-  @StateObject private var generalSettings = GeneralSettingsManager.shared
-  @EnvironmentObject private var gameRepository: GameRepository
-  @EnvironmentObject private var appUpdateService: AppUpdateService
-  @State private var showDirectoryPicker = false
-  @State private var showBackupDirectoryPicker = false
-  @State private var showingRestartAlert = false
-  @State private var selectedLanguage = LanguageManager.shared.selectedLanguage
-  @State private var error: GlobalError?
-  @State private var backupAlertMessage = ""
-  @State private var showBackupAlert = false
-  @State private var isRunningManualBackup = false
-  @State private var showRestoreSheet = false
-  @State private var restoreBackups: [BackupService.BackupEntry] = []
-  @State private var selectedBackupId: BackupService.BackupEntry.ID?
-  @State private var availableRestoreServers: [String] = []
-  @State private var selectedRestoreServer = ""
-  @State private var isRestoring = false
-  @State private var showRestoreConfirm = false
-  @State private var restoreAlertMessage = ""
-  @State private var showRestoreAlert = false
-  @State private var restoreRestartMessage = ""
-  @State private var showRestoreRestartAlert = false
-  @State private var hasRestorePoints = false
+  @StateObject var generalSettings = GeneralSettingsManager.shared
+  @EnvironmentObject var gameRepository: GameRepository
+  @EnvironmentObject var appUpdateService: AppUpdateService
+  @State var showDirectoryPicker = false
+  @State var showBackupDirectoryPicker = false
+  @State var showingRestartAlert = false
+  @State var selectedLanguage = LanguageManager.shared.selectedLanguage
+  @State var error: GlobalError?
+  @State var backupAlertMessage = ""
+  @State var showBackupAlert = false
+  @State var isRunningManualBackup = false
+  @State var showRestoreSheet = false
+  @State var restoreBackups: [BackupService.BackupEntry] = []
+  @State var selectedBackupId: BackupService.BackupEntry.ID?
+  @State var availableRestoreServers: [String] = []
+  @State var selectedRestoreServer = ""
+  @State var isRestoring = false
+  @State var showRestoreConfirm = false
+  @State var restoreAlertMessage = ""
+  @State var showRestoreAlert = false
+  @State var restoreRestartMessage = ""
+  @State var showRestoreRestartAlert = false
+  @State var hasRestorePoints = false
   /// 数据库中所有工作路径及对应游戏数量（用于快速切换）
-  @State private var workingPathOptions: [(path: String, count: Int)] = []
+  @State var workingPathOptions: [(path: String, count: Int)] = []
 
-  private let defaultLanguage = LanguageManager.getDefaultLanguage()
-  private let defaultWorkingDirectory = AppPaths.launcherSupportDirectory.path
-  private let defaultConcurrentDownloads = 64
-  private let defaultEnableGitHubProxy = true
-  private let defaultGitHubProxyURL = "https://gh-proxy.com"
-  private let defaultEnableResourcePageCache = true
-  private let defaultLaunchAtLoginEnabled = false
-  private let defaultUpdateAutoCheckEnabled = true
-  private let defaultUpdateAutoDownloadEnabled = false
-  private let defaultConfirmDeleteServer = true
-  private let defaultConfirmDeleteWorld = true
-  private let defaultConfirmUninstallPluginMod = true
-  private let defaultConfirmExitWhileRunning = true
-  private let defaultBackupAutoEnabled = false
-  private let defaultBackupIntervalMinutes = 60
-  private let defaultBackupKeepCount = 10
-  private let defaultBackupBeforeUpdate = true
-  private let defaultBackupDirectory = AppPaths.launcherSupportDirectory
+  let defaultLanguage = LanguageManager.getDefaultLanguage()
+  let defaultWorkingDirectory = AppPaths.launcherSupportDirectory.path
+  let defaultConcurrentDownloads = 64
+  let defaultEnableGitHubProxy = true
+  let defaultGitHubProxyURL = "https://gh-proxy.com"
+  let defaultEnableResourcePageCache = true
+  let defaultLaunchAtLoginEnabled = false
+  let defaultUpdateAutoCheckEnabled = true
+  let defaultUpdateAutoDownloadEnabled = false
+  let defaultConfirmDeleteServer = true
+  let defaultConfirmDeleteWorld = true
+  let defaultConfirmUninstallPluginMod = true
+  let defaultConfirmExitWhileRunning = true
+  let defaultBackupAutoEnabled = false
+  let defaultBackupIntervalMinutes = 60
+  let defaultBackupKeepCount = 10
+  let defaultBackupBeforeUpdate = true
+  let defaultBackupDirectory = AppPaths.launcherSupportDirectory
     .appendingPathComponent("backups", isDirectory: true).path
-  private let sections: Set<GeneralSettingsSection>
+  let sections: Set<GeneralSettingsSection>
 
   public init(sections: Set<GeneralSettingsSection> = [.basic, .update, .safety, .backup]) {
     self.sections = sections
@@ -621,5 +620,4 @@ public struct GeneralSettingsView: View {
       restoreSheet
     }
   }
-
 }
