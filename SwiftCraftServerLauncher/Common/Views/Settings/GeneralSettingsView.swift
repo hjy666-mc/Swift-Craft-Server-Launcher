@@ -9,40 +9,52 @@ public enum GeneralSettingsSection: Hashable {
 }
 
 public struct GeneralSettingsView: View {
-  @StateObject private var generalSettings = GeneralSettingsManager.shared
-  @EnvironmentObject private var gameRepository: GameRepository
-  @EnvironmentObject private var appUpdateService: AppUpdateService
-  @State private var showDirectoryPicker = false
-  @State private var showBackupDirectoryPicker = false
-  @State private var showingRestartAlert = false
-  @State private var selectedLanguage = LanguageManager.shared.selectedLanguage
-  @State private var error: GlobalError?
-  @State private var backupAlertMessage = ""
-  @State private var showBackupAlert = false
-  @State private var isRunningManualBackup = false
+  @StateObject var generalSettings = GeneralSettingsManager.shared
+  @EnvironmentObject var gameRepository: GameRepository
+  @EnvironmentObject var appUpdateService: AppUpdateService
+  @State var showDirectoryPicker = false
+  @State var showBackupDirectoryPicker = false
+  @State var showingRestartAlert = false
+  @State var selectedLanguage = LanguageManager.shared.selectedLanguage
+  @State var error: GlobalError?
+  @State var backupAlertMessage = ""
+  @State var showBackupAlert = false
+  @State var isRunningManualBackup = false
+  @State var showRestoreSheet = false
+  @State var restoreBackups: [BackupService.BackupEntry] = []
+  @State var selectedBackupId: BackupService.BackupEntry.ID?
+  @State var availableRestoreServers: [String] = []
+  @State var selectedRestoreServer = ""
+  @State var isRestoring = false
+  @State var showRestoreConfirm = false
+  @State var restoreAlertMessage = ""
+  @State var showRestoreAlert = false
+  @State var restoreRestartMessage = ""
+  @State var showRestoreRestartAlert = false
+  @State var hasRestorePoints = false
   /// 数据库中所有工作路径及对应游戏数量（用于快速切换）
-  @State private var workingPathOptions: [(path: String, count: Int)] = []
+  @State var workingPathOptions: [(path: String, count: Int)] = []
 
-  private let defaultLanguage = LanguageManager.getDefaultLanguage()
-  private let defaultWorkingDirectory = AppPaths.launcherSupportDirectory.path
-  private let defaultConcurrentDownloads = 64
-  private let defaultEnableGitHubProxy = true
-  private let defaultGitHubProxyURL = "https://gh-proxy.com"
-  private let defaultEnableResourcePageCache = true
-  private let defaultLaunchAtLoginEnabled = false
-  private let defaultUpdateAutoCheckEnabled = true
-  private let defaultUpdateAutoDownloadEnabled = false
-  private let defaultConfirmDeleteServer = true
-  private let defaultConfirmDeleteWorld = true
-  private let defaultConfirmUninstallPluginMod = true
-  private let defaultConfirmExitWhileRunning = true
-  private let defaultBackupAutoEnabled = false
-  private let defaultBackupIntervalMinutes = 60
-  private let defaultBackupKeepCount = 10
-  private let defaultBackupBeforeUpdate = true
-  private let defaultBackupDirectory = AppPaths.launcherSupportDirectory
+  let defaultLanguage = LanguageManager.getDefaultLanguage()
+  let defaultWorkingDirectory = AppPaths.launcherSupportDirectory.path
+  let defaultConcurrentDownloads = 64
+  let defaultEnableGitHubProxy = true
+  let defaultGitHubProxyURL = "https://gh-proxy.com"
+  let defaultEnableResourcePageCache = true
+  let defaultLaunchAtLoginEnabled = false
+  let defaultUpdateAutoCheckEnabled = true
+  let defaultUpdateAutoDownloadEnabled = false
+  let defaultConfirmDeleteServer = true
+  let defaultConfirmDeleteWorld = true
+  let defaultConfirmUninstallPluginMod = true
+  let defaultConfirmExitWhileRunning = true
+  let defaultBackupAutoEnabled = false
+  let defaultBackupIntervalMinutes = 60
+  let defaultBackupKeepCount = 10
+  let defaultBackupBeforeUpdate = true
+  let defaultBackupDirectory = AppPaths.launcherSupportDirectory
     .appendingPathComponent("backups", isDirectory: true).path
-  private let sections: Set<GeneralSettingsSection>
+  let sections: Set<GeneralSettingsSection>
 
   public init(sections: Set<GeneralSettingsSection> = [.basic, .update, .safety, .backup]) {
     self.sections = sections
@@ -409,7 +421,9 @@ public struct GeneralSettingsView: View {
             )
             .foregroundStyle(.secondary)
 
-            resetIconButton(disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled) {
+            resetIconButton(
+              disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled
+            ) {
               generalSettings.backupAutoEnabled = defaultBackupAutoEnabled
             }
           }
@@ -489,7 +503,9 @@ public struct GeneralSettingsView: View {
               handleBackupDirectoryImport(result)
             }
 
-            resetIconButton(disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory) {
+            resetIconButton(
+              disabled: generalSettings.backupDirectoryPath == defaultBackupDirectory
+            ) {
               generalSettings.backupDirectoryPath = defaultBackupDirectory
             }
           }
@@ -521,12 +537,26 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom)
+
+        if hasRestorePoints {
+          LabeledContent("settings.general.backup.restore.title".localized()) {
+            HStack(alignment: .top, spacing: 8) {
+              Button("settings.general.backup.restore.action".localized()) {
+                loadRestoreBackups()
+                showRestoreSheet = true
+              }
+              .buttonStyle(.bordered)
+            }
+          }
+          .labeledContentStyle(.custom)
+        }
       }
     }
     .onAppear {
       applyLaunchAtLoginPreference()
       appUpdateService.applyUserPreferences()
       BackupService.shared.reloadAutoBackupScheduler()
+      refreshRestoreAvailability()
     }
     .onChange(of: generalSettings.launchAtLoginEnabled) { _, _ in
       applyLaunchAtLoginPreference()
@@ -567,260 +597,27 @@ public struct GeneralSettingsView: View {
     } message: {
       Text(backupAlertMessage)
     }
-  }
-
-  // MARK: - Private Methods
-
-  /// 工作路径选择框展示文案：路径最后一段 + 游戏个数
-  private func workingPathDisplayString(for item: (path: String, count: Int)) -> String {
-    let lastComponent = (item.path as NSString).lastPathComponent
-    let countStr = String(format: "settings.working_path.game_count".localized(), item.count)
-    return "\(lastComponent) (\(countStr))"
-  }
-
-  /// 安全地重置工作目录
-  private func resetWorkingDirectorySafely() {
-    do {
-      let appSupportDirectory = FileManager.default.urls(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask
-      ).first
-
-      guard let supportDir = appSupportDirectory?.appendingPathComponent(Bundle.main.appName) else {
-        throw GlobalError.configuration(
-          chineseMessage: "无法获取应用支持目录",
-          i18nKey: "error.configuration.app_support_directory_not_found",
-          level: .popup
-        )
+    .alert(
+      "settings.general.backup.restore.alert.title".localized(),
+      isPresented: $showRestoreAlert
+    ) {
+      Button("common.ok".localized(), role: .cancel) {}
+    } message: {
+      Text(restoreAlertMessage)
+    }
+    .alert(
+      "settings.general.backup.restore.restart.title".localized(),
+      isPresented: $showRestoreRestartAlert
+    ) {
+      Button("settings.language.restart.confirm".localized(), role: .destructive) {
+        restartAppSafely()
       }
-
-      // 确保目录存在
-      try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
-
-      generalSettings.launcherWorkingDirectory = supportDir.path
-
-      Logger.shared.info("工作目录已重置为: \(supportDir.path)")
-    } catch {
-      let globalError = GlobalError.from(error)
-      GlobalErrorHandler.shared.handle(globalError)
-      self.error = globalError
+      Button("common.cancel".localized(), role: .cancel) {}
+    } message: {
+      Text(restoreRestartMessage)
+    }
+    .sheet(isPresented: $showRestoreSheet) {
+      restoreSheet
     }
   }
-
-  /// 处理目录导入结果
-  private func handleDirectoryImport(_ result: Result<[URL], Error>) {
-    switch result {
-    case .success(let urls):
-      if let url = urls.first {
-        do {
-          // 验证目录是否可访问
-          let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .isReadableKey])
-          guard resourceValues.isDirectory == true, resourceValues.isReadable == true else {
-            throw GlobalError.fileSystem(
-              chineseMessage: "选择的路径不是可读的目录",
-              i18nKey: "error.filesystem.invalid_directory_selected",
-              level: .notification
-            )
-          }
-
-          generalSettings.launcherWorkingDirectory = url.path
-          // GameRepository 观察者会自动重新加载，无需手动 loadGames
-
-          Logger.shared.info("工作目录已设置为: \(url.path)")
-        } catch {
-          let globalError = GlobalError.from(error)
-          GlobalErrorHandler.shared.handle(globalError)
-          self.error = globalError
-        }
-      }
-    case .failure(let error):
-      let globalError = GlobalError.fileSystem(
-        chineseMessage: "选择目录失败: \(error.localizedDescription)",
-        i18nKey: "error.filesystem.directory_selection_failed",
-        level: .notification
-      )
-      GlobalErrorHandler.shared.handle(globalError)
-      self.error = globalError
-    }
-  }
-
-  /// 安全地重启应用
-  private func restartAppSafely() {
-    do {
-      try restartApp()
-    } catch {
-      let globalError = GlobalError.from(error)
-      GlobalErrorHandler.shared.handle(globalError)
-      self.error = globalError
-    }
-  }
-
-  private func applyLaunchAtLoginPreference() {
-    do {
-      try LaunchAtLoginManager.shared.applyPreference(enabled: generalSettings.launchAtLoginEnabled)
-    } catch {
-      GlobalErrorHandler.shared.handle(error)
-    }
-  }
-
-  private func handleBackupDirectoryImport(_ result: Result<[URL], Error>) {
-    switch result {
-    case .success(let urls):
-      guard let url = urls.first else { return }
-      do {
-        let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .isReadableKey])
-        guard resourceValues.isDirectory == true, resourceValues.isReadable == true else {
-          throw GlobalError.fileSystem(
-            chineseMessage: "备份目录不可访问",
-            i18nKey: "error.filesystem.invalid_directory_selected",
-            level: .notification
-          )
-        }
-        generalSettings.backupDirectoryPath = url.path
-        BackupService.shared.reloadAutoBackupScheduler()
-      } catch {
-        GlobalErrorHandler.shared.handle(error)
-      }
-    case .failure(let error):
-      GlobalErrorHandler.shared.handle(error)
-    }
-  }
-
-  private func runManualBackup() {
-    guard !isRunningManualBackup else { return }
-    isRunningManualBackup = true
-    Task { @MainActor in
-      defer { isRunningManualBackup = false }
-      do {
-        let backupURL = try await BackupService.shared.createBackup(reason: "manual")
-        backupAlertMessage = String(
-          format: "settings.general.backup.alert.success".localized(),
-          backupURL.path
-        )
-      } catch {
-        backupAlertMessage = String(
-          format: "settings.general.backup.alert.failure".localized(),
-          error.localizedDescription
-        )
-      }
-      showBackupAlert = true
-    }
-  }
-
-  private func formattedDate(_ timestamp: Double) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-    return formatter.string(from: Date(timeIntervalSince1970: timestamp))
-  }
-
-  @ViewBuilder
-  private func resetIconButton(disabled: Bool, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Image(systemName: "arrow.counterclockwise.circle")
-        .font(.title3)
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(disabled ? .tertiary : .secondary)
-    .help("common.reset".localized())
-    .disabled(disabled)
-  }
-}
-
-/// 重启应用
-/// - Throws: GlobalError 当重启失败时
-private func restartApp() throws {
-  guard let appURL = Bundle.main.bundleURL as URL? else {
-    throw GlobalError.configuration(
-      chineseMessage: "无法获取应用路径",
-      i18nKey: "error.configuration.app_path_not_found",
-      level: .popup
-    )
-  }
-
-  let task = Process()
-  task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-  task.arguments = [appURL.path]
-
-  try task.run()
-
-  DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-    NSApplication.shared.terminate(nil)
-  }
-}
-
-// MARK: - Theme Selector View
-struct ThemeSelectorView: View {
-  @Binding var selectedTheme: ThemeMode
-
-  var body: some View {
-    HStack(spacing: 16) {
-      ForEach(ThemeMode.allCases, id: \.self) { theme in
-        ThemeOptionView(
-          theme: theme,
-          isSelected: selectedTheme == theme
-        ) {
-          selectedTheme = theme
-        }
-      }
-    }
-  }
-}
-
-// MARK: - Theme Option View
-struct ThemeOptionView: View {
-  let theme: ThemeMode
-  let isSelected: Bool
-  let onTap: () -> Void
-
-  var body: some View {
-    VStack(spacing: 12) {
-      // 主题图标
-      ZStack {
-        RoundedRectangle(cornerRadius: 6)
-          .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: isSelected ? 3 : 0)
-          .frame(width: 61, height: 41)
-
-        // 窗口图标内容
-        ThemeWindowIcon(theme: theme)
-          .frame(width: 60, height: 40)
-      }
-
-      // 主题标签
-      Text(theme.localizedName)
-        .font(.caption)
-        .foregroundColor(isSelected ? .primary : .secondary)
-    }
-    .onTapGesture {
-      onTap()
-    }
-    .animation(.easeInOut(duration: 0.2), value: isSelected)
-  }
-}
-
-// MARK: - Theme Window Icon
-struct ThemeWindowIcon: View {
-  let theme: ThemeMode
-
-  var body: some View {
-    Image(iconName)
-      .resizable()
-      .frame(width: 60, height: 40)
-      .cornerRadius(6)
-  }
-
-  private var iconName: String {
-    let isSystem26 = ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26
-    switch theme {
-    case .system:
-      return isSystem26 ? "AppearanceAuto_Normal_Normal" : "AppearanceAuto_Normal"
-    case .light:
-      return isSystem26 ? "AppearanceLight_Normal_Normal" : "AppearanceLight_Normal"
-    case .dark:
-      return isSystem26 ? "AppearanceDark_Normal_Normal" : "AppearanceDark_Normal"
-    }
-  }
-}
-
-#Preview {
-  GeneralSettingsView()
 }
