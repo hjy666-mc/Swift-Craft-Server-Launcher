@@ -99,6 +99,10 @@ enum DownloadManager {
         let iconSystemName: String
     }
 
+    private static var activeSessions: [UUID: URLSession] = [:]
+    private static var activeDelegates: [UUID: DownloadProgressDelegate] = [:]
+    private static let activeSessionsLock = NSLock()
+
     private static func trackingInfo(for destinationURL: URL) -> TrackingInfo? {
         let path = destinationURL.path.lowercased()
         let fileName = destinationURL.lastPathComponent
@@ -490,6 +494,7 @@ enum DownloadManager {
         try await withCheckedThrowingContinuation { continuation in
             var session: URLSession?
             var task: URLSessionDownloadTask?
+            let sessionId = UUID()
             let delegate = DownloadProgressDelegate(
                 progressHandler: { received, expected in
                     guard let trackingId else { return }
@@ -504,13 +509,25 @@ enum DownloadManager {
                     }
                 },
                 completion: { result in
+                    activeSessionsLock.lock()
+                    activeSessions[sessionId] = nil
+                    activeDelegates[sessionId] = nil
+                    activeSessionsLock.unlock()
                     session?.finishTasksAndInvalidate()
                     continuation.resume(with: result)
                 }
             )
             session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            activeSessionsLock.lock()
+            activeSessions[sessionId] = session
+            activeDelegates[sessionId] = delegate
+            activeSessionsLock.unlock()
             task = session?.downloadTask(with: request)
             guard let task else {
+                activeSessionsLock.lock()
+                activeSessions[sessionId] = nil
+                activeDelegates[sessionId] = nil
+                activeSessionsLock.unlock()
                 continuation.resume(throwing: URLError(.unknown))
                 return
             }
