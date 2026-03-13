@@ -166,6 +166,14 @@ struct GameFormView: View {
 
     private var footerView: some View {
         HStack {
+            if isDownloading {
+                Button {
+                    dismiss()
+                } label: {
+                    Label("最小化", systemImage: "minus.square")
+                }
+                .buttonStyle(.borderless)
+            }
             cancelButton
             Spacer()
             confirmButton

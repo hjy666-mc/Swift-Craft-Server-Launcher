@@ -23,8 +23,7 @@ class JavaDownloadManager: ObservableObject {
             downloadState.reset()
             downloadState.startDownload(version: version)
 
-            // 显示下载弹窗
-            showDownloadWindow()
+            // 不再显示独立下载窗口
 
             // 设置进度回调
             javaRuntimeService.setProgressCallback { [weak self] fileName, completed, total in
@@ -80,14 +79,8 @@ class JavaDownloadManager: ObservableObject {
     }
 
     /// 显示下载窗口
-    private func showDownloadWindow() {
-        WindowManager.shared.openWindow(id: .javaDownload)
-        isWindowVisible = true
-    }
-
     /// 关闭窗口
     func closeWindow() {
-        WindowManager.shared.closeWindow(id: .javaDownload)
         isWindowVisible = false
         downloadState.reset()
         dismissCallback?()

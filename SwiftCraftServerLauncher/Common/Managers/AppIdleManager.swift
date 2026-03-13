@@ -105,21 +105,5 @@ final class AppIdleManager: ObservableObject {
         ContributorAvatarCache.shared.clearCache()
         StaticContributorAvatarCache.shared.clearCache()
         MinecraftSkinUtils.clearCache()
-
-        if !isWindowVisible(.aiChat) {
-            WindowDataStore.shared.cleanup(for: .aiChat)
-        }
-        if !isWindowVisible(.skinPreview) {
-            WindowDataStore.shared.cleanup(for: .skinPreview)
-        }
-    }
-
-    private func isWindowVisible(_ id: WindowID) -> Bool {
-        for window in NSApplication.shared.windows {
-            if window.identifier?.rawValue == id.rawValue, window.isVisible {
-                return true
-            }
-        }
-        return false
     }
 }

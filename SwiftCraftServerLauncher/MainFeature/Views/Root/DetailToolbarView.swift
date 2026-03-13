@@ -9,6 +9,7 @@ public struct DetailToolbarView: ToolbarContent {
     @EnvironmentObject var serverLaunchUseCase: ServerLaunchUseCase
     @StateObject private var serverActionManager = ServerActionManager.shared
     @StateObject private var serverStatusManager = ServerStatusManager.shared
+    @StateObject private var downloadCenter = DownloadCenter.shared
 
     private var currentServer: ServerInstance? {
         if case .server(let serverId) = detailState.selectedItem {
@@ -87,8 +88,18 @@ public struct DetailToolbarView: ToolbarContent {
                     }
                     .help("resource.open_in_browser".localized())
                 } else {
-                    Label(DataSource.modrinth.localizedName, systemImage: "network")
-                        .labelStyle(.titleOnly)
+                    if downloadCenter.hasActiveTasks {
+                        Button {
+                            WindowManager.shared.openWindow(id: .downloadCenter)
+                        } label: {
+                            DownloadProgressLabelView(progress: downloadCenter.averageProgress)
+                        }
+                        .buttonStyle(.plain)
+                        .help("下载中心")
+                    } else {
+                        Label(DataSource.modrinth.localizedName, systemImage: "network")
+                            .labelStyle(.titleOnly)
+                    }
                 }
             case .game:
                 EmptyView()
@@ -97,6 +108,22 @@ public struct DetailToolbarView: ToolbarContent {
             @unknown default:
                 EmptyView()
             }
+        }
+    }
+}
+
+private struct DownloadProgressLabelView: View {
+    let progress: Double?
+
+    var body: some View {
+        let resolvedProgress = progress ?? 0
+        HStack(spacing: 8) {
+            ProgressView(value: resolvedProgress)
+                .progressViewStyle(.linear)
+                .frame(width: 140)
+            Text("\(Int(resolvedProgress * 100))%")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

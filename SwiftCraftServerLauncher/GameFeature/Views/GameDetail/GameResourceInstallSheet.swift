@@ -171,6 +171,14 @@ struct GameResourceInstallFooter: View {
         Group {
             if projectDetail != nil {
                 HStack {
+                    if isDownloadingAll {
+                        Button {
+                            isPresented = false
+                        } label: {
+                            Label("最小化", systemImage: "minus.square")
+                        }
+                        .buttonStyle(.borderless)
+                    }
                     Button("common.close".localized()) { isPresented = false }
                     Spacer()
                     if resourceType == "mod", !isUpdateMode {

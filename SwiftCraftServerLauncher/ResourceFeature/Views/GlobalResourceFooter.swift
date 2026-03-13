@@ -26,6 +26,14 @@ struct GlobalResourceFooter: View {
                     }
                 } else {
                     HStack {
+                        if isDownloadingAll || isDownloadingMainOnly {
+                            Button {
+                                isPresented = false
+                            } label: {
+                                Label("最小化", systemImage: "minus.square")
+                            }
+                            .buttonStyle(.borderless)
+                        }
                         Button("common.close".localized()) { isPresented = false }
                         Spacer()
                         if resourceType == "mod" && !installToServer {

@@ -36,7 +36,6 @@ struct SwiftCraftServerLauncherApp: App {
     @Environment(\.scenePhase)
     private var scenePhase
 
-    
     // MARK: - StateObjects
     @StateObject var playerListViewModel = PlayerListViewModel()
     @StateObject var gameRepository = GameRepository()
@@ -51,7 +50,6 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject private var skinSelectionStore = SkinSelectionStore()
     @StateObject private var appIdleManager = AppIdleManager.shared
 
-    
     // MARK: - Notification Delegate
     private let notificationCenterDelegate = NotificationCenterDelegate()
 
@@ -64,10 +62,8 @@ struct SwiftCraftServerLauncherApp: App {
         }
     }
 
-    
     // MARK: - Body
     var body: some Scene {
-
         WindowGroup {
             MainView()
                 .environment(\.appLogger, Logger.shared)
@@ -129,5 +125,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }
+
+        appWindowGroups()
     }
 }

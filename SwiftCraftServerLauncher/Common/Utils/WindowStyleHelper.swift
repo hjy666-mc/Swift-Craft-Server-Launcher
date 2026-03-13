@@ -47,19 +47,14 @@ extension View {
 
 /// 窗口清理修饰符
 struct WindowCleanup: ViewModifier {
-    let windowID: WindowID
-
     func body(content: Content) -> some View {
         content
-            .onDisappear {
-                WindowDataStore.shared.cleanup(for: windowID)
-            }
     }
 }
 
 extension View {
     /// 应用窗口清理配置
-    func windowCleanup(for windowID: WindowID) -> some View {
-        modifier(WindowCleanup(windowID: windowID))
+    func windowCleanup(for _: WindowID) -> some View {
+        modifier(WindowCleanup())
     }
 }
