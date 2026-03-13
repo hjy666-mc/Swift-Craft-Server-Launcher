@@ -513,7 +513,6 @@ enum DownloadManager {
                     activeSessions[sessionId] = nil
                     activeDelegates[sessionId] = nil
                     activeSessionsLock.unlock()
-                    session?.finishTasksAndInvalidate()
                     continuation.resume(with: result)
                 }
             )
