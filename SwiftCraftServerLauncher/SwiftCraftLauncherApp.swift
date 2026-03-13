@@ -1,5 +1,5 @@
 //
-//  SwiftCraftServerLauncherApp.swift
+//  SwiftCraftLauncherApp.swift
 //  SwiftCraftServerLauncher
 //
 //  Created by su on 2025/5/30.
@@ -24,9 +24,9 @@
 //  This program includes additional terms for source attribution and name usage.
 //  See doc/ADDITIONAL_TERMS.md in the project root for details.
 
+import Combine
 import SwiftUI
 import UserNotifications
-import Combine
 
 @main
 struct SwiftCraftServerLauncherApp: App {
@@ -36,6 +36,7 @@ struct SwiftCraftServerLauncherApp: App {
     @Environment(\.scenePhase)
     private var scenePhase
 
+    
     // MARK: - StateObjects
     @StateObject var playerListViewModel = PlayerListViewModel()
     @StateObject var gameRepository = GameRepository()
@@ -50,6 +51,7 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject private var skinSelectionStore = SkinSelectionStore()
     @StateObject private var appIdleManager = AppIdleManager.shared
 
+    
     // MARK: - Notification Delegate
     private let notificationCenterDelegate = NotificationCenterDelegate()
 
@@ -62,6 +64,7 @@ struct SwiftCraftServerLauncherApp: App {
         }
     }
 
+    
     // MARK: - Body
     var body: some Scene {
 
@@ -112,8 +115,8 @@ struct SwiftCraftServerLauncherApp: App {
                     }
                 }
             }
-            CommandGroup(replacing: .newItem) { }
-            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .saveItem) {}
         }
 
         Settings {
