@@ -82,7 +82,7 @@ struct ServerPluginsManagerView: View {
             }
         }
         .confirmationDialog(
-            "确认移除插件",
+            "server.plugins.remove.title".localized(),
             isPresented: Binding(
                 get: { pendingLocalRemoveURL != nil || pendingRemoteRemoveFileName != nil },
                 set: { showing in
@@ -109,9 +109,9 @@ struct ServerPluginsManagerView: View {
             }
         } message: {
             if let url = pendingLocalRemoveURL {
-                Text("将移除插件“\(url.lastPathComponent)”，是否继续？")
+                Text(String(format: "server.plugins.remove.message".localized(), url.lastPathComponent))
             } else {
-                Text("将移除插件“\(pendingRemoteRemoveFileName ?? "")”，是否继续？")
+                Text(String(format: "server.plugins.remove.message".localized(), pendingRemoteRemoveFileName ?? ""))
             }
         }
     }

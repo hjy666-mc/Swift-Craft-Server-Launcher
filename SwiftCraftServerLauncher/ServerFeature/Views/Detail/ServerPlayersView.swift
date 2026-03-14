@@ -38,7 +38,7 @@ struct ServerPlayersView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "person.badge.plus")
                                 .foregroundStyle(.secondary)
-                            Text("快速添加")
+                            Text("server.players.quick_add.title".localized())
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                             Spacer()
@@ -46,7 +46,9 @@ struct ServerPlayersView: View {
 
                         HStack(spacing: 8) {
                             TextField(
-                                selectedList == "bannedIps" ? "输入玩家名或 IP" : "server.players.name_placeholder".localized(),
+                                selectedList == "bannedIps"
+                                    ? "server.players.placeholder.banned_ips".localized()
+                                    : "server.players.name_placeholder".localized(),
                                 text: $newName
                             )
                             .textFieldStyle(.roundedBorder)
@@ -80,7 +82,7 @@ struct ServerPlayersView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     if selectedList == "bannedIps" {
-                        Text("提示：可输入玩家名或直接输入 IP。")
+                        Text("server.players.banned_ip_hint".localized())
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -145,11 +147,15 @@ struct ServerPlayersView: View {
                     Divider()
                     Button {
                         toggleExpand(sectionKey: sectionKey)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(isExpanded ? "收起" : "更多 (\(entries.count - collapsedPreviewCount))")
-                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(
+                                    isExpanded
+                                        ? "server.players.collapse".localized()
+                                        : String(format: "server.players.more_count".localized(), entries.count - collapsedPreviewCount)
+                                )
+                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }

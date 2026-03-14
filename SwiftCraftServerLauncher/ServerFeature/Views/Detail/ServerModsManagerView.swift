@@ -82,7 +82,7 @@ struct ServerModsManagerView: View {
             }
         }
         .confirmationDialog(
-            "确认移除模组",
+            "server.mods.remove.title".localized(),
             isPresented: Binding(
                 get: { pendingLocalRemoveURL != nil || pendingRemoteRemoveFileName != nil },
                 set: { showing in
@@ -109,9 +109,9 @@ struct ServerModsManagerView: View {
             }
         } message: {
             if let url = pendingLocalRemoveURL {
-                Text("将移除模组“\(url.lastPathComponent)”，是否继续？")
+                Text(String(format: "server.mods.remove.message".localized(), url.lastPathComponent))
             } else {
-                Text("将移除模组“\(pendingRemoteRemoveFileName ?? "")”，是否继续？")
+                Text(String(format: "server.mods.remove.message".localized(), pendingRemoteRemoveFileName ?? ""))
             }
         }
     }

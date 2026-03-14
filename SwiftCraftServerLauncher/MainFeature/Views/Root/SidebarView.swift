@@ -208,7 +208,7 @@ public struct SidebarView: View {
             }
         }
         .confirmationDialog(
-            "确认删除服务器",
+            "sidebar.confirm.delete_server.title".localized(),
             isPresented: Binding(
                 get: { pendingDeleteServer != nil },
                 set: { showing in
@@ -231,10 +231,10 @@ public struct SidebarView: View {
                 pendingDeleteServer = nil
             }
         } message: {
-            Text("将删除服务器“\(pendingDeleteServer?.name ?? "")”及其目录，是否继续？")
+            Text(String(format: "sidebar.confirm.delete_server.message".localized(), pendingDeleteServer?.name ?? ""))
         }
         .confirmationDialog(
-            "确认删除损坏服务器",
+            "sidebar.confirm.delete_corrupted_server.title".localized(),
             isPresented: Binding(
                 get: { pendingDeleteCorruptedServerName != nil },
                 set: { showing in
@@ -252,7 +252,7 @@ public struct SidebarView: View {
                 pendingDeleteCorruptedServerName = nil
             }
         } message: {
-            Text("将删除损坏服务器“\(pendingDeleteCorruptedServerName ?? "")”，是否继续？")
+            Text(String(format: "sidebar.confirm.delete_corrupted_server.message".localized(), pendingDeleteCorruptedServerName ?? ""))
         }
     }
 
@@ -337,13 +337,13 @@ public struct SidebarView: View {
                 .lineLimit(2)
             Spacer(minLength: 0)
             if canCopy {
-                Button("复制") {
+                Button("sidebar.node.copy".localized()) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(value, forType: .string)
                 }
                 .buttonStyle(.plain)
             } else if canOpen {
-                Button("打开") {
+                Button("sidebar.node.open".localized()) {
                     guard FileManager.default.fileExists(atPath: value) else { return }
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: value)])
                 }

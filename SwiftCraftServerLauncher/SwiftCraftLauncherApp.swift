@@ -102,11 +102,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             }
             CommandGroup(after: .help) {
-                Button(
-                    Locale.preferredLanguages.first?.hasPrefix("zh") == true
-                        ? "访问项目官网"
-                        : "Visit Project Website"
-                ) {
+                Button("menu.visit.website".localized()) {
                     if let url = URL(string: "https://github.com/hjy666-mc/Swift-Craft-Server-Launcher") {
                         NSWorkspace.shared.open(url)
                     }

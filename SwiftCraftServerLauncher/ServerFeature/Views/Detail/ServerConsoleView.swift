@@ -113,7 +113,7 @@ struct ServerConsoleView: View {
         .frame(minHeight: 220)
         .overlay(alignment: .topTrailing) {
             if initialConsoleLines.count > 2_000 {
-                Button("加载更早历史") {
+                Button("server.console.load_earlier_history".localized()) {
                     loadOlderToken += 1
                 }
                 .buttonStyle(.plain)
@@ -127,7 +127,7 @@ struct ServerConsoleView: View {
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在渲染日志...")
+                    Text("server.console.rendering_logs".localized())
                 }
                 .font(.caption)
                 .padding(.horizontal, 10)

@@ -84,7 +84,7 @@ struct ServerWorldsManagerView: View {
             }
         }
         .confirmationDialog(
-            "确认删除世界",
+            "server.worlds.remove.title".localized(),
             isPresented: Binding(
                 get: { pendingLocalRemoveURL != nil || pendingRemoteRemoveName != nil },
                 set: { showing in
@@ -111,9 +111,9 @@ struct ServerWorldsManagerView: View {
             }
         } message: {
             if let url = pendingLocalRemoveURL {
-                Text("将删除世界“\(url.lastPathComponent)”，是否继续？")
+                Text(String(format: "server.worlds.remove.message".localized(), url.lastPathComponent))
             } else {
-                Text("将删除世界“\(pendingRemoteRemoveName ?? "")”，是否继续？")
+                Text(String(format: "server.worlds.remove.message".localized(), pendingRemoteRemoveName ?? ""))
             }
         }
     }

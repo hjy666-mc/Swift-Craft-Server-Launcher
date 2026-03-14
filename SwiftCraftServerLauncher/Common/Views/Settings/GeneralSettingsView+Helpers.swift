@@ -196,13 +196,13 @@ extension GeneralSettingsView {
     let reasonLabel: String
     switch reason {
     case "manual":
-      reasonLabel = "手动备份"
+      reasonLabel = "backup.reason.manual".localized()
     case "auto":
-      reasonLabel = "自动备份"
+      reasonLabel = "backup.reason.auto".localized()
     case "before-update":
-      reasonLabel = "更新前备份"
+      reasonLabel = "backup.reason.before_update".localized()
     default:
-      reasonLabel = "备份"
+      reasonLabel = "backup.reason.default".localized()
     }
 
     return "\(reasonLabel) · \(dateString)"
