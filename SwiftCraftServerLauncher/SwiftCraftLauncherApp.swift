@@ -79,6 +79,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
                 .windowOpener()
+                .titlebarSeparatorOnHover()
                 .onAppear {
                     appIdleManager.startMonitoring()
                     BackupService.shared.startAutoBackupScheduler()

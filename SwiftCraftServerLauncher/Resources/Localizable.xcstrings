@@ -1216,6 +1216,57 @@
         }
       }
     },
+    "download.center" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download Center"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载中心"
+          }
+        }
+      }
+    },
+    "download.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel Download"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消下载"
+          }
+        }
+      }
+    },
+    "download.minimize" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimize"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小化"
+          }
+        }
+      }
+    },
     "download.core.title" : {
       "comment" : "Download Progress",
       "extractionState" : "manual",
@@ -2294,6 +2345,23 @@
         }
       }
     },
+    "error.download.temp_file_missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporary File Missing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载临时文件不存在"
+          }
+        }
+      }
+    },
     "error.file.access.failed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3279,6 +3347,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "意外的 NBT 结束标签"
+          }
+        }
+      }
+    },
+    "error.filesystem.operation_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filesystem Operation Failed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件操作失败"
           }
         }
       }
@@ -15285,16 +15370,7 @@
     "Visit Project Website" : {
 
     },
-    "下载中心" : {
-
-    },
-    "最小化" : {
-
-    },
     "加载更早历史" : {
-
-    },
-    "取消下载" : {
 
     },
     "复制" : {
@@ -15334,9 +15410,6 @@
 
     },
     "正在渲染日志..." : {
-
-    },
-    "清空已完成" : {
 
     },
     "确认删除世界" : {

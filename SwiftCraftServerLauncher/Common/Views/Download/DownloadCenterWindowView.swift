@@ -6,14 +6,9 @@ struct DownloadCenterWindowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("下载中心")
+                Text("download.center".localized())
                     .font(.headline)
                 Spacer()
-                Button("清空已完成") {
-                    downloadCenter.removeFinishedTasks()
-                }
-                .buttonStyle(.borderless)
-                .disabled(downloadCenter.tasks.allSatisfy { $0.status == .running })
             }
 
             if downloadCenter.activeTasks.isEmpty {
@@ -59,7 +54,7 @@ struct DownloadCenterWindowView: View {
                             Image(systemName: "xmark.circle")
                         }
                         .buttonStyle(.plain)
-                        .help("取消下载")
+                        .help("download.cancel".localized())
                     }
                     .padding(.vertical, 4)
                 }

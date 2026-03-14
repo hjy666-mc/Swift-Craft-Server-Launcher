@@ -6,15 +6,15 @@ struct DownloadProgressIndicatorView: View {
     var body: some View {
         let resolvedProgress = min(max(progress ?? 0, 0), 1)
         HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .stroke(Color.primary.opacity(0.15), lineWidth: 4)
-                Circle()
-                    .trim(from: 0, to: resolvedProgress)
-                    .stroke(Color.green, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+            if progress == nil {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+            } else {
+                ProgressView(value: resolvedProgress, total: 1)
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
             }
-            .frame(width: 18, height: 18)
             Text("\(Int(resolvedProgress * 100))%")
                 .font(.caption)
                 .foregroundStyle(.secondary)

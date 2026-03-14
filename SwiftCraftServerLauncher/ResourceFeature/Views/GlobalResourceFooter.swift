@@ -30,7 +30,7 @@ struct GlobalResourceFooter: View {
                             Button {
                                 isPresented = false
                             } label: {
-                                Label("最小化", systemImage: "minus.square")
+                            Label("download.minimize".localized(), systemImage: "minus.square")
                             }
                             .buttonStyle(.borderless)
                         }

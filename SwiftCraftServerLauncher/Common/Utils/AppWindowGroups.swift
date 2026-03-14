@@ -13,7 +13,7 @@ extension SwiftCraftServerLauncherApp {
     @SceneBuilder
     func appWindowGroups() -> some Scene {
         // 下载中心窗口
-        Window("下载中心", id: WindowID.downloadCenter.rawValue) {
+        Window("download.center".localized(), id: WindowID.downloadCenter.rawValue) {
             DownloadCenterWindowView()
                 .windowStyleConfig(for: .downloadCenter)
                 .windowCleanup(for: .downloadCenter)
