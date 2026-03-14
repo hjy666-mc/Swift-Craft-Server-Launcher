@@ -36,14 +36,6 @@ struct SkinUploadSectionView: View {
                 }
                 .padding(.horizontal, 4)
                 Spacer()
-                Button {
-                    openSkinPreviewWindow()
-                } label: {
-                    Image(systemName: "eye")
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.bordered)
-                .disabled(selectedSkinImage == nil && currentSkinRenderImage == nil && selectedSkinPath == nil)
             }
         }
     }
@@ -114,20 +106,6 @@ struct SkinUploadSectionView: View {
         case .slim:
             return .alex
         }
-    }
-
-    /// 打开皮肤预览窗口
-    private func openSkinPreviewWindow() {
-        let playerModel = convertToPlayerModel(currentModel)
-        // 存储到 WindowDataStore
-        WindowDataStore.shared.skinPreviewData = SkinPreviewData(
-            skinImage: selectedSkinImage ?? currentSkinRenderImage,
-            skinPath: selectedSkinPath,
-            capeImage: selectedCapeImage,
-            playerModel: playerModel
-        )
-        // 打开窗口
-        WindowManager.shared.openWindow(id: .skinPreview)
     }
 }
 

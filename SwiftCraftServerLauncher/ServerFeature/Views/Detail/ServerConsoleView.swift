@@ -25,6 +25,7 @@ struct ServerConsoleView: View {
     @State private var consoleEvent: ServerConsoleManager.ConsoleEvent?
     @State private var isRenderingConsole: Bool = false
     @State private var loadOlderToken: Int = 0
+    @State private var scrollToLeadingToken: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -55,6 +56,7 @@ struct ServerConsoleView: View {
             installKeyMonitor()
             initialConsoleLines = console.logLines(for: server.id)
             isRenderingConsole = false
+            scrollToLeadingToken += 1
         }
         .onChange(of: server.id) { _, _ in
             isRenderingConsole = true
@@ -78,6 +80,7 @@ struct ServerConsoleView: View {
             initialConsoleLines = console.logLines(for: server.id)
             consoleEvent = nil
             isRenderingConsole = false
+            scrollToLeadingToken += 1
         }
         .onDisappear {
             stopRemoteLogPolling()
@@ -104,12 +107,13 @@ struct ServerConsoleView: View {
             initialLines: initialConsoleLines,
             event: consoleEvent,
             enableColor: generalSettings.enableConsoleColoredOutput,
-            loadOlderToken: loadOlderToken
+            loadOlderToken: loadOlderToken,
+            scrollToLeadingToken: scrollToLeadingToken
         )
         .frame(minHeight: 220)
         .overlay(alignment: .topTrailing) {
             if initialConsoleLines.count > 2_000 {
-                Button("加载更早历史") {
+                Button("server.console.load_earlier_history".localized()) {
                     loadOlderToken += 1
                 }
                 .buttonStyle(.plain)
@@ -123,7 +127,7 @@ struct ServerConsoleView: View {
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在渲染日志...")
+                    Text("server.console.rendering_logs".localized())
                 }
                 .font(.caption)
                 .padding(.horizontal, 10)
@@ -833,6 +837,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
     let event: ServerConsoleManager.ConsoleEvent?
     let enableColor: Bool
     let loadOlderToken: Int
+    let scrollToLeadingToken: Int
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -890,6 +895,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         context.coordinator.updateInitialIfNeeded(lines: initialLines)
         context.coordinator.apply(event: event)
         context.coordinator.loadOlderIfNeeded(token: loadOlderToken)
+        context.coordinator.scrollToLeadingIfNeeded(token: scrollToLeadingToken)
     }
 
     final class Coordinator {
@@ -900,6 +906,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         private var olderLines: [String] = []
         private var lastSequence: Int = 0
         private var lastLoadOlderToken: Int = 0
+        private var lastScrollToLeadingToken: Int = 0
         private let maxRealtimeLines = 2_000
         private let olderBatchSize = 500
 
@@ -944,6 +951,15 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
             olderLines.removeSubrange(start...)
             lines = batch + lines
             redrawAll(keepAtBottom: false)
+        }
+
+        func scrollToLeadingIfNeeded(token: Int) {
+            guard token != lastScrollToLeadingToken else { return }
+            lastScrollToLeadingToken = token
+            guard let scrollView else { return }
+            let currentOrigin = scrollView.contentView.bounds.origin
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: currentOrigin.y))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
 
         private func append(text: String) {

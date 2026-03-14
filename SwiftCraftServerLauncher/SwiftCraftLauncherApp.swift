@@ -1,5 +1,5 @@
 //
-//  SwiftCraftServerLauncherApp.swift
+//  SwiftCraftLauncherApp.swift
 //  SwiftCraftServerLauncher
 //
 //  Created by su on 2025/5/30.
@@ -24,12 +24,15 @@
 //  This program includes additional terms for source attribution and name usage.
 //  See doc/ADDITIONAL_TERMS.md in the project root for details.
 
+import Combine
 import SwiftUI
 import UserNotifications
-import Combine
 
 @main
 struct SwiftCraftServerLauncherApp: App {
+    @NSApplicationDelegateAdaptor(AppTerminationDelegate.self)
+    private var appTerminationDelegate
+
     @Environment(\.scenePhase)
     private var scenePhase
 
@@ -61,7 +64,6 @@ struct SwiftCraftServerLauncherApp: App {
 
     // MARK: - Body
     var body: some Scene {
-
         WindowGroup {
             MainView()
                 .environment(\.appLogger, Logger.shared)
@@ -77,8 +79,10 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
                 .windowOpener()
+                .titlebarSeparatorOnHover()
                 .onAppear {
                     appIdleManager.startMonitoring()
+                    BackupService.shared.startAutoBackupScheduler()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     appIdleManager.handleScenePhase(newPhase)
@@ -98,18 +102,14 @@ struct SwiftCraftServerLauncherApp: App {
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             }
             CommandGroup(after: .help) {
-                Button(
-                    Locale.preferredLanguages.first?.hasPrefix("zh") == true
-                        ? "访问项目官网"
-                        : "Visit Project Website"
-                ) {
+                Button("menu.visit.website".localized()) {
                     if let url = URL(string: "https://github.com/hjy666-mc/Swift-Craft-Server-Launcher") {
                         NSWorkspace.shared.open(url)
                     }
                 }
             }
-            CommandGroup(replacing: .newItem) { }
-            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .saveItem) {}
         }
 
         Settings {
@@ -122,5 +122,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }
+
+        appWindowGroups()
     }
 }

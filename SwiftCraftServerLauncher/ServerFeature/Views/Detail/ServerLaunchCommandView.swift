@@ -100,14 +100,14 @@ struct ServerLaunchCommandView: View {
                         title: "server.launch.mods".localized(),
                         icon: "puzzlepiece.extension",
                         isEnabled: supportsMods,
-                        disabledHint: isChinese ? "仅 Fabric / Forge" : "Fabric / Forge only"
+                        disabledHint: "server.launch.hint.mods_only".localized()
                     )
                     sectionRow(
                         section: .plugins,
                         title: "server.launch.plugins".localized(),
                         icon: "powerplug",
                         isEnabled: supportsPlugins,
-                        disabledHint: isChinese ? "仅 Paper" : "Paper only"
+                        disabledHint: "server.launch.hint.plugins_only".localized()
                     )
                 }
                 .frame(width: 180, alignment: .topLeading)

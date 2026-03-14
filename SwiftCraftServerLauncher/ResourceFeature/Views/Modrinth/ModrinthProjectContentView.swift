@@ -289,11 +289,58 @@ struct ModrinthProjectContentView: View {
 
     // MARK: - Loading View
     private var loadingView: some View {
-        VStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
+        VStack(alignment: .leading, spacing: 12) {
+            SkeletonView(
+                width: SkeletonWidth.make(base: 220, variance: 34, seed: 201),
+                height: 20,
+                cornerRadius: 6
+            )
+            HStack(spacing: 8) {
+                ForEach(0..<4, id: \.self) { index in
+                    SkeletonView(
+                        width: SkeletonWidth.make(base: 72, variance: 14, seed: 210 + index),
+                        height: 18,
+                        cornerRadius: 9
+                    )
+                }
+            }
+
+            SkeletonView(
+                width: SkeletonWidth.make(base: 180, variance: 30, seed: 202),
+                height: 20,
+                cornerRadius: 6
+            )
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { index in
+                    SkeletonView(
+                        width: SkeletonWidth.make(base: 82, variance: 14, seed: 220 + index),
+                        height: 18,
+                        cornerRadius: 9
+                    )
+                }
+            }
+
+            SkeletonView(
+                width: SkeletonWidth.make(base: 140, variance: 28, seed: 203),
+                height: 20,
+                cornerRadius: 6
+            )
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(0..<3, id: \.self) { index in
+                    SkeletonView(
+                        width: SkeletonWidth.make(
+                            base: 340 - CGFloat(index * 28),
+                            variance: 44,
+                            seed: 230 + index
+                        ),
+                        height: 12,
+                        cornerRadius: 4
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Constants.padding)
     }
 

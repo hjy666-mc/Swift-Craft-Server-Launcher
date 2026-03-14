@@ -147,10 +147,9 @@ struct ModrinthDetailView: View {
         }
         .searchable(
             text: $searchText,
-            placement: .toolbar,
+            placement: .automatic,
             prompt: "search.resources".localized()
         )
-
         .onChange(of: searchText) { oldValue, newValue in
             // 优化：仅在搜索文本实际变化时触发防抖搜索
             if oldValue != newValue {
@@ -264,12 +263,14 @@ struct ModrinthDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowSeparator(.hidden)
             } else if viewModel.isLoading {
-                HStack {
-                    ProgressView()
-                        .controlSize(.small)
+                ForEach(0..<8, id: \.self) { index in
+                    ModrinthDetailSkeletonCardView(seed: index)
+                        .padding(.vertical, ModrinthConstants.UIConstants.verticalPadding)
+                        .listRowInsets(
+                            EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+                        )
+                        .listRowSeparator(.hidden)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .listRowSeparator(.hidden)
             } else if hasLoaded && viewModel.results.isEmpty {
                 emptyResultView()
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -293,9 +294,11 @@ struct ModrinthDetailView: View {
                     .listRowSeparator(.hidden)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        selectedProjectId = mod.projectId
-                        if let type = ResourceType(rawValue: query) {
-                            selectedItem = .resource(type)
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            selectedProjectId = mod.projectId
+                            if let type = ResourceType(rawValue: query) {
+                                selectedItem = .resource(type)
+                            }
                         }
                     }
                     .onAppear {
@@ -364,5 +367,66 @@ struct ModrinthDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
+    }
+}
+
+private struct ModrinthDetailSkeletonCardView: View {
+    let seed: Int
+
+    private var tagCount: Int { 2 + (seed % 2) }
+    private var titleWidth: CGFloat {
+        SkeletonWidth.make(base: 176, variance: 34, seed: seed * 31 + 1)
+    }
+    private var subtitleWidth: CGFloat {
+        SkeletonWidth.make(base: 238, variance: 48, seed: seed * 31 + 2)
+    }
+
+    var body: some View {
+        HStack(spacing: ModrinthConstants.UIConstants.contentSpacing) {
+            SkeletonView(
+                width: ModrinthConstants.UIConstants.iconSize,
+                height: ModrinthConstants.UIConstants.iconSize,
+                cornerRadius: ModrinthConstants.UIConstants.cornerRadius
+            )
+
+            VStack(alignment: .leading, spacing: ModrinthConstants.UIConstants.spacing) {
+                SkeletonView(width: titleWidth, height: 16, cornerRadius: 4)
+                SkeletonView(width: subtitleWidth, height: 13, cornerRadius: 4)
+                HStack(spacing: ModrinthConstants.UIConstants.spacing) {
+                    ForEach(0..<tagCount, id: \.self) { index in
+                        SkeletonView(
+                            width: SkeletonWidth.make(
+                                base: 44,
+                                variance: 10,
+                                seed: seed * 31 + 10 + index
+                            ),
+                            height: 14,
+                            cornerRadius: 6
+                        )
+                    }
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: ModrinthConstants.UIConstants.spacing) {
+                SkeletonView(
+                    width: SkeletonWidth.make(base: 56, variance: 12, seed: seed * 31 + 20),
+                    height: 12,
+                    cornerRadius: 4
+                )
+                SkeletonView(
+                    width: SkeletonWidth.make(base: 48, variance: 10, seed: seed * 31 + 21),
+                    height: 12,
+                    cornerRadius: 4
+                )
+                SkeletonView(
+                    width: SkeletonWidth.make(base: 84, variance: 16, seed: seed * 31 + 22),
+                    height: 22,
+                    cornerRadius: 8
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }

@@ -5,9 +5,12 @@ import UniformTypeIdentifiers
 struct ServerWorldsManagerView: View {
     let server: ServerInstance
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State private var folders: [URL] = []
     @State private var remoteFolders: [String] = []
     @State private var showImporter = false
+    @State private var pendingLocalRemoveURL: URL?
+    @State private var pendingRemoteRemoveName: String?
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -32,7 +35,13 @@ struct ServerWorldsManagerView: View {
                                 HStack {
                                     Text(name)
                                     Spacer()
-                                    Button("common.remove".localized()) { removeRemoteFolder(name) }
+                                    Button("common.remove".localized()) {
+                                        if generalSettings.confirmDeleteWorld {
+                                            pendingRemoteRemoveName = name
+                                        } else {
+                                            removeRemoteFolder(name)
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -40,7 +49,13 @@ struct ServerWorldsManagerView: View {
                                 HStack {
                                     Text(url.lastPathComponent)
                                     Spacer()
-                                    Button("common.remove".localized()) { removeFolder(url) }
+                                    Button("common.remove".localized()) {
+                                        if generalSettings.confirmDeleteWorld {
+                                            pendingLocalRemoveURL = url
+                                        } else {
+                                            removeFolder(url)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -66,6 +81,39 @@ struct ServerWorldsManagerView: View {
         ) { result in
             if case .success(let urls) = result {
                 importWorlds(urls)
+            }
+        }
+        .confirmationDialog(
+            "server.worlds.remove.title".localized(),
+            isPresented: Binding(
+                get: { pendingLocalRemoveURL != nil || pendingRemoteRemoveName != nil },
+                set: { showing in
+                    if !showing {
+                        pendingLocalRemoveURL = nil
+                        pendingRemoteRemoveName = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                if let url = pendingLocalRemoveURL {
+                    removeFolder(url)
+                } else if let name = pendingRemoteRemoveName {
+                    removeRemoteFolder(name)
+                }
+                pendingLocalRemoveURL = nil
+                pendingRemoteRemoveName = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingLocalRemoveURL = nil
+                pendingRemoteRemoveName = nil
+            }
+        } message: {
+            if let url = pendingLocalRemoveURL {
+                Text(String(format: "server.worlds.remove.message".localized(), url.lastPathComponent))
+            } else {
+                Text(String(format: "server.worlds.remove.message".localized(), pendingRemoteRemoveName ?? ""))
             }
         }
     }

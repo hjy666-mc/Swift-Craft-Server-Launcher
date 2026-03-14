@@ -223,6 +223,10 @@ final class GameProcessManager: ObservableObject, @unchecked Sendable {
         return queue.sync { gameProcesses[key]?.isRunning ?? false }
     }
 
+    func runningProcessCount() -> Int {
+        queue.sync { gameProcesses.values.filter(\.isRunning).count }
+    }
+
     /// 检查该游戏是否有任意玩家的实例正在运行（用于删除前校验）
     /// - Parameter gameId: 游戏 ID
     /// - Returns: 是否有任意 userId 下该游戏在运行

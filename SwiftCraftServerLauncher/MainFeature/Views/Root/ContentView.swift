@@ -32,25 +32,31 @@ struct ContentView: View {
 
     @ViewBuilder
     private func resourceContentView(type: ResourceType) -> some View {
-        if let projectId = detailState.selectedProjectId {
-            ModrinthProjectContentView(
-                projectDetail: detailState.loadedProjectDetailBinding,
-                projectId: projectId
-            )
-        } else {
-            CategoryContentView(
-                project: type.rawValue,
-                type: "resource",
-                selectedCategories: filterState.selectedCategoriesBinding,
-                selectedFeatures: filterState.selectedFeaturesBinding,
-                selectedResolutions: filterState.selectedResolutionsBinding,
-                selectedPerformanceImpacts: filterState.selectedPerformanceImpactBinding,
-                selectedVersions: filterState.selectedVersionsBinding,
-                selectedLoaders: filterState.selectedLoadersBinding,
-                dataSource: filterState.dataSource
-            )
-            .id(type)
+        ZStack {
+            if let projectId = detailState.selectedProjectId {
+                ModrinthProjectContentView(
+                    projectDetail: detailState.loadedProjectDetailBinding,
+                    projectId: projectId
+                )
+                .transition(.resourcePanelForward)
+            } else {
+                CategoryContentView(
+                    project: type.rawValue,
+                    type: "resource",
+                    selectedCategories: filterState.selectedCategoriesBinding,
+                    selectedFeatures: filterState.selectedFeaturesBinding,
+                    selectedResolutions: filterState.selectedResolutionsBinding,
+                    selectedPerformanceImpacts: filterState.selectedPerformanceImpactBinding,
+                    selectedVersions: filterState.selectedVersionsBinding,
+                    selectedLoaders: filterState.selectedLoadersBinding,
+                    dataSource: filterState.dataSource
+                )
+                .id(type)
+                .transition(.resourcePanelBackward)
+            }
         }
+        .clipped()
+        .animation(.easeInOut(duration: 0.28), value: detailState.selectedProjectId)
     }
 
     @ViewBuilder

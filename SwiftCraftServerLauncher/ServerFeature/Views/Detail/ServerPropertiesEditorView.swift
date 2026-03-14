@@ -404,7 +404,7 @@ private struct ServerExtraConfigEditorView: View {
                 Text(item.fileName)
                     .font(.headline)
                 Spacer()
-                Text(isDirty ? "自动保存中…" : "已保存")
+                Text(isDirty ? "server.properties.auto_save.saving".localized() : "server.properties.auto_save.saved".localized())
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("common.close".localized()) { dismiss() }

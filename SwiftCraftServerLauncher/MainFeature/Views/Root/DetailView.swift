@@ -32,29 +32,35 @@ struct DetailView: View {
 
     @ViewBuilder
     private func resourceDetailView(type: ResourceType) -> some View {
-        if detailState.selectedProjectId != nil {
-            List {
-                ModrinthProjectDetailView(
-                    projectDetail: detailState.loadedProjectDetail
+        ZStack {
+            if detailState.selectedProjectId != nil {
+                List {
+                    ModrinthProjectDetailView(
+                        projectDetail: detailState.loadedProjectDetail
+                    )
+                }
+                .transition(.resourcePanelForward)
+            } else {
+                ModrinthDetailView(
+                    query: type.rawValue,
+                    selectedVersions: filterState.selectedVersionsBinding,
+                    selectedCategories: filterState.selectedCategoriesBinding,
+                    selectedFeatures: filterState.selectedFeaturesBinding,
+                    selectedResolutions: filterState.selectedResolutionsBinding,
+                    selectedPerformanceImpact: filterState.selectedPerformanceImpactBinding,
+                    selectedProjectId: detailState.selectedProjectIdBinding,
+                    selectedLoader: filterState.selectedLoadersBinding,
+                    gameInfo: nil,
+                    selectedItem: detailState.selectedItemBinding,
+                    gameType: detailState.gameTypeBinding,
+                    dataSource: filterState.dataSourceBinding,
+                    searchText: filterState.searchTextBinding
                 )
+                .transition(.resourcePanelBackward)
             }
-        } else {
-            ModrinthDetailView(
-                query: type.rawValue,
-                selectedVersions: filterState.selectedVersionsBinding,
-                selectedCategories: filterState.selectedCategoriesBinding,
-                selectedFeatures: filterState.selectedFeaturesBinding,
-                selectedResolutions: filterState.selectedResolutionsBinding,
-                selectedPerformanceImpact: filterState.selectedPerformanceImpactBinding,
-                selectedProjectId: detailState.selectedProjectIdBinding,
-                selectedLoader: filterState.selectedLoadersBinding,
-                gameInfo: nil,
-                selectedItem: detailState.selectedItemBinding,
-                gameType: detailState.gameTypeBinding,
-                dataSource: filterState.dataSourceBinding,
-                searchText: filterState.searchTextBinding
-            )
         }
+        .clipped()
+        .animation(.easeInOut(duration: 0.28), value: detailState.selectedProjectId)
     }
 
     @ViewBuilder

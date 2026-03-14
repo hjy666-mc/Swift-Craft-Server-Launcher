@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: JohnTitor/setup-xcode@v0.1.1
         with:
           xcode-version: latest-stable
 
@@ -245,7 +245,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -313,7 +313,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-          SPARKLE_DOWNLOAD_URL_MODE: ${{ vars.SPARKLE_DOWNLOAD_URL_MODE }}
         run: |
           TAG="$RELEASE_TAG"
           if [[ -z "$TAG" ]]; then
@@ -324,19 +323,8 @@ jobs:
             exit 1
           fi
 
-          MODE="${SPARKLE_DOWNLOAD_URL_MODE:-tag}"
-          case "$MODE" in
-            latest)
-              DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/latest/download"
-              ;;
-            tag)
-              DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}"
-              ;;
-            *)
-              echo "❌ Invalid SPARKLE_DOWNLOAD_URL_MODE: $MODE (allowed: tag/latest)"
-              exit 1
-              ;;
-          esac
+          # Always bind appcast enclosure URLs to the concrete release tag.
+          DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}"
 
           RELEASE_NOTES_URL_PREFIX="https://${REPOSITORY_OWNER}.github.io/${REPO_NAME}/release-notes/${TAG}"
 
@@ -382,6 +370,7 @@ jobs:
       - name: Generate architecture appcasts
         env:
           TAG: ${{ steps.release_meta.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
           DOWNLOAD_URL_PREFIX: ${{ steps.release_meta.outputs.download_url_prefix }}
           RELEASE_NOTES_URL_PREFIX: ${{ steps.release_meta.outputs.release_notes_url_prefix }}
           GENERATE_APPCAST_BIN: ${{ steps.sparkle_tool.outputs.tool_path }}
@@ -413,6 +402,15 @@ jobs:
 
           mv output/archives/arm64/appcast.xml output/appcast-arm64.xml
           mv output/archives/x86_64/appcast.xml output/appcast-x86_64.xml
+
+          EXPECTED_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
+          for APPCAST in output/appcast-arm64.xml output/appcast-x86_64.xml; do
+            if ! grep -Fq "<enclosure url=\"${EXPECTED_PREFIX}" "$APPCAST"; then
+              echo "❌ Invalid enclosure URL in ${APPCAST}. Expected prefix: ${EXPECTED_PREFIX}"
+              grep -n "<enclosure url=" "$APPCAST" || true
+              exit 1
+            fi
+          done
 
           cp output/archives/arm64/*.md output/release-notes/"$TAG"/
           cp output/archives/x86_64/*.md output/release-notes/"$TAG"/

@@ -10,168 +10,192 @@ public struct SidebarView: View {
     @AppStorage("activeServerNodeId")
     private var activeServerNodeId: String = ServerNode.local.id
     @StateObject private var serverActionManager = ServerActionManager.shared
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
+    @StateObject private var downloadCenter = DownloadCenter.shared
+    @State private var showDownloadTip = false
+    @State private var isHoveringDownloadBar = false
     @State private var hoveredNodeInfoId: String?
     @State private var hoveredNodePopoverId: String?
     @State private var pendingNodePopoverClose: DispatchWorkItem?
+    @State private var pendingDeleteServer: ServerInstance?
+    @State private var pendingDeleteCorruptedServerName: String?
 
     public init() {}
 
     public var body: some View {
-        List(selection: detailState.selectedItemOptionalBinding) {
-            Section(header: Text("sidebar.nodes.title".localized())) {
-                ForEach(filteredNodes) { node in
-                    HStack(spacing: 6) {
-                        Button {
-                            activeServerNodeId = node.id
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: node.isLocal ? "desktopcomputer" : "network")
-                                Text(node.name)
-                                    .lineLimit(1)
-                                Spacer(minLength: 4)
-                                if activeServerNodeId == node.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.accentColor)
-                                        .transition(.opacity.combined(with: .scale))
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 2)
-                            .padding(.horizontal, 2)
-                            .contentShape(Rectangle())
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(activeServerNodeId == node.id ? Color.accentColor.opacity(0.14) : Color.clear)
-                            )
-                            .animation(.easeInOut(duration: 0.15), value: activeServerNodeId)
-                        }
-                        .buttonStyle(.plain)
-
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                            .onHover { hovering in
-                                if hovering {
-                                    pendingNodePopoverClose?.cancel()
-                                    hoveredNodeInfoId = node.id
-                                } else {
-                                    scheduleNodePopoverClose(for: node.id)
-                                }
-                            }
-                            .popover(
-                                isPresented: Binding(
-                                    get: { hoveredNodeInfoId == node.id || hoveredNodePopoverId == node.id },
-                                    set: { showing in
-                                        if !showing, hoveredNodeInfoId == node.id {
-                                            hoveredNodeInfoId = nil
-                                        }
-                                    }
-                                ),
-                                arrowEdge: .trailing
-                            ) {
-                                nodeInfoPopover(node: node)
-                                    .frame(width: 420)
-                                    .padding(10)
-                                    .onHover { hovering in
-                                        if hovering {
-                                            pendingNodePopoverClose?.cancel()
-                                            hoveredNodePopoverId = node.id
-                                        } else {
-                                            hoveredNodePopoverId = nil
-                                            scheduleNodePopoverClose(for: node.id)
-                                        }
-                                    }
-                            }
-                    }
-                    .contextMenu {
-                        if !node.isLocal {
-                            Button(role: .destructive) {
-                                serverNodeRepository.deleteNode(id: node.id)
-                                if activeServerNodeId == node.id {
-                                    activeServerNodeId = ServerNode.local.id
-                                }
+        VStack(spacing: 0) {
+            List(selection: detailState.selectedItemOptionalBinding) {
+                Section(header: Text("sidebar.nodes.title".localized())) {
+                    ForEach(filteredNodes) { node in
+                        HStack(spacing: 6) {
+                            Button {
+                                activeServerNodeId = node.id
                             } label: {
-                                Label("node.delete".localized(), systemImage: "trash")
+                                HStack(spacing: 6) {
+                                    Image(systemName: node.isLocal ? "desktopcomputer" : "network")
+                                    Text(node.name)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 4)
+                                    if activeServerNodeId == node.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.accentColor)
+                                            .transition(.opacity.combined(with: .scale))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 2)
+                                .padding(.horizontal, 2)
+                                .contentShape(Rectangle())
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(activeServerNodeId == node.id ? Color.accentColor.opacity(0.14) : Color.clear)
+                                )
+                                .animation(.easeInOut(duration: 0.15), value: activeServerNodeId)
+                            }
+                            .buttonStyle(.plain)
+
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.secondary)
+                                .onHover { hovering in
+                                    if hovering {
+                                        pendingNodePopoverClose?.cancel()
+                                        hoveredNodeInfoId = node.id
+                                    } else {
+                                        scheduleNodePopoverClose(for: node.id)
+                                    }
+                                }
+                                .popover(
+                                    isPresented: Binding(
+                                        get: { hoveredNodeInfoId == node.id || hoveredNodePopoverId == node.id },
+                                        set: { showing in
+                                            if !showing, hoveredNodeInfoId == node.id {
+                                                hoveredNodeInfoId = nil
+                                            }
+                                        }
+                                    ),
+                                    arrowEdge: .trailing
+                                ) {
+                                    nodeInfoPopover(node: node)
+                                        .frame(width: 420)
+                                        .padding(10)
+                                        .onHover { hovering in
+                                            if hovering {
+                                                pendingNodePopoverClose?.cancel()
+                                                hoveredNodePopoverId = node.id
+                                            } else {
+                                                hoveredNodePopoverId = nil
+                                                scheduleNodePopoverClose(for: node.id)
+                                            }
+                                        }
+                                }
+                        }
+                        .contextMenu {
+                            if !node.isLocal {
+                                Button(role: .destructive) {
+                                    serverNodeRepository.deleteNode(id: node.id)
+                                    if activeServerNodeId == node.id {
+                                        activeServerNodeId = ServerNode.local.id
+                                    }
+                                } label: {
+                                    Label("node.delete".localized(), systemImage: "trash")
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // 资源部分
-            Section(header: Text("sidebar.resources.title".localized())) {
-                ForEach([ResourceType.mod, ResourceType.plugin], id: \.self) { type in
-                    NavigationLink(value: SidebarItem.resource(type)) {
-                        HStack(spacing: 6) {
-                            Label(type.localizedName, systemImage: type.systemImage)
-                        }
-                    }
-                }
-            }
-
-            Section(header: Text("\("sidebar.servers.title".localized()) (\(filteredServers.count))")) {
-                ForEach(filteredServers) { server in
-                    NavigationLink(value: SidebarItem.server(server.id)) {
-                        HStack(spacing: 6) {
-                            if let iconURL = server.iconFileURL,
-                               let iconImage = NSImage(contentsOf: iconURL) {
-                                Image(nsImage: iconImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 16, height: 16)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                            } else {
-                                Image(systemName: server.resolvedIconName)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 16, height: 16)
-                                    .foregroundStyle(.secondary)
+                // 资源部分
+                Section(header: Text("sidebar.resources.title".localized())) {
+                    ForEach([ResourceType.mod, ResourceType.plugin], id: \.self) { type in
+                        NavigationLink(value: SidebarItem.resource(type)) {
+                            HStack(spacing: 6) {
+                                Label(type.localizedName, systemImage: type.systemImage)
                             }
-                            Text(server.name)
-                                .lineLimit(1)
-                            Spacer()
-                        }
-                    }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            serverActionManager.deleteServer(
-                                server: server,
-                                serverRepository: serverRepository,
-                                serverNodeRepository: serverNodeRepository,
-                                selectedItem: detailState.selectedItemBinding
-                            )
-                        } label: {
-                            Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
                         }
                     }
                 }
-                if filteredServers.isEmpty {
-                    Text("node.no_servers".localized())
-                        .foregroundColor(.secondary)
-                }
-            }
 
-            if !filteredCorruptedServers.isEmpty {
-                Section(header: Text("sidebar.corrupted_servers.title".localized())) {
-                    ForEach(filteredCorruptedServers, id: \.self) { name in
-                        HStack(spacing: 6) {
-                            Label(name, systemImage: "exclamationmark.triangle")
+                Section(header: Text("\("sidebar.servers.title".localized()) (\(filteredServers.count))")) {
+                    ForEach(filteredServers) { server in
+                        NavigationLink(value: SidebarItem.server(server.id)) {
+                            HStack(spacing: 6) {
+                                if let iconURL = server.iconFileURL,
+                                   let iconImage = NSImage(contentsOf: iconURL) {
+                                    Image(nsImage: iconImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 16, height: 16)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                } else {
+                                    Image(systemName: server.resolvedIconName)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 16, height: 16)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(server.name)
+                                    .lineLimit(1)
+                                Spacer()
+                            }
                         }
                         .contextMenu {
                             Button(role: .destructive) {
-                                serverActionManager.deleteCorruptedServer(
-                                    name: name,
-                                    serverRepository: serverRepository
-                                )
+                                if generalSettings.confirmDeleteServer {
+                                    pendingDeleteServer = server
+                                } else {
+                                    serverActionManager.deleteServer(
+                                        server: server,
+                                        serverRepository: serverRepository,
+                                        serverNodeRepository: serverNodeRepository,
+                                        selectedItem: detailState.selectedItemBinding
+                                    )
+                                }
                             } label: {
                                 Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
                             }
                         }
                     }
+                    if filteredServers.isEmpty {
+                        Text("node.no_servers".localized())
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if !filteredCorruptedServers.isEmpty {
+                    Section(header: Text("sidebar.corrupted_servers.title".localized())) {
+                        ForEach(filteredCorruptedServers, id: \.self) { name in
+                            HStack(spacing: 6) {
+                                Label(name, systemImage: "exclamationmark.triangle")
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    if generalSettings.confirmDeleteServer {
+                                        pendingDeleteCorruptedServerName = name
+                                    } else {
+                                        serverActionManager.deleteCorruptedServer(
+                                            name: name,
+                                            serverRepository: serverRepository
+                                        )
+                                    }
+                                } label: {
+                                    Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            .searchable(text: $searchText, placement: .sidebar, prompt: Localized.Sidebar.Search.games)
+            .listStyle(.sidebar)
+
+            Rectangle()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(height: 1)
+                .opacity(isHoveringDownloadBar ? 1 : 0)
+                .animation(.easeInOut(duration: 0.12), value: isHoveringDownloadBar)
+
+            downloadBar
         }
-        .searchable(text: $searchText, placement: .sidebar, prompt: Localized.Sidebar.Search.games)
-        .listStyle(.sidebar)
         .onAppear {
             serverRepository.reloadServers()
             if serverNodeRepository.getNode(by: activeServerNodeId) == nil {
@@ -181,6 +205,105 @@ public struct SidebarView: View {
         .onChange(of: detailState.selectedItem) { _, newValue in
             if case .node(let nodeId) = newValue {
                 activeServerNodeId = nodeId
+            }
+        }
+        .confirmationDialog(
+            "sidebar.confirm.delete_server.title".localized(),
+            isPresented: Binding(
+                get: { pendingDeleteServer != nil },
+                set: { showing in
+                    if !showing { pendingDeleteServer = nil }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                guard let server = pendingDeleteServer else { return }
+                serverActionManager.deleteServer(
+                    server: server,
+                    serverRepository: serverRepository,
+                    serverNodeRepository: serverNodeRepository,
+                    selectedItem: detailState.selectedItemBinding
+                )
+                pendingDeleteServer = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingDeleteServer = nil
+            }
+        } message: {
+            Text(String(format: "sidebar.confirm.delete_server.message".localized(), pendingDeleteServer?.name ?? ""))
+        }
+        .confirmationDialog(
+            "sidebar.confirm.delete_corrupted_server.title".localized(),
+            isPresented: Binding(
+                get: { pendingDeleteCorruptedServerName != nil },
+                set: { showing in
+                    if !showing { pendingDeleteCorruptedServerName = nil }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                guard let name = pendingDeleteCorruptedServerName else { return }
+                serverActionManager.deleteCorruptedServer(name: name, serverRepository: serverRepository)
+                pendingDeleteCorruptedServerName = nil
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingDeleteCorruptedServerName = nil
+            }
+        } message: {
+            Text(String(format: "sidebar.confirm.delete_corrupted_server.message".localized(), pendingDeleteCorruptedServerName ?? ""))
+        }
+    }
+
+    private var downloadBar: some View {
+        let progress = downloadCenter.averageProgress
+        let resolvedProgress = min(max(progress ?? 0, 0), 1)
+        let activeCount = downloadCenter.activeTasks.count
+        return Button {
+            showDownloadTip.toggle()
+        } label: {
+            HStack(spacing: 10) {
+                progressRing(value: resolvedProgress, badgeCount: activeCount)
+                Text("\(Int(resolvedProgress * 100))%")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHoveringDownloadBar = hovering
+        }
+        .popover(isPresented: $showDownloadTip, arrowEdge: .bottom) {
+            DownloadCenterTipView()
+        }
+    }
+
+    private func progressRing(value: Double, badgeCount: Int) -> some View {
+        let clampedValue = min(max(value, 0), 1)
+        return ZStack {
+            Circle()
+                .stroke(Color.secondary.opacity(0.35), lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: clampedValue)
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 18, height: 18)
+        .overlay(alignment: .topTrailing) {
+            if badgeCount > 0 {
+                Text("\(badgeCount)")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.accentColor))
+                    .offset(x: 6, y: -6)
             }
         }
     }
@@ -214,13 +337,13 @@ public struct SidebarView: View {
                 .lineLimit(2)
             Spacer(minLength: 0)
             if canCopy {
-                Button("复制") {
+                Button("sidebar.node.copy".localized()) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(value, forType: .string)
                 }
                 .buttonStyle(.plain)
             } else if canOpen {
-                Button("打开") {
+                Button("sidebar.node.open".localized()) {
                     guard FileManager.default.fileExists(atPath: value) else { return }
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: value)])
                 }
