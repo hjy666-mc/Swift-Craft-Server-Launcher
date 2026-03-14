@@ -255,6 +255,10 @@ jobs:
             echo "❌ Missing secret: SPARKLE_PRIVATE_KEY"
             exit 1
           fi
+          if [[ ${#SPARKLE_PRIVATE_KEY} -lt 80 ]]; then
+            echo "❌ SPARKLE_PRIVATE_KEY looks too short (expected private key)."
+            exit 1
+          fi
 
       - name: Fetch tags
         run: git fetch --force --tags
@@ -392,13 +396,13 @@ jobs:
             DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
           fi
 
-          echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
             --ed-key-file - \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
             output/archives/arm64
 
-          echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
             --ed-key-file - \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
@@ -411,6 +415,11 @@ jobs:
           for APPCAST in output/appcast-arm64.xml output/appcast-x86_64.xml; do
             if ! grep -Fq "<enclosure url=\"${EXPECTED_PREFIX}" "$APPCAST"; then
               echo "❌ Invalid enclosure URL in ${APPCAST}. Expected prefix: ${EXPECTED_PREFIX}"
+              grep -n "<enclosure url=" "$APPCAST" || true
+              exit 1
+            fi
+            if ! grep -Fq "sparkle:edSignature=" "$APPCAST"; then
+              echo "❌ Missing sparkle:edSignature in ${APPCAST}."
               grep -n "<enclosure url=" "$APPCAST" || true
               exit 1
             fi
