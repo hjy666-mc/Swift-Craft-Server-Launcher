@@ -3,10 +3,10 @@
     <channel>
         <title>SwiftCraftServerLauncher</title>
         <item>
-            <title>0.0.4</title>
-            <pubDate>Sat, 14 Mar 2026 13:53:27 +0000</pubDate>
-            <sparkle:version>4</sparkle:version>
-            <sparkle:shortVersionString>0.0.4</sparkle:shortVersionString>
+            <title>0.0.3</title>
+            <pubDate>Sat, 14 Mar 2026 14:53:25 +0000</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.0.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <sparkle:releaseNotesLink>https://hjy666-mc.github.io/Swift-Craft-Server-Launcher/release-notes/SwiftCraftServerLauncher-arm64.md</sparkle:releaseNotesLink>
