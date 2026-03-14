@@ -147,15 +147,15 @@ struct ServerPlayersView: View {
                     Divider()
                     Button {
                         toggleExpand(sectionKey: sectionKey)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(
-                                    isExpanded
-                                        ? "server.players.collapse".localized()
-                                        : String(format: "server.players.more_count".localized(), entries.count - collapsedPreviewCount)
-                                )
-                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(
+                                isExpanded
+                                    ? "server.players.collapse".localized()
+                                    : String(format: "server.players.more_count".localized(), entries.count - collapsedPreviewCount)
+                            )
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     }
