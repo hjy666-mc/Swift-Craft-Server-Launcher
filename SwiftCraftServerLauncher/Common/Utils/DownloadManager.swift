@@ -103,6 +103,21 @@ enum DownloadManager {
     private static var activeDelegates: [UUID: DownloadProgressDelegate] = [:]
     private static let activeSessionsLock = NSLock()
 
+    private static func persistTemporaryFile(_ url: URL) throws -> URL {
+        let fileManager = FileManager.default
+        let ext = url.pathExtension
+        let fileName = "scsl-download-\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)")
+        let destination = fileManager.temporaryDirectory.appendingPathComponent(fileName)
+
+        do {
+            try fileManager.moveItem(at: url, to: destination)
+            return destination
+        } catch {
+            try fileManager.copyItem(at: url, to: destination)
+            return destination
+        }
+    }
+
     private static func trackingInfo(for destinationURL: URL) -> TrackingInfo? {
         let path = destinationURL.path.lowercased()
         let fileName = destinationURL.lastPathComponent
@@ -255,7 +270,7 @@ enum DownloadManager {
 
         do {
             let request = URLRequest(url: finalURL)
-            let (tempFileURL, response) = try await downloadWithProgress(
+            let (tempFileURL, response) = try await downloadWithProgressOrFallback(
                 request: request,
                 trackingId: trackingId
             )
@@ -401,12 +416,20 @@ enum DownloadManager {
                     request.setValue(value, forHTTPHeaderField: key)
                 }
             }
-            let (tempFileURL, response) = try await downloadWithProgress(
+            let (tempFileURL, response) = try await downloadWithProgressOrFallback(
                 request: request,
                 trackingId: trackingId
             )
             defer {
                 try? fileManager.removeItem(at: tempFileURL)
+            }
+
+            if !fileManager.fileExists(atPath: tempFileURL.path) {
+                throw GlobalError.download(
+                    chineseMessage: "下载临时文件不存在",
+                    i18nKey: "error.download.temp_file_missing",
+                    level: .notification
+                )
             }
 
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -462,9 +485,15 @@ enum DownloadManager {
                     i18nKey: "error.download.network_request_failed",
                     level: .notification
                 )
+            } else if let fileError = error as? CocoaError {
+                throw GlobalError.fileSystem(
+                    chineseMessage: "文件操作失败: \(fileError.localizedDescription)",
+                    i18nKey: "error.filesystem.operation_failed",
+                    level: .notification
+                )
             } else {
                 throw GlobalError.download(
-                    chineseMessage: "下载失败",
+                    chineseMessage: "下载失败: \(error.localizedDescription)",
                     i18nKey: "error.download.general_failure",
                     level: .notification
                 )
@@ -476,6 +505,7 @@ enum DownloadManager {
         private let progressHandler: (Int64, Int64) -> Void
         private let completion: (Result<(URL, URLResponse), Error>) -> Void
         private var tempFileURL: URL?
+        private var tempFileError: Error?
         private var didComplete = false
 
         init(
@@ -541,6 +571,29 @@ enum DownloadManager {
         }
     }
 
+    private static func downloadWithProgressOrFallback(
+        request: URLRequest,
+        trackingId: UUID?
+    ) async throws -> (URL, URLResponse) {
+        do {
+            return try await downloadWithProgress(request: request, trackingId: trackingId)
+        } catch {
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                throw error
+            }
+            let wasCancelled = await MainActor.run {
+                guard let trackingId else { return false }
+                return DownloadCenter.shared.wasCancelled(id: trackingId)
+            }
+            if wasCancelled {
+                throw URLError(.cancelled)
+            }
+            let (tempFileURL, response) = try await URLSession.shared.download(for: request)
+            let persistedURL = try persistTemporaryFile(tempFileURL)
+            return (persistedURL, response)
+        }
+    }
+
     /// 计算文件的 SHA1 哈希值
     /// - Parameter url: 文件路径
     /// - Returns: SHA1 哈希字符串
@@ -556,7 +609,12 @@ extension DownloadManager.DownloadProgressDelegate: URLSessionDownloadDelegate, 
         downloadTask _: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        tempFileURL = location
+        do {
+            tempFileURL = try DownloadManager.persistTemporaryFile(location)
+        } catch {
+            tempFileError = error
+            tempFileURL = location
+        }
     }
 
     func urlSession(
@@ -578,6 +636,10 @@ extension DownloadManager.DownloadProgressDelegate: URLSessionDownloadDelegate, 
         didComplete = true
         if let error {
             completion(.failure(error))
+            return
+        }
+        if let tempFileError {
+            completion(.failure(tempFileError))
             return
         }
         guard let tempFileURL, let response = task.response else {

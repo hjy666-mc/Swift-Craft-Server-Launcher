@@ -3,6 +3,7 @@ import SwiftUI
 public struct ContentToolbarView: ToolbarContent {
     @State private var showingServerForm = false
     @State private var showingAddNodeForm = false
+    @StateObject private var downloadCenter = DownloadCenter.shared
     @EnvironmentObject var gameRepository: GameRepository
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
@@ -45,6 +46,19 @@ public struct ContentToolbarView: ToolbarContent {
                     .environmentObject(serverNodeRepository)
                     .presentationBackgroundInteraction(.automatic)
             }
+
+            Button {
+                WindowManager.shared.openWindow(id: .downloadCenter)
+            } label: {
+                DownloadProgressIndicatorView(
+                    progress: downloadCenter.hasActiveTasks ? downloadCenter.averageProgress : 0
+                )
+                .opacity(downloadCenter.hasActiveTasks ? 1 : 0.4)
+                .frame(minWidth: 72, alignment: .trailing)
+            }
+            .buttonStyle(.plain)
+            .disabled(!downloadCenter.hasActiveTasks)
+            .help("下载中心")
         }
     }
 }
