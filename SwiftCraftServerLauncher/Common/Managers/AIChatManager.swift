@@ -551,10 +551,6 @@ class AIChatManager: ObservableObject {
 
     /// 打开聊天窗口
     func openChatWindow() {
-        let chatState = ChatState()
-        // 存储到 WindowDataStore
-        WindowDataStore.shared.aiChatState = chatState
-        // 打开窗口
-        WindowManager.shared.openWindow(id: .aiChat)
+        // 已移除独立聊天窗口
     }
 }

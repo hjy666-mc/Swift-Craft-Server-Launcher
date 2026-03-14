@@ -101,24 +101,6 @@ class GameLogCollector {
         playerListViewModel: PlayerListViewModel,
         gameRepository: GameRepository
     ) async {
-        // 创建 ChatState
-        let chatState = ChatState()
-
-        // 准备附件
-        var attachments: [MessageAttachmentType] = []
-        for logFile in logFiles {
-            attachments.append(.file(logFile, logFile.lastPathComponent))
-        }
-
-        // 存储到 WindowDataStore
-        WindowDataStore.shared.aiChatState = chatState
-        // 打开窗口
-        WindowManager.shared.openWindow(id: .aiChat)
-
-        // 等待窗口打开后发送消息
-        try? await Task.sleep(nanoseconds: 100_000_000) // 等待 0.1 秒
-
-        // 发送消息和附件
-        await AIChatManager.shared.sendMessage("", attachments: attachments, chatState: chatState)
+        // 已移除独立聊天窗口
     }
 }

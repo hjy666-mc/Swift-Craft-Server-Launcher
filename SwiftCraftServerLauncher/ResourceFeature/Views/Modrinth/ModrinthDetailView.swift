@@ -147,10 +147,9 @@ struct ModrinthDetailView: View {
         }
         .searchable(
             text: $searchText,
-            placement: .toolbar,
+            placement: .automatic,
             prompt: "search.resources".localized()
         )
-
         .onChange(of: searchText) { oldValue, newValue in
             // 优化：仅在搜索文本实际变化时触发防抖搜索
             if oldValue != newValue {

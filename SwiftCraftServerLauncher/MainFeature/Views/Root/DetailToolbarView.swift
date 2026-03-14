@@ -87,8 +87,7 @@ public struct DetailToolbarView: ToolbarContent {
                     }
                     .help("resource.open_in_browser".localized())
                 } else {
-                    Label(DataSource.modrinth.localizedName, systemImage: "network")
-                        .labelStyle(.titleOnly)
+                    EmptyView()
                 }
             case .game:
                 EmptyView()

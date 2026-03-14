@@ -1,5 +1,5 @@
 //
-//  SwiftCraftServerLauncherApp.swift
+//  SwiftCraftLauncherApp.swift
 //  SwiftCraftServerLauncher
 //
 //  Created by su on 2025/5/30.
@@ -24,9 +24,9 @@
 //  This program includes additional terms for source attribution and name usage.
 //  See doc/ADDITIONAL_TERMS.md in the project root for details.
 
+import Combine
 import SwiftUI
 import UserNotifications
-import Combine
 
 @main
 struct SwiftCraftServerLauncherApp: App {
@@ -64,7 +64,6 @@ struct SwiftCraftServerLauncherApp: App {
 
     // MARK: - Body
     var body: some Scene {
-
         WindowGroup {
             MainView()
                 .environment(\.appLogger, Logger.shared)
@@ -80,6 +79,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
                 .windowOpener()
+                .titlebarSeparatorOnHover()
                 .onAppear {
                     appIdleManager.startMonitoring()
                     BackupService.shared.startAutoBackupScheduler()
@@ -112,8 +112,8 @@ struct SwiftCraftServerLauncherApp: App {
                     }
                 }
             }
-            CommandGroup(replacing: .newItem) { }
-            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .saveItem) {}
         }
 
         Settings {
@@ -126,5 +126,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }
+
+        appWindowGroups()
     }
 }
