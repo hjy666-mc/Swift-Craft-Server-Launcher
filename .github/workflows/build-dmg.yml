@@ -324,7 +324,7 @@ jobs:
           fi
 
           # Always bind appcast enclosure URLs to the concrete release tag.
-          DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}"
+          DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
 
           RELEASE_NOTES_URL_PREFIX="https://${REPOSITORY_OWNER}.github.io/${REPO_NAME}/release-notes/${TAG}"
 
@@ -388,6 +388,10 @@ jobs:
           cp "output/changelog/${TAG}.md" "output/archives/arm64/${ARM_DMG_NAME%.dmg}.md"
           cp "output/changelog/${TAG}.md" "output/archives/x86_64/${X86_DMG_NAME%.dmg}.md"
 
+          if [[ "$DOWNLOAD_URL_PREFIX" != *"/${TAG}/" ]]; then
+            DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
+          fi
+
           echo "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
             --ed-key-file - \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
@@ -403,7 +407,7 @@ jobs:
           mv output/archives/arm64/appcast.xml output/appcast-arm64.xml
           mv output/archives/x86_64/appcast.xml output/appcast-x86_64.xml
 
-          EXPECTED_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
+          EXPECTED_PREFIX="${DOWNLOAD_URL_PREFIX}"
           for APPCAST in output/appcast-arm64.xml output/appcast-x86_64.xml; do
             if ! grep -Fq "<enclosure url=\"${EXPECTED_PREFIX}" "$APPCAST"; then
               echo "❌ Invalid enclosure URL in ${APPCAST}. Expected prefix: ${EXPECTED_PREFIX}"
