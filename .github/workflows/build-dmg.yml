@@ -291,6 +291,11 @@ jobs:
           echo "arm_dmg=$ARM_DMG" >> "$GITHUB_OUTPUT"
           echo "x86_dmg=$X86_DMG" >> "$GITHUB_OUTPUT"
 
+      - name: Create Sparkle private key file
+        run: |
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > ed25519_priv.pem
+          chmod 600 ed25519_priv.pem
+
       - name: Install Sparkle generate_appcast tool
         id: sparkle_tool
         run: |
@@ -335,6 +340,62 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "download_url_prefix=$DOWNLOAD_URL_PREFIX" >> "$GITHUB_OUTPUT"
           echo "release_notes_url_prefix=$RELEASE_NOTES_URL_PREFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Validate DMG Info.plist (version + Sparkle key)
+        env:
+          TAG: ${{ steps.release_meta.outputs.tag }}
+          EXPECTED_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          ARM_DMG: ${{ steps.dmgs.outputs.arm_dmg }}
+          X86_DMG: ${{ steps.dmgs.outputs.x86_dmg }}
+        run: |
+          if [[ -z "$EXPECTED_PUBLIC_KEY" ]]; then
+            echo "❌ Missing secret: SPARKLE_PUBLIC_KEY"
+            exit 1
+          fi
+
+          validate_dmg() {
+            local dmg_path="$1"
+            local mount_dir
+            mount_dir="$(mktemp -d)"
+            hdiutil attach -nobrowse -quiet "$dmg_path" -mountpoint "$mount_dir"
+            local app_path
+            app_path="$(find "$mount_dir" -maxdepth 2 -type d -name "*.app" | head -n 1)"
+            if [[ -z "$app_path" ]]; then
+              hdiutil detach -quiet "$mount_dir" || true
+              echo "❌ 未在 DMG 中找到 .app: $dmg_path"
+              exit 1
+            fi
+
+            local plist_path="$app_path/Contents/Info.plist"
+            local short_version
+            local build_version
+            local public_key
+            short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist_path" 2>/dev/null || true)"
+            build_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist_path" 2>/dev/null || true)"
+            public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$plist_path" 2>/dev/null || true)"
+
+            echo "DMG: $(basename "$dmg_path")"
+            echo "  CFBundleShortVersionString: $short_version"
+            echo "  CFBundleVersion: $build_version"
+            echo "  SUPublicEDKey: $public_key"
+
+            if [[ "$short_version" != "$TAG" ]]; then
+              hdiutil detach -quiet "$mount_dir" || true
+              echo "❌ CFBundleShortVersionString 与 TAG 不一致: $short_version != $TAG"
+              exit 1
+            fi
+
+            if [[ "$public_key" != "$EXPECTED_PUBLIC_KEY" ]]; then
+              hdiutil detach -quiet "$mount_dir" || true
+              echo "❌ SUPublicEDKey 与期望不一致"
+              exit 1
+            fi
+
+            hdiutil detach -quiet "$mount_dir" || true
+          }
+
+          validate_dmg "$ARM_DMG"
+          validate_dmg "$X86_DMG"
 
       - name: Generate changelog from feat/fix commits
         env:
@@ -396,14 +457,14 @@ jobs:
             DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
           fi
 
-          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
-            --ed-key-file - \
+          "$GENERATE_APPCAST_BIN" \
+            --ed-key-file ed25519_priv.pem \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
             output/archives/arm64
 
-          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$GENERATE_APPCAST_BIN" \
-            --ed-key-file - \
+          "$GENERATE_APPCAST_BIN" \
+            --ed-key-file ed25519_priv.pem \
             --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
             --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
             output/archives/x86_64
