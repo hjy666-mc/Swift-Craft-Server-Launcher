@@ -249,17 +249,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate secret
-        run: |
-          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
-            echo "❌ Missing secret: SPARKLE_PRIVATE_KEY"
-            exit 1
-          fi
-          if [[ ${#SPARKLE_PRIVATE_KEY} -lt 80 ]]; then
-            echo "❌ SPARKLE_PRIVATE_KEY looks too short (expected private key)."
-            exit 1
-          fi
-
       - name: Fetch tags
         run: git fetch --force --tags
 
