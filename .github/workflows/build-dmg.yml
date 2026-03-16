@@ -87,6 +87,29 @@ jobs:
 
           echo "✅ HelpBook 配置已添加到生成的 Info.plist"
 
+      - name: Add Sparkle public key to generated Info.plist
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+        run: |
+          ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
+          INFO_PLIST_PATH="$APP_PATH/Contents/Info.plist"
+
+          if [[ -z "$SPARKLE_PUBLIC_KEY" ]]; then
+            echo "❌ Missing repo variable: SPARKLE_PUBLIC_KEY"
+            exit 1
+          fi
+          if [[ ! -f "$INFO_PLIST_PATH" ]]; then
+            echo "❌ 未找到生成的 Info.plist: $INFO_PLIST_PATH"
+            exit 1
+          fi
+
+          echo "📝 向生成的 Info.plist 添加 Sparkle 公钥..."
+          /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH"
+
+          echo "✅ Sparkle 公钥已添加到生成的 Info.plist"
+
       - name: Verify build output
         run: |
           ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
@@ -284,6 +307,10 @@ jobs:
         run: |
           printf '%s' "$SPARKLE_PRIVATE_KEY" > ed25519_priv.pem
           chmod 600 ed25519_priv.pem
+          if [[ $(wc -c < ed25519_priv.pem) -lt 40 ]]; then
+            echo "❌ ed25519_priv.pem looks too short (expected private key)."
+            exit 1
+          fi
 
       - name: Install Sparkle generate_appcast tool
         id: sparkle_tool
@@ -338,7 +365,7 @@ jobs:
           X86_DMG: ${{ steps.dmgs.outputs.x86_dmg }}
         run: |
           if [[ -z "$EXPECTED_PUBLIC_KEY" ]]; then
-            echo "❌ Missing secret: SPARKLE_PUBLIC_KEY"
+            echo "❌ Missing repo variable: SPARKLE_PUBLIC_KEY"
             exit 1
           fi
 
