@@ -3,13 +3,13 @@
     <channel>
         <title>SwiftCraftServerLauncher</title>
         <item>
-            <title>0.0.3</title>
-            <pubDate>Sun, 15 Mar 2026 04:49:47 +0000</pubDate>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>0.0.3</sparkle:shortVersionString>
+            <title>0.0.6</title>
+            <pubDate>Mon, 16 Mar 2026 14:55:54 +0000</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.0.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14</sparkle:minimumSystemVersion>
             <sparkle:releaseNotesLink>https://hjy666-mc.github.io/Swift-Craft-Server-Launcher/release-notes/SwiftCraftServerLauncher-x86_64.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/download/0.0.4/SwiftCraftServerLauncher-x86_64.dmg" length="4943320" type="application/octet-stream"/>
+            <enclosure url="https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/download/0.0.6/SwiftCraftServerLauncher-x86_64.dmg" length="4943473" type="application/octet-stream" sparkle:edSignature="22Qj+JYrAOUXitLQGXbjj/vAJY32IjfNO1TH4hvgAJW+8n1m8U4tNbWioCfxzscDAT2RdetPFLdsZwiR7dROCA=="/>
         </item>
     </channel>
 </rss>
