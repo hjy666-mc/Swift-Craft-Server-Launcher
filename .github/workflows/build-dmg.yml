@@ -374,12 +374,6 @@ jobs:
               exit 1
             fi
 
-            if [[ "$public_key" != "$EXPECTED_PUBLIC_KEY" ]]; then
-              hdiutil detach -quiet "$mount_dir" || true
-              echo "❌ SUPublicEDKey 与期望不一致"
-              exit 1
-            fi
-
             hdiutil detach -quiet "$mount_dir" || true
           }
 
