@@ -375,7 +375,7 @@ struct CommandPaletteView: View {
 
     private func shortcutBadges(for node: CommandPaletteNode?) -> some View {
         HStack(spacing: 6) {
-            if let node, !node.children.isEmpty, (node.settingsTab != nil || node.action != nil || node.id == "settings") {
+            if let node, !node.children.isEmpty, node.settingsTab != nil || node.action != nil || node.id == "settings" {
                 shortcutBadge(text: "↩ 打开")
                 shortcutBadge(text: "→ 展开")
             } else if let node, !node.children.isEmpty {
