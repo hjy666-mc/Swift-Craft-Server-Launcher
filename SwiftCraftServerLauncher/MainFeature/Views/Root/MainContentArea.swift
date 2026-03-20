@@ -1,11 +1,3 @@
-//
-//  MainContentArea.swift
-//  SwiftCraftServerLauncher
-//
-//  承载 filterState/detailState，将二者从 MainView 根节点下沉至此，
-//  减少 filterState（搜索、筛选等）变化时对 MainView 的触发重建。
-//
-
 import SwiftUI
 
 /// 主内容区域：持有 filterState、detailState，渲染 NavigationSplitView
@@ -17,6 +9,7 @@ struct MainContentArea: View {
     @StateObject private var filterState = ResourceFilterState()
     @StateObject private var detailState = ResourceDetailState()
     @EnvironmentObject var serverRepository: ServerRepository
+    @EnvironmentObject private var commandPalette: CommandPaletteController
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -48,10 +41,9 @@ struct MainContentArea: View {
             if case .game = detailState.selectedItem {
                 detailState.selectedItem = .resource(.mod)
             }
-            if case .resource(let type) = detailState.selectedItem,
-               type != .mod && type != .plugin {
-                detailState.selectedItem = .resource(.mod)
-            }
+        }
+        .sheet(isPresented: $commandPalette.isPresented) {
+            CommandPaletteView(nodes: commandPaletteNodes)
         }
     }
 
@@ -150,5 +142,219 @@ struct MainContentArea: View {
             detailState.loadedProjectDetail = nil
             detailState.selectedProjectId = nil
         }
+    }
+
+    private func openResource(
+        type: ResourceType,
+        applySearch: Bool
+    ) {
+        detailState.selectedItem = .resource(type)
+        detailState.gameResourcesType = type.rawValue
+        resetToResourceDefaults()
+        if applySearch {
+            filterState.searchText = commandPalette.query
+        }
+    }
+
+    private var commandPaletteNodes: [CommandPaletteNode] {
+        var nodes: [CommandPaletteNode] = []
+
+        let settingsChildren: [CommandPaletteNode] = [
+            CommandPaletteNode(
+                id: "settings.basic",
+                title: "settings.general.basic.tab".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "gearshape",
+                settingsTab: .generalBasic
+            ),
+            CommandPaletteNode(
+                id: "settings.update",
+                title: "settings.general.update.tab".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "arrow.triangle.2.circlepath",
+                settingsTab: .generalUpdate
+            ),
+            CommandPaletteNode(
+                id: "settings.safety",
+                title: "settings.general.confirmation.tab".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "checkmark.shield",
+                settingsTab: .generalSafety
+            ),
+            CommandPaletteNode(
+                id: "settings.backup",
+                title: "settings.general.backup.tab".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "archivebox",
+                settingsTab: .generalBackup
+            ),
+            CommandPaletteNode(
+                id: "settings.appearance",
+                title: "settings.appearance.tab".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "paintpalette",
+                settingsTab: .appearance
+            ),
+        ]
+
+        nodes.append(
+            CommandPaletteNode(
+                id: "settings",
+                title: "command.palette.action.settings".localized(),
+                subtitle: "command.palette.section.settings".localized(),
+                systemImage: "gearshape",
+                children: settingsChildren
+            )
+        )
+
+        nodes.append(
+            CommandPaletteNode(
+                id: "downloadCenter",
+                title: "command.palette.action.download_center".localized(),
+                subtitle: nil,
+                systemImage: "arrow.down.circle"
+            ) {
+                WindowManager.shared.openWindow(id: .downloadCenter)
+            }
+        )
+
+        let resourceTypes: [ResourceType] = [.mod, .plugin]
+        let resourceChildren: [CommandPaletteNode] = resourceTypes.map { type in
+            CommandPaletteNode(
+                id: "resource:\(type.rawValue)",
+                title: type.localizedName,
+                subtitle: "command.palette.section.resources".localized(),
+                systemImage: type.systemImage,
+                searchScope: .resourceType(type),
+                searchOnly: false,
+                resourceType: type
+            ) {
+                openResource(type: type, applySearch: !commandPalette.query.isEmpty)
+            }
+        }
+
+        let resourceSearchNodes: [CommandPaletteNode] = resourceTypes.map { type in
+            CommandPaletteNode(
+                id: "resource-search:\(type.rawValue)",
+                title: type.localizedName,
+                subtitle: nil,
+                systemImage: type.systemImage,
+                searchOnly: true,
+                resourceType: type
+            ) {
+                openResource(type: type, applySearch: true)
+            }
+        }
+
+        nodes.append(
+            CommandPaletteNode(
+                id: "resources",
+                title: "command.palette.section.resources".localized(),
+                subtitle: nil,
+                systemImage: "square.grid.2x2",
+                children: resourceChildren,
+                searchScope: .resources
+            )
+        )
+
+        nodes.append(contentsOf: resourceSearchNodes)
+
+        let serverChildren = serverRepository.servers.map { server in
+            let supportsMods = server.serverType == .fabric || server.serverType == .forge
+            let supportsPlugins = server.serverType == .paper
+            var detailChildren: [CommandPaletteNode] = [
+                CommandPaletteNode(
+                    id: "server:\(server.id):console",
+                    title: "server.console.title".localized(),
+                    subtitle: server.name,
+                    systemImage: "terminal"
+                ) {
+                    detailState.selectedItem = .server(server.id)
+                    handleResourceToServerTransition(serverId: server.id)
+                    detailState.serverPanelSection = "console"
+                },
+                CommandPaletteNode(
+                    id: "server:\(server.id):config",
+                    title: "server.launch.server_config".localized(),
+                    subtitle: server.name,
+                    systemImage: "slider.horizontal.3"
+                ) {
+                    detailState.selectedItem = .server(server.id)
+                    handleResourceToServerTransition(serverId: server.id)
+                    detailState.serverPanelSection = "serverConfig"
+                },
+                CommandPaletteNode(
+                    id: "server:\(server.id):players",
+                    title: "server.launch.players".localized(),
+                    subtitle: server.name,
+                    systemImage: "person.3"
+                ) {
+                    detailState.selectedItem = .server(server.id)
+                    handleResourceToServerTransition(serverId: server.id)
+                    detailState.serverPanelSection = "players"
+                },
+                CommandPaletteNode(
+                    id: "server:\(server.id):worlds",
+                    title: "server.launch.worlds".localized(),
+                    subtitle: server.name,
+                    systemImage: "globe.americas"
+                ) {
+                    detailState.selectedItem = .server(server.id)
+                    handleResourceToServerTransition(serverId: server.id)
+                    detailState.serverPanelSection = "worlds"
+                },
+            ]
+            if supportsMods {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):mods",
+                        title: "server.launch.mods".localized(),
+                        subtitle: server.name,
+                        systemImage: "puzzlepiece.extension"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "mods"
+                    }
+                )
+            }
+            if supportsPlugins {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):plugins",
+                        title: "server.launch.plugins".localized(),
+                        subtitle: server.name,
+                        systemImage: "powerplug"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "plugins"
+                    }
+                )
+            }
+
+            return CommandPaletteNode(
+                id: "server:\(server.id)",
+                title: server.name,
+                subtitle: "command.palette.section.servers".localized(),
+                systemImage: "server.rack",
+                children: detailChildren
+            ) {
+                detailState.selectedItem = .server(server.id)
+                handleResourceToServerTransition(serverId: server.id)
+            }
+        }
+
+        nodes.append(
+            CommandPaletteNode(
+                id: "servers",
+                title: "command.palette.section.servers".localized(),
+                subtitle: nil,
+                systemImage: "server.rack",
+                children: serverChildren
+            )
+        )
+
+        return nodes
     }
 }
