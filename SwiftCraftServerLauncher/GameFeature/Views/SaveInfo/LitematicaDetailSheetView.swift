@@ -1,10 +1,3 @@
-//
-//  LitematicaDetailSheetView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/20.
-//
-
 import SwiftUI
 
 /// Litematica 投影详细信息视图

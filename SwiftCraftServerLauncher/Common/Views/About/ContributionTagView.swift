@@ -1,9 +1,3 @@
-//
-//  ContributionTagView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// 贡献类型标签视图

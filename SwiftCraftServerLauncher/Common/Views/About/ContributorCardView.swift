@@ -1,9 +1,3 @@
-//
-//  ContributorCardView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// GitHub 贡献者卡片视图

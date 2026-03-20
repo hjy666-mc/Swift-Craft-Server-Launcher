@@ -1,10 +1,3 @@
-//
-//  ResourceFilterState.swift
-//  SwiftCraftServerLauncher
-//
-//  收拢资源筛选、分页、Tab、数据源、搜索与本地筛选等状态，通过 @EnvironmentObject 向下提供，减少 @Binding 透传。
-//
-
 import SwiftUI
 
 /// 资源筛选与列表相关状态（可观测）

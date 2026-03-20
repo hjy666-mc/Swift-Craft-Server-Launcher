@@ -1,9 +1,3 @@
-//
-//  AIChatComponents.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 import AppKit
 

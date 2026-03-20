@@ -1,9 +1,3 @@
-//  CategoryContent.swift
-//  Launcher
-//
-//  Created by su on 2025/5/8.
-//
-
 import SwiftUI
 
 // MARK: - CategoryContent

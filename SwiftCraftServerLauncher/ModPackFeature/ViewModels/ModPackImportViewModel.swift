@@ -1,9 +1,3 @@
-//
-//  ModPackImportViewModel.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 // MARK: - ModPack Import View Model

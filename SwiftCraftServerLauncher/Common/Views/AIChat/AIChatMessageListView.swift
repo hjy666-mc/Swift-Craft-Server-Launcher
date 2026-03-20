@@ -1,9 +1,3 @@
-//
-//  AIChatMessageListView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// AI 聊天消息列表视图

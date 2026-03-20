@@ -1,9 +1,3 @@
-//
-//  LauncherFileFilter.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// 启动器文件过滤器

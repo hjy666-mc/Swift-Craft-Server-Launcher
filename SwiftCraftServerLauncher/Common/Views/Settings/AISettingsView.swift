@@ -1,10 +1,3 @@
-//
-//  AISettingsView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by AI Assistant
-//
-
 import SwiftUI
 
 public struct AISettingsView: View {

@@ -1,10 +1,3 @@
-//
-//  WindowAccessor.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/9/19.
-//
-
 import SwiftUI
 import AppKit
 

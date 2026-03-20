@@ -1,10 +1,3 @@
-//
-//  ModrinthProjectTitleView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/8/3.
-//
-
 import SwiftUI
 
 struct ModrinthProjectTitleView: View {

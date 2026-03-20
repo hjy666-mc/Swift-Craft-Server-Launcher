@@ -1,9 +1,3 @@
-//
-//  OverflowButton.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by AI Assistant
-//
 import SwiftUI
 
 // MARK: - Overflow Button

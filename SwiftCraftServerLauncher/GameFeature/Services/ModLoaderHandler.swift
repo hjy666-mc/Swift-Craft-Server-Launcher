@@ -1,10 +1,3 @@
-//
-//  ModLoaderHandler.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/7/25.
-//
-
 protocol ModLoaderHandler {
     /// 设置指定版本的加载器（抛出异常版本）
     /// - Parameters:

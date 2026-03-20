@@ -1,10 +1,3 @@
-//
-//  ModPackExporter.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by Auto on 2025/01/XX.
-//
-
 import Foundation
 
 /// 整合包导出器

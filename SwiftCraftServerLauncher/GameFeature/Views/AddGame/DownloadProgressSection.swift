@@ -1,9 +1,3 @@
-//
-//  DownloadProgressSection.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 // MARK: - Download Progress Section

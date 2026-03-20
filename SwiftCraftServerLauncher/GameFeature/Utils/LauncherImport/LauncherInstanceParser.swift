@@ -1,9 +1,3 @@
-//
-//  LauncherInstanceParser.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// 启动器实例解析器协议
