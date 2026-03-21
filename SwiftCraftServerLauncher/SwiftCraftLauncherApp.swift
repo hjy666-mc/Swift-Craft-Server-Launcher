@@ -1,4 +1,5 @@
 import Combine
+import CoreSpotlight
 import SwiftUI
 import UserNotifications
 
@@ -64,6 +65,11 @@ struct SwiftCraftServerLauncherApp: App {
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     appIdleManager.handleScenePhase(newPhase)
+                }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                        SpotlightActionCenter.shared.send(identifier: identifier)
+                    }
                 }
         }
         .windowStyle(.titleBar)

@@ -74,15 +74,7 @@ struct CommandPaletteView: View {
 
     private var displayRows: [DisplayRow] {
         if isSearching {
-            return displayNodes.map { node in
-                DisplayRow(
-                    id: node.id,
-                    node: node,
-                    title: nil,
-                    indent: 0,
-                    isSelectable: true
-                )
-            }
+            return buildSearchRows()
         }
 
         var rows: [DisplayRow] = []
@@ -118,22 +110,38 @@ struct CommandPaletteView: View {
                 action: entry.node.action
             )
         }
-        let scopedResourceSearch = resourceSearchNodesForScope()
-        return mapped + scopedResourceSearch
+        return mapped + resourceSearchNodesForScope()
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            searchFieldView
+        ZStack {
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    commandPalette.dismiss()
+                }
 
-            if displayNodes.isEmpty {
-                emptyState
-            } else {
-                actionListView
+            VStack(spacing: 12) {
+                searchFieldView
+
+                if displayNodes.isEmpty {
+                    emptyState
+                } else {
+                    actionListView
+                }
             }
+            .padding(16)
+            .frame(width: 520, height: 420)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(NSColor.windowBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.black.opacity(0.12), lineWidth: 1)
+            )
+            .onTapGesture {}
         }
-        .padding(16)
-        .frame(width: 520, height: 420)
         .onAppear {
             isSearchFocused = true
             syncSelection()
@@ -309,6 +317,13 @@ struct CommandPaletteView: View {
                     .lineLimit(1)
             }
             Spacer()
+            Text("command.palette.action.show_more".localized())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.gray.opacity(0.18))
+                .clipShape(Capsule())
             if isSelected {
                 shortcutBadges(for: nil)
             }
@@ -511,6 +526,44 @@ struct CommandPaletteView: View {
         case .none:
             return allSearchNodes
         }
+    }
+
+    private func buildSearchRows() -> [DisplayRow] {
+        let regularNodes = searchResults.filter { !$0.searchOnly }
+        let resourceNodes = searchResults.filter { $0.searchOnly }
+
+        var rows: [DisplayRow] = regularNodes.map { node in
+            DisplayRow(
+                id: node.id,
+                node: node,
+                title: nil,
+                indent: 0,
+                isSelectable: true
+            )
+        }
+
+        if !resourceNodes.isEmpty {
+            rows.append(
+                DisplayRow(
+                    id: "search-section-resources",
+                    node: nil,
+                    title: "command.palette.section.resources".localized(),
+                    indent: 0,
+                    isSelectable: false
+                )
+            )
+            rows.append(contentsOf: resourceNodes.map { node in
+                DisplayRow(
+                    id: node.id,
+                    node: node,
+                    title: nil,
+                    indent: 0,
+                    isSelectable: true
+                )
+            })
+        }
+
+        return rows
     }
 
     private func buildTreeRows(nodes: [CommandPaletteNode], indent: CGFloat) -> [DisplayRow] {

@@ -8,7 +8,13 @@ struct MainContentArea: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @StateObject private var filterState = ResourceFilterState()
     @StateObject private var detailState = ResourceDetailState()
+    @State private var pendingSpotlightIdentifier: String?
+    @State private var spotlightRetryCount = 0
     @EnvironmentObject var serverRepository: ServerRepository
+    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @Environment(\.openSettings)
+    private var openSettings: OpenSettingsAction
+    @EnvironmentObject private var settingsNavigationManager: SettingsNavigationManager
     @EnvironmentObject private var commandPalette: CommandPaletteController
 
     var body: some View {
@@ -41,6 +47,20 @@ struct MainContentArea: View {
             if case .game = detailState.selectedItem {
                 detailState.selectedItem = .resource(.mod)
             }
+        }
+        .onAppear {
+            SpotlightIndexService.shared.ensureIndexedIfNeeded(nodes: commandPaletteNodes)
+            processPendingSpotlight()
+        }
+        .onChange(of: serverRepository.servers) { _, _ in
+            SpotlightIndexService.shared.scheduleIndex(nodes: commandPaletteNodes)
+            processPendingSpotlight()
+        }
+        .onReceive(SpotlightActionCenter.shared.publisher) { identifier in
+            pendingSpotlightIdentifier = identifier
+            spotlightRetryCount = 0
+            processPendingSpotlight()
+            serverRepository.reloadServers()
         }
         .sheet(isPresented: $commandPalette.isPresented) {
             CommandPaletteView(nodes: commandPaletteNodes)
@@ -356,5 +376,51 @@ struct MainContentArea: View {
         )
 
         return nodes
+    }
+
+    @discardableResult
+    private func handleSpotlightIdentifier(_ identifier: String) -> Bool {
+        let id = SpotlightIndexService.shared.stripIdentifierPrefix(identifier)
+        let flattened = flattenNodes(commandPaletteNodes)
+        guard let node = flattened.first(where: { $0.id == id }) else { return false }
+
+        if node.id == "settings" {
+            openSettings()
+            settingsNavigationManager.selectedTab = .generalBasic
+            return true
+        }
+
+        if let tab = node.settingsTab {
+            openSettings()
+            settingsNavigationManager.selectedTab = tab
+            return true
+        }
+
+        node.action?()
+        return true
+    }
+
+    private func processPendingSpotlight() {
+        guard let pending = pendingSpotlightIdentifier else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if handleSpotlightIdentifier(pending) {
+                pendingSpotlightIdentifier = nil
+                spotlightRetryCount = 0
+            } else if spotlightRetryCount < 4 {
+                spotlightRetryCount += 1
+                processPendingSpotlight()
+            }
+        }
+    }
+
+    private func flattenNodes(_ nodes: [CommandPaletteNode]) -> [CommandPaletteNode] {
+        var results: [CommandPaletteNode] = []
+        for node in nodes {
+            results.append(node)
+            if !node.children.isEmpty {
+                results.append(contentsOf: flattenNodes(node.children))
+            }
+        }
+        return results
     }
 }
