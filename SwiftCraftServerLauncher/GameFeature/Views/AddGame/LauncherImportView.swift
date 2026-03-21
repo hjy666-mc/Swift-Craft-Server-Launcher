@@ -1,9 +1,3 @@
-//
-//  LauncherImportView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 

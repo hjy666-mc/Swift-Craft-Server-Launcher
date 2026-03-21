@@ -1,9 +1,3 @@
-//
-//  AIChatAttachmentManager.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 

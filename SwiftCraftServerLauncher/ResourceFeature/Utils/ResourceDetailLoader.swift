@@ -1,10 +1,3 @@
-//
-//  ResourceDetailLoader.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/28.
-//
-
 import Foundation
 
 /// 资源详情加载器

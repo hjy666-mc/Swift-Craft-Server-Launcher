@@ -1,10 +1,3 @@
-//
-//  DetailView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/1.
-//
-
 import SwiftUI
 import AppKit
 

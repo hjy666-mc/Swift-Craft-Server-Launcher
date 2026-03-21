@@ -1,10 +1,3 @@
-//
-//  ModPackDependencyInstaller.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/8/3.
-//
-
 import Foundation
 
 /// 整合包依赖安装服务

@@ -1,8 +1,3 @@
-//
-//  Localized.swift
-//  SwiftCraftServerLauncher
-//
-
 enum Localized {
   enum Sidebar {
     enum Search {

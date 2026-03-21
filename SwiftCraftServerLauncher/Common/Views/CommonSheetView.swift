@@ -1,10 +1,3 @@
-//
-//  CommonSheetView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/1.
-//
-
 import SwiftUI
 
 /// 通用Sheet视图组件

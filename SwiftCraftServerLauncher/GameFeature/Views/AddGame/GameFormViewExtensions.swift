@@ -1,9 +1,3 @@
-//
-//  GameFormViewExtensions.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 // MARK: - Game Form View Extensions

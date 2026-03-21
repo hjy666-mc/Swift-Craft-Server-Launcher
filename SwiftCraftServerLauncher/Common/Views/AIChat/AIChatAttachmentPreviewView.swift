@@ -1,9 +1,3 @@
-//
-//  AIChatAttachmentPreviewView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// AI 聊天附件预览区域视图

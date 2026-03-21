@@ -1,10 +1,3 @@
-//
-//  AppLogging.swift
-//  SwiftCraftServerLauncher
-//
-//  日志协议与 Environment 注入，便于测试与替换实现。
-//
-
 import Foundation
 import SwiftUI
 

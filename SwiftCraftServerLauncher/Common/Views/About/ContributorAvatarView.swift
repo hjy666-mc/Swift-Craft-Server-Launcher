@@ -1,9 +1,3 @@
-//
-//  ContributorAvatarView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 import Foundation
 

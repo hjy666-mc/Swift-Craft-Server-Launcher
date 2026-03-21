@@ -1,10 +1,3 @@
-//
-//  ResourceEnableDisableManager.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/28.
-//
-
 import Foundation
 
 /// 资源启用/禁用状态管理器

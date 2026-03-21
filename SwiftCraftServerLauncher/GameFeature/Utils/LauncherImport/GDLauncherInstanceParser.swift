@@ -1,9 +1,3 @@
-//
-//  GDLauncherInstanceParser.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// GDLauncher 实例解析器

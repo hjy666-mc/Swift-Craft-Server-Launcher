@@ -13,12 +13,12 @@ enum SettingsTab: Int {
 /// 通用设置视图
 /// 应用设置
 public struct SettingsView: View {
-    @State private var selectedTab: SettingsTab = .generalBasic
+    @EnvironmentObject private var settingsNavigation: SettingsNavigationManager
 
     public init() {}
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $settingsNavigation.selectedTab) {
             GeneralSettingsView(sections: [.basic])
                 .tabItem {
                     Label("settings.general.basic.tab".localized(), systemImage: "gearshape")

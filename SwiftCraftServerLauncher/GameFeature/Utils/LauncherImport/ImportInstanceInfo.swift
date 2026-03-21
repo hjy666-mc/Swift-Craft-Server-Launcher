@@ -1,9 +1,3 @@
-//
-//  ImportInstanceInfo.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// 导入实例信息
