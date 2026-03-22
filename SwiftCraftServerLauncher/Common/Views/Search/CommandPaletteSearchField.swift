@@ -30,4 +30,30 @@ final class CommandPaletteSearchFieldView: NSSearchField {
     override func mouseDown(with event: NSEvent) {
         onActivate?()
     }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateMagnifierTint()
+    }
+
+    private func updateMagnifierTint() {
+        guard let cell = cell as? NSSearchFieldCell,
+              let searchButtonCell = cell.searchButtonCell else { return }
+        let baseImage = searchButtonCell.image
+        guard let baseImage else { return }
+        let tinted = tintedImage(baseImage, color: NSColor.secondaryLabelColor)
+        if let tinted {
+            searchButtonCell.image = tinted
+        }
+    }
+
+    private func tintedImage(_ image: NSImage, color: NSColor) -> NSImage? {
+        let output = image.copy() as? NSImage ?? image
+        output.lockFocus()
+        color.set()
+        let imageRect = NSRect(origin: .zero, size: output.size)
+        imageRect.fill(using: .sourceAtop)
+        output.unlockFocus()
+        return output
+    }
 }

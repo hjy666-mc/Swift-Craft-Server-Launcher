@@ -14,7 +14,6 @@ public struct SidebarView: View {
     @StateObject private var downloadCenter = DownloadCenter.shared
     @State private var showDownloadTip = false
     @State private var isHoveringDownloadBar = false
-    @State private var isHoveringCommandSearch = false
     @State private var hoveredNodeInfoId: String?
     @State private var hoveredNodePopoverId: String?
     @State private var pendingNodePopoverClose: DispatchWorkItem?
@@ -37,11 +36,6 @@ public struct SidebarView: View {
                     .padding(.vertical, 2)
                     .background(Color.gray.opacity(0.18))
                     .clipShape(Capsule())
-            }
-            .scaleEffect(isHoveringCommandSearch ? 1.02 : 1)
-            .animation(.easeInOut(duration: 0.12), value: isHoveringCommandSearch)
-            .onHover { hovering in
-                isHoveringCommandSearch = hovering
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
