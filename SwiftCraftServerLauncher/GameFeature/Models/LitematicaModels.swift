@@ -1,10 +1,3 @@
-//
-//  LitematicaModels.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/20.
-//
-
 import Foundation
 
 /// Litematica 投影文件信息模型

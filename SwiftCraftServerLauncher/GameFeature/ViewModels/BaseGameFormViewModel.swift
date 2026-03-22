@@ -1,9 +1,3 @@
-//
-//  BaseGameFormViewModel.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 import Combine
 

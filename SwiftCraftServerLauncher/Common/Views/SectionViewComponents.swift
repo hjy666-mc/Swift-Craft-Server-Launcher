@@ -1,9 +1,3 @@
-//
-//  SectionViewComponents.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by AI Assistant
-//
 import SwiftUI
 
 // MARK: - Constants

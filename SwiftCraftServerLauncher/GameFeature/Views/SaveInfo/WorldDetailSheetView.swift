@@ -1,10 +1,3 @@
-//
-//  WorldDetailSheetView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su (via AI assistant) on 2025/1/29.
-//
-
 import SwiftUI
 
 private enum WorldDetailLoadError: Error {

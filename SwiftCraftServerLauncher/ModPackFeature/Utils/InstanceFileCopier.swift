@@ -1,8 +1,3 @@
-//
-//  InstanceFileCopier.swift
-//  SwiftCraftServerLauncher
-//
-
 import Foundation
 
 enum InstanceFileCopier {

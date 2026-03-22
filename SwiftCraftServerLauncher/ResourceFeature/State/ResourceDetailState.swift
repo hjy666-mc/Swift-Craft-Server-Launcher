@@ -1,10 +1,3 @@
-//
-//  ResourceDetailState.swift
-//  SwiftCraftServerLauncher
-//
-//  收拢当前选中的侧边栏项、游戏/资源类型、项目详情等状态，通过 @EnvironmentObject 向下提供，减少 @Binding 透传。
-//
-
 import SwiftUI
 
 /// 资源/游戏详情与导航相关状态（可观测）

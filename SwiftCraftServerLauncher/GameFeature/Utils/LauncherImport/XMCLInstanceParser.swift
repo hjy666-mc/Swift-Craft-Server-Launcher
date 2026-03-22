@@ -1,9 +1,3 @@
-//
-//  XMCLInstanceParser.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// XMCL 实例解析器

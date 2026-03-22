@@ -1,11 +1,3 @@
-//
-//  MainView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/5/30.
-//
-//
-
 import SwiftUI
 
 struct MainView: View {

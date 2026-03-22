@@ -6,7 +6,7 @@ public struct SidebarView: View {
     @EnvironmentObject var detailState: ResourceDetailState
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
-    @State private var searchText: String = ""
+    @EnvironmentObject private var commandPalette: CommandPaletteController
     @AppStorage("activeServerNodeId")
     private var activeServerNodeId: String = ServerNode.local.id
     @StateObject private var serverActionManager = ServerActionManager.shared
@@ -24,6 +24,23 @@ public struct SidebarView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                CommandPaletteSearchField {
+                    commandPalette.present()
+                }
+                .frame(height: 28)
+                Text("⌘K")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.gray.opacity(0.18))
+                    .clipShape(Capsule())
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
             List(selection: detailState.selectedItemOptionalBinding) {
                 Section(header: Text("sidebar.nodes.title".localized())) {
                     ForEach(filteredNodes) { node in
@@ -185,7 +202,6 @@ public struct SidebarView: View {
                     }
                 }
             }
-            .searchable(text: $searchText, placement: .sidebar, prompt: Localized.Sidebar.Search.games)
             .listStyle(.sidebar)
 
             Rectangle()
@@ -354,32 +370,15 @@ public struct SidebarView: View {
 
     private var filteredServers: [ServerInstance] {
         let nodeServers = serverRepository.servers.filter { $0.nodeId == activeServerNodeId }
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return nodeServers
-        }
-        let lower = searchText.lowercased()
-        return nodeServers.filter { $0.name.lowercased().contains(lower) }
+        return nodeServers
     }
 
     private var filteredNodes: [ServerNode] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return serverNodeRepository.nodes
-        }
-        let lower = trimmed.lowercased()
-        return serverNodeRepository.nodes.filter {
-            $0.name.lowercased().contains(lower) || $0.host.lowercased().contains(lower)
-        }
+        serverNodeRepository.nodes
     }
 
     private var filteredCorruptedServers: [String] {
-        let names = serverRepository.corruptedServers
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return names
-        }
-        let lower = trimmed.lowercased()
-        return names.filter { $0.lowercased().contains(lower) }
+        serverRepository.corruptedServers
     }
 
     private func scheduleNodePopoverClose(for nodeId: String) {

@@ -1,10 +1,3 @@
-//
-//  MiniRangeSlider.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/8/11.
-//
-
 import SwiftUI
 
 struct MiniRangeSlider: View {

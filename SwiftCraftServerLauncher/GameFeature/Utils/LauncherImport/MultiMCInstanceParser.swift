@@ -1,9 +1,3 @@
-//
-//  MultiMCInstanceParser.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import Foundation
 
 /// MultiMC/PrismLauncher 实例解析器

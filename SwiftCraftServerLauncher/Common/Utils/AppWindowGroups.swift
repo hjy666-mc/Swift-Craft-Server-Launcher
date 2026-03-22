@@ -1,10 +1,3 @@
-//
-//  AppWindowGroups.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/27.
-//
-
 import SwiftUI
 
 /// 应用窗口组定义

@@ -1,10 +1,3 @@
-//
-//  GameModels.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/5/30.
-//
-
 import Foundation
 import SwiftUI
 

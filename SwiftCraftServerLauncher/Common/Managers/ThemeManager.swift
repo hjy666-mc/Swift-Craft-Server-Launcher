@@ -1,11 +1,3 @@
-//
-//  ThemeManager.swift
-//  SwiftCraftServerLauncher
-//
-//  独立主题管理器，将主题/外观相关职责从 GeneralSettingsManager 拆分，
-//  减少根视图因 GeneralSettingsManager 其他设置变化而重建。
-//
-
 import AppKit
 import Combine
 import Foundation

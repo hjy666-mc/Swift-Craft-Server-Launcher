@@ -1,9 +1,3 @@
-//
-//  StaticContributorCardView.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// 静态贡献者卡片视图
