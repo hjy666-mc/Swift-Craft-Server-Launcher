@@ -327,7 +327,6 @@ struct CommandPaletteView: View {
             shortcutBadges(for: nil)
                 .opacity(isSelected ? 1 : 0)
                 .frame(width: 110, alignment: .trailing)
->>>>>>> 308a98f (fix(ui): 修复指令面板行抖动)
             // no inline controls for search-only resource entries
         }
         .padding(.vertical, 6)
