@@ -281,9 +281,9 @@ struct CommandPaletteView: View {
             Text(node.title)
                 .foregroundColor(.primary)
             Spacer()
-            if isSelected {
-                shortcutBadges(for: node)
-            }
+            shortcutBadges(for: node)
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 110, alignment: .trailing)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
@@ -324,9 +324,10 @@ struct CommandPaletteView: View {
                 .padding(.vertical, 2)
                 .background(Color.gray.opacity(0.18))
                 .clipShape(Capsule())
-            if isSelected {
-                shortcutBadges(for: nil)
-            }
+            shortcutBadges(for: nil)
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 110, alignment: .trailing)
+>>>>>>> 308a98f (fix(ui): 修复指令面板行抖动)
             // no inline controls for search-only resource entries
         }
         .padding(.vertical, 6)
