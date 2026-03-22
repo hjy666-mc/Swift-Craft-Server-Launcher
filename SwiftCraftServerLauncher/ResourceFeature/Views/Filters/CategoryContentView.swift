@@ -15,6 +15,9 @@ struct CategoryContentView: View {
     let gameVersion: String?
     let gameLoader: String?
     let dataSource: DataSource
+    @AppStorage("resource.mod.notice.hidden")
+    private var hideModClientNotice = false
+    @State private var showModClientNotice = true
 
     // MARK: - Initialization
     init(
@@ -52,6 +55,9 @@ struct CategoryContentView: View {
             if let error = viewModel.error {
                 newErrorView(error)
             } else {
+                if shouldShowModNotice {
+                    modClientNotice
+                }
                 if type == "resource" {
                     versionSection
                 }
@@ -78,7 +84,7 @@ struct CategoryContentView: View {
             }
         }
         if type == "resource" && project == ProjectType.mod {
-            selectedFeatures = [AppConstants.EnvironmentTypes.server]
+            selectedFeatures = []
         }
     }
 
@@ -149,6 +155,7 @@ struct CategoryContentView: View {
             case ProjectType.modpack, ProjectType.mod:
                 if type == "resource" {
                     loaderSection
+                    environmentSection
                 }
                 EmptyView()
             case ProjectType.resourcepack:
@@ -166,7 +173,7 @@ struct CategoryContentView: View {
 
     private var environmentSection: some View {
         CategorySectionView(
-            title: "filter.environment",
+            title: "filter.environment.detail",
             items: environmentItems,
             selectedItems: $selectedFeatures,
             isLoading: viewModel.isLoading
@@ -231,5 +238,36 @@ struct CategoryContentView: View {
             FilterItem(id: AppConstants.EnvironmentTypes.client, name: "environment.client".localized()),
             FilterItem(id: AppConstants.EnvironmentTypes.server, name: "environment.server".localized()),
         ]
+    }
+
+    private var shouldShowModNotice: Bool {
+        type == "resource" && project == ProjectType.mod && !hideModClientNotice && showModClientNotice
+    }
+
+    private var modClientNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(.secondary)
+            Text("resource.mod.notice".localized())
+                .foregroundStyle(.primary)
+                .font(.subheadline)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 6) {
+                Button("common.confirm".localized()) {
+                    showModClientNotice = false
+                }
+                .buttonStyle(.bordered)
+                Button("resource.mod.notice.dont_show".localized()) {
+                    hideModClientNotice = true
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.secondary.opacity(0.08))
+        )
+        .padding(.bottom, 8)
     }
 }
