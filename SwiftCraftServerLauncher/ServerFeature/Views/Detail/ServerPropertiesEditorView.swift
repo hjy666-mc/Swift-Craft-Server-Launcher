@@ -1,12 +1,42 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
-private struct ServerConfigFileItem: Identifiable, Hashable {
+struct ServerFileItem: Identifiable, Hashable {
     let url: URL?
     let relativePath: String
+    let isDirectory: Bool
+    let fileSize: Int?
 
     var id: String { relativePath }
     var fileName: String { URL(fileURLWithPath: relativePath).lastPathComponent }
+    var folderPath: String {
+        let folder = URL(fileURLWithPath: relativePath).deletingLastPathComponent().path
+        if folder == "." || folder == "/" {
+            return ""
+        }
+        return folder
+    }
+    var pathComponents: [String] {
+        relativePath.split(separator: "/").map(String.init)
+    }
+}
+
+private struct ServerConfigTreeNode: Identifiable, Hashable {
+    enum Kind: Hashable {
+        case folder
+        case file(ServerFileItem)
+    }
+
+    let id: String
+    var name: String
+    var kind: Kind
+    var children: [Self]?
+
+    var isFolder: Bool {
+        if case .folder = kind { return true }
+        return false
+    }
 }
 
 struct ServerPropertiesEditorView: View {
@@ -16,76 +46,96 @@ struct ServerPropertiesEditorView: View {
     @State private var isLoaded = false
     @State private var isDirty = false
     @State private var searchText: String = ""
-    @State private var showOtherConfigs = false
-    @State private var showRawPropertiesEditor = false
+    @State private var fileItems: [ServerFileItem] = []
+    @State private var selectedFile: ServerFileItem?
+    @State private var selectedNodeId: String?
+    @State private var serverPropertiesMode: ServerPropertiesMode = .visual
+    @State private var showSidebar = true
+    @State private var isImportingFiles = false
+    @State private var showNewFolderPrompt = false
+    @State private var newFolderName = ""
+    @State private var showNewFilePrompt = false
+    @State private var newFileName = ""
+    @State private var showRenamePrompt = false
+    @State private var renameValue = ""
+    @State private var renameTarget: ServerFileItem?
+    @State private var showDeleteConfirm = false
+    @State private var deleteTarget: ServerFileItem?
     @State private var propertiesAutoSaveTask: Task<Void, Never>?
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
-    var body: some View {
-        CommonSheetView(
-            header: {
-                HStack {
-                    Text("server.properties.title".localized())
-                        .font(.headline)
-                    Spacer()
-                    Button("server.properties.edit_raw".localized()) { showRawPropertiesEditor = true }
-                    Button("server.properties.other_configs".localized()) { showOtherConfigs = true }
-                }
-            },
-            body: {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("common.search".localized(), text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+    private let editableExtensions = Set(["properties", "yml", "yaml", "toml", "json", "conf", "cfg", "ini", "txt", "log", "md"])
 
-                    if properties.isEmpty && isLoaded {
-                        Text("server.properties.no_properties".localized())
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    } else {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 8) {
-                                ForEach(filteredKeys, id: \.self) { key in
-                                    propertyRow(key: key)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 2)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    var body: some View {
+        ServerDetailPage(
+            title: "server.properties.title".localized(),
+            contentPadding: 0,
+            content: {
+                HSplitView {
+                    if showSidebar {
+                        configSidebar
                     }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            },
-            footer: {
-                HStack {
-                    Spacer()
+                    contentArea
                 }
             }
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { load() }
+        .fileImporter(
+            isPresented: $isImportingFiles,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                importFiles(urls, to: currentDirectoryPath)
+            case .failure(let error):
+                GlobalErrorHandler.shared.handle(error)
+            }
+        }
+        .alert("server.files.new_folder".localized(), isPresented: $showNewFolderPrompt) {
+            TextField("server.files.name_placeholder".localized(), text: $newFolderName)
+            Button("common.create".localized()) { createFolder() }
+            Button("common.cancel".localized(), role: .cancel) {}
+        }
+        .alert("server.files.new_file".localized(), isPresented: $showNewFilePrompt) {
+            TextField("server.files.name_placeholder".localized(), text: $newFileName)
+            Button("common.create".localized()) { createFile() }
+            Button("common.cancel".localized(), role: .cancel) {}
+        }
+        .alert("server.files.rename".localized(), isPresented: $showRenamePrompt) {
+            TextField("server.files.name_placeholder".localized(), text: $renameValue)
+            Button("common.confirm".localized()) { renameSelected() }
+            Button("common.cancel".localized(), role: .cancel) {}
+        }
+        .alert("server.files.delete".localized(), isPresented: $showDeleteConfirm) {
+            Button("common.delete".localized(), role: .destructive) { deleteSelected() }
+            Button("common.cancel".localized(), role: .cancel) {}
+        } message: {
+            Text("server.files.delete.confirm".localized())
+        }
+        .onAppear {
+            load()
+            loadFiles()
+        }
         .onReceive(autoRefreshTimer) { _ in
             if !isDirty {
                 load()
             }
+            loadFiles()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+            handleToolbarAction(action)
         }
         .onDisappear {
             propertiesAutoSaveTask?.cancel()
             save()
         }
-        .sheet(isPresented: $showOtherConfigs) {
-            ServerExtraConfigFilesView(server: server)
-                .presentationDetents([.large])
+        .onChange(of: selectedNodeId) { _, newValue in
+            guard let newValue, let item = configItemById[newValue] else { return }
+            selectedFile = item
         }
-        .sheet(isPresented: $showRawPropertiesEditor) {
-            ServerExtraConfigEditorView(
-                server: server,
-                item: ServerConfigFileItem(
-                    url: AppPaths.serverDirectory(serverName: server.name).appendingPathComponent("server.properties"),
-                    relativePath: "server.properties"
-                )
-            )
-            .presentationDetents([.fraction(0.95), .large])
+        .onChange(of: selectedFile) { _, newValue in
+            selectedNodeId = newValue?.id
         }
     }
 
@@ -135,6 +185,547 @@ struct ServerPropertiesEditorView: View {
             isDirty = false
         } catch {
             GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func loadFiles() {
+        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    let entries = try await SSHNodeService.listRemoteServerFiles(node: node, serverName: server.name)
+                    await MainActor.run {
+                        fileItems = entries.map {
+                            ServerFileItem(
+                                url: nil,
+                                relativePath: $0.relativePath,
+                                isDirectory: $0.isDirectory,
+                                fileSize: nil
+                            )
+                        }
+                        selectDefaultFileIfNeeded()
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        var result: [ServerFileItem] = []
+        let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        while let url = enumerator?.nextObject() as? URL {
+            let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+            let isDirectory = resourceValues?.isDirectory == true
+            if url.lastPathComponent.lowercased() == "eula.txt" {
+                continue
+            }
+            let fileSize = resourceValues?.fileSize
+            result.append(ServerFileItem(
+                url: url,
+                relativePath: relativePath(for: url),
+                isDirectory: isDirectory,
+                fileSize: fileSize
+            ))
+        }
+        fileItems = result.sorted { $0.relativePath < $1.relativePath }
+        selectDefaultFileIfNeeded()
+    }
+
+    private func selectDefaultFileIfNeeded() {
+        if let selectedFile, fileItems.contains(selectedFile) {
+            return
+        }
+        if let defaultItem = fileItems.first(where: { $0.relativePath.lowercased().hasSuffix("server.properties") }) {
+            selectedFile = defaultItem
+            selectedNodeId = defaultItem.id
+            return
+        }
+        selectedFile = fileItems.first
+        selectedNodeId = fileItems.first?.id
+    }
+
+    private func relativePath(for url: URL) -> String {
+        let root = AppPaths.serverDirectory(serverName: server.name).path
+        if url.path.hasPrefix(root) {
+            return String(url.path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        }
+        return url.path
+    }
+
+    private var configSidebar: some View {
+        List(selection: $selectedNodeId) {
+            OutlineGroup(configTree, children: \.children) { node in
+                let row = HStack(spacing: 8) {
+                    Image(systemName: node.isFolder ? "folder" : "doc.text")
+                        .foregroundStyle(.secondary)
+                    Text(node.name)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+                .contextMenu {
+                    if let item = itemForNode(node) {
+                        Button("server.files.rename".localized()) {
+                            beginRename(item)
+                        }
+                        Button("server.files.delete".localized(), role: .destructive) {
+                            confirmDelete(item)
+                        }
+                    }
+                    Divider()
+                    Button("server.files.upload".localized()) {
+                        isImportingFiles = true
+                    }
+                    Button("server.files.new_folder".localized()) {
+                        showNewFolderPrompt = true
+                    }
+                    Button("server.files.new_file".localized()) {
+                        showNewFilePrompt = true
+                    }
+                }
+                let droppableRow: some View = {
+                    if node.isFolder {
+                        return AnyView(
+                            row.onDrop(of: [UTType.fileURL, UTType.plainText], isTargeted: nil) { providers in
+                                handleDrop(providers, to: node.id)
+                            }
+                        )
+                    }
+                    return AnyView(row)
+                }()
+                droppableRow
+                    .draggable(node.id)
+                    .tag(node.id)
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onDrop(of: [UTType.fileURL, UTType.plainText], isTargeted: nil) { providers in
+            handleDrop(providers, to: "")
+        }
+        .contextMenu {
+            Button("server.files.upload".localized()) {
+                isImportingFiles = true
+            }
+            Button("server.files.new_folder".localized()) {
+                showNewFolderPrompt = true
+            }
+            Button("server.files.new_file".localized()) {
+                showNewFilePrompt = true
+            }
+        }
+        .frame(minWidth: 150, idealWidth: 190, maxWidth: 260, maxHeight: .infinity)
+    }
+
+    private var contentArea: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let selectedFile, selectedFile.isDirectory {
+                folderDetailView(for: selectedFile)
+            } else if let selectedFile, selectedFile.relativePath.lowercased().hasSuffix("server.properties") {
+                Picker("", selection: $serverPropertiesMode) {
+                    Text("server.properties.mode.visual".localized())
+                        .tag(ServerPropertiesMode.visual)
+                    Text("server.properties.mode.raw".localized())
+                        .tag(ServerPropertiesMode.raw)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+
+                if serverPropertiesMode == .visual {
+                    serverPropertiesVisualEditor
+                } else {
+                    RawConfigEditorView(server: server, item: selectedFile)
+                        .environmentObject(serverNodeRepository)
+                        .id(selectedFile.id)
+                }
+            } else if let selectedFile, isEditableFile(selectedFile) {
+                RawConfigEditorView(server: server, item: selectedFile)
+                    .environmentObject(serverNodeRepository)
+                    .id(selectedFile.id)
+            } else if selectedFile != nil {
+                ServerDetailEmptyState(text: "server.files.not_editable".localized())
+            } else {
+                ServerDetailEmptyState(text: "server.extra_configs.empty".localized())
+            }
+        }
+        .padding(.leading, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func folderDetailView(for item: ServerFileItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(item.fileName)
+                .font(.title3.weight(.semibold))
+            Text("server.files.folder_hint".localized())
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onDrop(of: [UTType.fileURL, UTType.plainText], isTargeted: nil) { providers in
+            handleDrop(providers, to: item.relativePath)
+        }
+    }
+
+    private var serverPropertiesVisualEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("common.search".localized(), text: $searchText)
+                .textFieldStyle(.roundedBorder)
+
+            if properties.isEmpty && isLoaded {
+                ServerDetailEmptyState(text: "server.properties.no_properties".localized())
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(filteredKeys, id: \.self) { key in
+                            propertyRow(key: key)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 2)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var configTree: [ServerConfigTreeNode] {
+        var root: [String: ServerConfigTreeNode] = [:]
+        for item in fileItems {
+            insert(item: item, into: &root)
+        }
+        return root.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private var configItemById: [String: ServerFileItem] {
+        Dictionary(uniqueKeysWithValues: fileItems.map { ($0.id, $0) })
+    }
+
+    private func insert(item: ServerFileItem, into root: inout [String: ServerConfigTreeNode]) {
+        let parts = item.pathComponents
+        guard !parts.isEmpty else { return }
+        insert(parts: parts, index: 0, currentPath: "", item: item, into: &root)
+    }
+
+    private func insert(
+        parts: [String],
+        index: Int,
+        currentPath: String,
+        item: ServerFileItem,
+        into nodeMap: inout [String: ServerConfigTreeNode]
+    ) {
+        let name = parts[index]
+        let path = currentPath.isEmpty ? name : "\(currentPath)/\(name)"
+        if index == parts.count - 1 {
+            if item.isDirectory {
+                let existingChildren = nodeMap[path]?.children
+                nodeMap[path] = ServerConfigTreeNode(id: item.id, name: name, kind: .folder, children: existingChildren)
+            } else {
+                nodeMap[path] = ServerConfigTreeNode(
+                    id: item.id,
+                    name: name,
+                    kind: .file(item),
+                    children: nil
+                )
+            }
+            return
+        }
+        var node = nodeMap[path] ?? ServerConfigTreeNode(id: path, name: name, kind: .folder, children: [])
+        if node.children == nil {
+            node.children = []
+        }
+        var childMap = Dictionary(uniqueKeysWithValues: (node.children ?? []).map { ($0.id, $0) })
+        insert(parts: parts, index: index + 1, currentPath: path, item: item, into: &childMap)
+        node.children = childMap.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        nodeMap[path] = node
+    }
+
+    private var isRemoteServer: Bool {
+        server.nodeId != ServerNode.local.id || server.javaPath == "java"
+    }
+
+    private var currentDirectoryPath: String {
+        if let selectedFile, selectedFile.isDirectory {
+            return selectedFile.relativePath
+        }
+        if let selectedFile {
+            return selectedFile.folderPath
+        }
+        return ""
+    }
+
+    private func itemForNode(_ node: ServerConfigTreeNode) -> ServerFileItem? {
+        if case .file(let item) = node.kind {
+            return item
+        }
+        return fileItems.first { $0.relativePath == node.id && $0.isDirectory }
+    }
+
+    private func isEditableFile(_ item: ServerFileItem) -> Bool {
+        guard !item.isDirectory else { return false }
+        let ext = URL(fileURLWithPath: item.relativePath).pathExtension.lowercased()
+        guard editableExtensions.contains(ext) else { return false }
+        if let size = item.fileSize, size > 1_000_000 {
+            return false
+        }
+        return true
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider], to targetFolder: String) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.canLoadObject(ofClass: URL.self) {
+                _ = provider.loadObject(ofClass: URL.self) { object, _ in
+                    guard let url = object else { return }
+                    importFiles([url], to: targetFolder)
+                }
+                handled = true
+                continue
+            }
+            if provider.canLoadObject(ofClass: NSString.self) {
+                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                    guard let value = object as? String else { return }
+                    moveItem(from: value, toFolder: targetFolder)
+                }
+                handled = true
+            }
+        }
+        return handled
+    }
+
+    private func importFiles(_ urls: [URL], to targetFolder: String) {
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    for url in urls {
+                        try await SSHNodeService.uploadRemoteFile(node: node, serverName: server.name, localURL: url, remoteDirectory: targetFolder)
+                    }
+                    await MainActor.run { loadFiles() }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let targetDir = targetFolder.isEmpty ? root : root.appendingPathComponent(targetFolder)
+        do {
+            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+            for url in urls {
+                let target = targetDir.appendingPathComponent(url.lastPathComponent)
+                if FileManager.default.fileExists(atPath: target.path) {
+                    try? FileManager.default.removeItem(at: target)
+                }
+                try FileManager.default.copyItem(at: url, to: target)
+            }
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func moveItem(from sourceRelativePath: String, toFolder targetFolder: String) {
+        guard sourceRelativePath != targetFolder else { return }
+        if !targetFolder.isEmpty && targetFolder.hasPrefix(sourceRelativePath + "/") {
+            return
+        }
+        let sourceName = URL(fileURLWithPath: sourceRelativePath).lastPathComponent
+        let targetPath = targetFolder.isEmpty ? sourceName : "\(targetFolder)/\(sourceName)"
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.moveRemotePath(node: node, serverName: server.name, from: sourceRelativePath, to: targetPath)
+                    await MainActor.run { loadFiles() }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let sourceURL = root.appendingPathComponent(sourceRelativePath)
+        let targetURL = root.appendingPathComponent(targetPath)
+        do {
+            try FileManager.default.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: targetURL.path) {
+                try? FileManager.default.removeItem(at: targetURL)
+            }
+            try FileManager.default.moveItem(at: sourceURL, to: targetURL)
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func createFolder() {
+        let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let targetPath = currentDirectoryPath.isEmpty ? trimmed : "\(currentDirectoryPath)/\(trimmed)"
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.createRemoteDirectory(node: node, serverName: server.name, relativePath: targetPath)
+                    await MainActor.run {
+                        newFolderName = ""
+                        loadFiles()
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let url = root.appendingPathComponent(targetPath)
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            newFolderName = ""
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func createFile() {
+        let trimmed = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let targetPath = currentDirectoryPath.isEmpty ? trimmed : "\(currentDirectoryPath)/\(trimmed)"
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.writeRemoteConfigFile(node: node, serverName: server.name, relativePath: targetPath, content: "")
+                    await MainActor.run {
+                        newFileName = ""
+                        loadFiles()
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let url = root.appendingPathComponent(targetPath)
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+            }
+            newFileName = ""
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func beginRenameSelected() {
+        guard let selectedFile else { return }
+        beginRename(selectedFile)
+    }
+
+    private func beginRename(_ item: ServerFileItem) {
+        renameTarget = item
+        renameValue = item.fileName
+        showRenamePrompt = true
+    }
+
+    private func renameSelected() {
+        guard let target = renameTarget else { return }
+        let trimmed = renameValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let newPath = target.folderPath.isEmpty ? trimmed : "\(target.folderPath)/\(trimmed)"
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.moveRemotePath(node: node, serverName: server.name, from: target.relativePath, to: newPath)
+                    await MainActor.run {
+                        self.renameTarget = nil
+                        renameValue = ""
+                        loadFiles()
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let sourceURL = root.appendingPathComponent(target.relativePath)
+        let targetURL = root.appendingPathComponent(newPath)
+        do {
+            try FileManager.default.moveItem(at: sourceURL, to: targetURL)
+            self.renameTarget = nil
+            renameValue = ""
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func confirmDeleteSelected() {
+        guard let selectedFile else { return }
+        confirmDelete(selectedFile)
+    }
+
+    private func confirmDelete(_ item: ServerFileItem) {
+        deleteTarget = item
+        showDeleteConfirm = true
+    }
+
+    private func deleteSelected() {
+        guard let deleteTarget else { return }
+        if isRemoteServer {
+            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
+            Task {
+                do {
+                    try await SSHNodeService.removeRemotePath(node: node, serverName: server.name, relativePath: deleteTarget.relativePath)
+                    await MainActor.run {
+                        self.deleteTarget = nil
+                        loadFiles()
+                    }
+                } catch {
+                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
+                }
+            }
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let targetURL = root.appendingPathComponent(deleteTarget.relativePath)
+        do {
+            try FileManager.default.removeItem(at: targetURL)
+            self.deleteTarget = nil
+            loadFiles()
+        } catch {
+            GlobalErrorHandler.shared.handle(error)
+        }
+    }
+
+    private func handleToolbarAction(_ action: ServerDetailToolbarAction) {
+        switch action {
+        case .configToggleSidebar:
+            showSidebar.toggle()
+        case .configUpload:
+            isImportingFiles = true
+        case .configNewFolder:
+            showNewFolderPrompt = true
+        case .configNewFile:
+            showNewFilePrompt = true
+        case .configRename:
+            beginRenameSelected()
+        case .configDelete:
+            confirmDeleteSelected()
+        default:
+            break
         }
     }
 
@@ -267,666 +858,7 @@ struct ServerPropertiesEditorView: View {
     }
 }
 
-private struct ServerExtraConfigFilesView: View {
-    let server: ServerInstance
-    @Environment(\.dismiss)
-    private var dismiss
-    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
-    @State private var files: [ServerConfigFileItem] = []
-    @State private var searchText = ""
-    @State private var selectedFile: ServerConfigFileItem?
-    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
-
-    private let allowedExtensions = Set(["yml", "yaml", "toml", "json", "conf", "cfg", "ini"])
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("server.extra_configs.title".localized())
-                    .font(.headline)
-                Spacer()
-                Button("common.close".localized()) { dismiss() }
-            }
-
-            TextField("server.extra_configs.search_file".localized(), text: $searchText)
-                .textFieldStyle(.roundedBorder)
-
-            if filteredFiles.isEmpty {
-                Text("server.extra_configs.empty".localized())
-                    .foregroundColor(.secondary)
-            } else {
-                List(filteredFiles) { item in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.fileName)
-                            Text(item.relativePath)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button("common.edit".localized()) {
-                            selectedFile = item
-                        }
-                    }
-                }
-                .frame(minHeight: 420)
-            }
-        }
-        .padding()
-        .onAppear { loadFiles() }
-        .onReceive(autoRefreshTimer) { _ in
-            loadFiles()
-        }
-        .sheet(item: $selectedFile) { item in
-            ServerExtraConfigEditorView(server: server, item: item)
-                .environmentObject(serverNodeRepository)
-                .presentationDetents([.fraction(0.95), .large])
-        }
-    }
-
-    private var filteredFiles: [ServerConfigFileItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return files }
-        return files.filter {
-            $0.fileName.lowercased().contains(query) ||
-            $0.relativePath.lowercased().contains(query)
-        }
-    }
-
-    private func loadFiles() {
-        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
-            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
-            Task {
-                do {
-                    let paths = try await SSHNodeService.listRemoteConfigFiles(node: node, serverName: server.name)
-                    await MainActor.run {
-                        files = paths.map { ServerConfigFileItem(url: nil, relativePath: $0) }
-                        Logger.shared.debug("配置文件面板加载(远程): \(server.name) -> \(files.count) 个")
-                    }
-                } catch {
-                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
-                }
-            }
-            return
-        }
-        let root = AppPaths.serverDirectory(serverName: server.name)
-        var result: [ServerConfigFileItem] = []
-        let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        )
-        while let url = enumerator?.nextObject() as? URL {
-            let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-            if resourceValues?.isDirectory == true {
-                continue
-            }
-            let ext = url.pathExtension.lowercased()
-            if !allowedExtensions.contains(ext) {
-                continue
-            }
-            let fileSize = resourceValues?.fileSize ?? 0
-            if fileSize > 1_000_000 {
-                continue
-            }
-            if url.lastPathComponent.lowercased() == "eula.txt" {
-                continue
-            }
-            result.append(ServerConfigFileItem(url: url, relativePath: relativePath(for: url)))
-        }
-        files = result.sorted { $0.relativePath < $1.relativePath }
-    }
-
-    private func relativePath(for url: URL) -> String {
-        let root = AppPaths.serverDirectory(serverName: server.name).path
-        if url.path.hasPrefix(root) {
-            return String(url.path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        }
-        return url.path
-    }
-}
-
-private struct ServerExtraConfigEditorView: View {
-    let server: ServerInstance
-    let item: ServerConfigFileItem
-    @Environment(\.dismiss)
-    private var dismiss
-    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
-    @State private var content = ""
-    @State private var isLoaded = false
-    @State private var isDirty = false
-    @State private var contentAutoSaveTask: Task<Void, Never>?
-    private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(item.fileName)
-                    .font(.headline)
-                Spacer()
-                Text(isDirty ? "server.properties.auto_save.saving".localized() : "server.properties.auto_save.saved".localized())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("common.close".localized()) { dismiss() }
-            }
-
-            if !isLoaded {
-                ProgressView()
-            } else {
-                LineNumberedTextEditor(
-                    text: Binding(
-                        get: { content },
-                        set: { newValue in
-                            content = newValue
-                            markContentDirtyAndAutoSave()
-                        }
-                    ),
-                    onSaveRequested: save,
-                    syntaxKind: syntaxKind
-                )
-                .frame(minWidth: 980, minHeight: 680)
-            }
-        }
-        .padding()
-        .frame(minWidth: 1080, minHeight: 760)
-        .onAppear { load() }
-        .onReceive(autoRefreshTimer) { _ in
-            if !isDirty {
-                load()
-            }
-        }
-        .onDisappear {
-            contentAutoSaveTask?.cancel()
-            save()
-        }
-    }
-
-    private func markContentDirtyAndAutoSave() {
-        isDirty = true
-        contentAutoSaveTask?.cancel()
-        contentAutoSaveTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                save()
-            }
-        }
-    }
-
-    private func load() {
-        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
-            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
-            Task {
-                do {
-                    let text = try await SSHNodeService.readRemoteConfigFile(node: node, serverName: server.name, relativePath: item.relativePath)
-                    await MainActor.run {
-                        content = text
-                        isLoaded = true
-                        isDirty = false
-                    }
-                } catch {
-                    await MainActor.run {
-                        GlobalErrorHandler.shared.handle(error)
-                        isLoaded = true
-                        isDirty = false
-                    }
-                }
-            }
-            return
-        }
-        guard let fileURL = item.url else { return }
-        do {
-            content = try String(contentsOf: fileURL, encoding: .utf8)
-            isLoaded = true
-            isDirty = false
-        } catch {
-            let fallbackContent = try? String(contentsOf: fileURL)
-            content = fallbackContent ?? ""
-            isLoaded = true
-            isDirty = false
-        }
-    }
-
-    private func save() {
-        if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
-            guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
-            Task {
-                do {
-                    try await SSHNodeService.writeRemoteConfigFile(node: node, serverName: server.name, relativePath: item.relativePath, content: content)
-                    await MainActor.run { isDirty = false }
-                } catch {
-                    await MainActor.run { GlobalErrorHandler.shared.handle(error) }
-                }
-            }
-            return
-        }
-        guard let fileURL = item.url else { return }
-        do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            isDirty = false
-        } catch {
-            GlobalErrorHandler.shared.handle(error)
-        }
-    }
-
-    private var syntaxKind: SyntaxKind {
-        switch URL(fileURLWithPath: item.relativePath).pathExtension.lowercased() {
-        case "json":
-            return .json
-        case "yaml", "yml":
-            return .yaml
-        case "toml":
-            return .toml
-        case "ini", "cfg", "conf":
-            return .ini
-        default:
-            if item.relativePath.lowercased().hasSuffix("server.properties") {
-                return .properties
-            }
-            return .plain
-        }
-    }
-}
-
-private struct LineNumberedTextEditor: View {
-    @Binding var text: String
-    var onSaveRequested: (() -> Void)?
-    var syntaxKind: SyntaxKind = .plain
-
-    var body: some View {
-        LineNumberedTextEditorRepresentable(
-            text: $text,
-            onSaveRequested: onSaveRequested,
-            syntaxKind: syntaxKind
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
-    @Binding var text: String
-    var onSaveRequested: (() -> Void)?
-    var syntaxKind: SyntaxKind = .plain
-
-    func makeNSView(context: Context) -> LineNumberEditorContainer {
-        let view = LineNumberEditorContainer()
-        view.onTextChange = { newValue in
-            if context.coordinator.isUpdatingFromSwiftUI {
-                return
-            }
-            text = newValue
-        }
-        view.onSaveRequested = onSaveRequested
-        view.syntaxKind = syntaxKind
-        view.setText(text)
-        return view
-    }
-
-    func updateNSView(_ nsView: LineNumberEditorContainer, context: Context) {
-        nsView.onSaveRequested = onSaveRequested
-        nsView.syntaxKind = syntaxKind
-        if nsView.text != text {
-            context.coordinator.isUpdatingFromSwiftUI = true
-            nsView.setText(text)
-            context.coordinator.isUpdatingFromSwiftUI = false
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    final class Coordinator {
-        var isUpdatingFromSwiftUI = false
-    }
-}
-
-private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
-    private let numberView = LineNumberGutterView()
-    private let textScrollView = NSScrollView()
-    private let textView = CommandAwareTextView()
-    private var boundsObserver: NSObjectProtocol?
-    private var isApplyingHighlight = false
-    var onTextChange: ((String) -> Void)?
-    var onSaveRequested: (() -> Void)? {
-        didSet {
-            textView.onSaveRequested = onSaveRequested
-        }
-    }
-    var syntaxKind: SyntaxKind = .plain {
-        didSet { applySyntaxHighlighting() }
-    }
-
-    var text: String { textView.string }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupViews()
-        setupObservers()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupViews()
-        setupObservers()
-    }
-
-    deinit {
-        if let boundsObserver {
-            NotificationCenter.default.removeObserver(boundsObserver)
-        }
-    }
-
-    func setText(_ value: String) {
-        textView.string = value
-        syncLineNumbers()
-        applySyntaxHighlighting()
-    }
-
-    private func setupViews() {
-        wantsLayer = true
-        numberView.translatesAutoresizingMaskIntoConstraints = false
-        numberView.wantsLayer = true
-        numberView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-
-        textView.frame = NSRect(x: 0, y: 0, width: 1000, height: 800)
-        textView.isRichText = false
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDataDetectionEnabled = false
-        textView.isAutomaticLinkDetectionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
-        textView.allowsUndo = true
-        textView.usesFindBar = true
-        textView.isIncrementalSearchingEnabled = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        textView.textColor = NSColor.labelColor
-        textView.textContainerInset = NSSize(width: 6, height: 6)
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.minSize = NSSize(width: 0, height: 0)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.widthTracksTextView = false
-        textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.delegate = self
-
-        textScrollView.documentView = textView
-        textScrollView.hasVerticalScroller = true
-        textScrollView.hasHorizontalScroller = true
-        textScrollView.autohidesScrollers = true
-        textScrollView.borderType = .noBorder
-        textScrollView.translatesAutoresizingMaskIntoConstraints = false
-        textScrollView.contentView.postsBoundsChangedNotifications = true
-
-        addSubview(numberView)
-        addSubview(textScrollView)
-
-        NSLayoutConstraint.activate([
-            numberView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            numberView.topAnchor.constraint(equalTo: topAnchor),
-            numberView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            numberView.widthAnchor.constraint(equalToConstant: 72),
-
-            textScrollView.leadingAnchor.constraint(equalTo: numberView.trailingAnchor),
-            textScrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            textScrollView.topAnchor.constraint(equalTo: topAnchor),
-            textScrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-    }
-
-    private func setupObservers() {
-        boundsObserver = NotificationCenter.default.addObserver(
-            forName: NSView.boundsDidChangeNotification,
-            object: textScrollView.contentView,
-            queue: .main
-        ) { [weak self] _ in
-            self?.syncNumberScrollOffset()
-        }
-    }
-
-    private func syncNumberScrollOffset() {
-        let sourceBounds = textScrollView.contentView.bounds
-        numberView.contentOffsetY = sourceBounds.origin.y
-        numberView.needsDisplay = true
-    }
-
-    private func syncLineNumbers() {
-        let count = max(textView.string.components(separatedBy: "\n").count, 1)
-        numberView.totalLines = count
-        if let font = textView.font {
-            numberView.lineHeight = font.ascender - font.descender + font.leading
-        }
-        numberView.topInset = textView.textContainerInset.height
-        numberView.needsDisplay = true
-        syncNumberScrollOffset()
-    }
-
-    func textDidChange(_ notification: Notification) {
-        syncLineNumbers()
-        applySyntaxHighlighting()
-        onTextChange?(textView.string)
-    }
-
-    private func applySyntaxHighlighting() {
-        guard !isApplyingHighlight else { return }
-        guard let storage = textView.textStorage else { return }
-
-        isApplyingHighlight = true
-        defer { isApplyingHighlight = false }
-
-        let fullRange = NSRange(location: 0, length: storage.length)
-        let selectedRanges = textView.selectedRanges
-        let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-
-        storage.beginEditing()
-        storage.setAttributes([
-            .foregroundColor: NSColor.labelColor,
-            .font: font,
-        ], range: fullRange)
-
-        highlightStrings(in: storage.string, storage: storage)
-        highlightNumbers(in: storage.string, storage: storage)
-        highlightBooleans(in: storage.string, storage: storage)
-        highlightKeys(in: storage.string, storage: storage)
-        // Keep comments last so comment text is excluded from other color rules.
-        highlightComments(in: storage.string, storage: storage)
-
-        storage.endEditing()
-        textView.selectedRanges = selectedRanges
-    }
-
-    private func highlightComments(in text: String, storage: NSTextStorage) {
-        let pattern: String
-        switch syntaxKind {
-        case .json:
-            return
-        case .yaml, .toml, .properties, .ini:
-            pattern = #"(?m)^\s*[#;].*$|(?m)^\s*//.*$"#
-        case .plain:
-            pattern = #"(?m)^\s*[#;].*$|(?m)^\s*//.*$"#
-        }
-        applyRegex(pattern, color: NSColor.systemGray, text: text, storage: storage)
-    }
-
-    private func highlightStrings(in text: String, storage: NSTextStorage) {
-        let pattern = #""([^"\\]|\\.)*"|'([^'\\]|\\.)*'"#
-        applyRegex(pattern, color: NSColor.systemRed, text: text, storage: storage)
-    }
-
-    private func highlightNumbers(in text: String, storage: NSTextStorage) {
-        let pattern = #"\b\d+(\.\d+)?\b"#
-        applyRegex(pattern, color: NSColor.systemOrange, text: text, storage: storage)
-    }
-
-    private func highlightBooleans(in text: String, storage: NSTextStorage) {
-        let pattern = #"\b(true|false|null|yes|no|on|off)\b"#
-        applyRegex(pattern, color: NSColor.systemPink, text: text, storage: storage, options: [.caseInsensitive])
-    }
-
-    private func highlightKeys(in text: String, storage: NSTextStorage) {
-        let pattern: String
-        let captureGroup: Int
-
-        switch syntaxKind {
-        case .json:
-            pattern = #"(?m)^\s*"([^"]+)"\s*:"#
-            captureGroup = 1
-        case .yaml, .toml:
-            pattern = #"(?m)^\s*([A-Za-z0-9_.-]+)\s*[:=]"#
-            captureGroup = 1
-        case .properties, .ini:
-            pattern = #"(?m)^\s*([^#;\s][^=:\n]*?)\s*[:=]"#
-            captureGroup = 1
-        case .plain:
-            pattern = #"(?m)^\s*([A-Za-z0-9_.-]+)\s*[:=]"#
-            captureGroup = 1
-        }
-
-        applyRegex(
-            pattern,
-            color: NSColor.systemTeal,
-            text: text,
-            storage: storage,
-            options: [],
-            captureGroup: captureGroup
-        )
-    }
-
-    private func applyRegex(
-        _ pattern: String,
-        color: NSColor,
-        text: String,
-        storage: NSTextStorage,
-        options: NSRegularExpression.Options = [],
-        captureGroup: Int? = nil
-    ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        regex.matches(in: text, range: range).forEach { match in
-            let targetRange: NSRange
-            if let captureGroup, match.numberOfRanges > captureGroup {
-                targetRange = match.range(at: captureGroup)
-            } else {
-                targetRange = match.range
-            }
-            guard targetRange.location != NSNotFound else { return }
-            storage.addAttribute(.foregroundColor, value: color, range: targetRange)
-        }
-    }
-}
-
-private final class CommandAwareTextView: NSTextView {
-    var onSaveRequested: (() -> Void)?
-
-    override func keyDown(with event: NSEvent) {
-        if handleFindShortcuts(event) {
-            return
-        }
-        super.keyDown(with: event)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if handleFindShortcuts(event) {
-            return true
-        }
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard modifiers.contains(.command),
-              let key = event.charactersIgnoringModifiers?.lowercased() else {
-            return super.performKeyEquivalent(with: event)
-        }
-        if key == "s" {
-            onSaveRequested?()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    private func handleFindShortcuts(_ event: NSEvent) -> Bool {
-        guard event.type == .keyDown else { return false }
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard modifiers.contains(.command),
-              let key = event.charactersIgnoringModifiers?.lowercased() else {
-            return false
-        }
-
-        let hasShift = modifiers.contains(.shift)
-        switch key {
-        case "f":
-            showFindPanel()
-            return true
-        case "g":
-            jumpFindResult(previous: hasShift)
-            return true
-        default:
-            return false
-        }
-    }
-
-    private func showFindPanel() {
-        window?.makeFirstResponder(self)
-        let item = NSMenuItem()
-        item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
-        performFindPanelAction(item)
-    }
-
-    private func jumpFindResult(previous: Bool) {
-        window?.makeFirstResponder(self)
-        let item = NSMenuItem()
-        item.tag = Int(previous ? NSFindPanelAction.previous.rawValue : NSFindPanelAction.next.rawValue)
-        performFindPanelAction(item)
-    }
-}
-
-private enum SyntaxKind {
-    case plain
-    case json
-    case yaml
-    case toml
-    case properties
-    case ini
-}
-
-private final class LineNumberGutterView: NSView {
-    var totalLines: Int = 1
-    var contentOffsetY: CGFloat = 0
-    var lineHeight: CGFloat = 16
-    var topInset: CGFloat = 0
-
-    override var isFlipped: Bool { true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.windowBackgroundColor.setFill()
-        dirtyRect.fill()
-
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
-            .foregroundColor: NSColor.labelColor.withAlphaComponent(0.8),
-        ]
-
-        let visibleTop = contentOffsetY - topInset
-        let firstLine = max(Int(floor(visibleTop / max(lineHeight, 1))) + 1, 1)
-        let visibleBottom = contentOffsetY + bounds.height
-        let lastLine = min(Int(ceil((visibleBottom - topInset) / max(lineHeight, 1))) + 1, totalLines)
-
-        if firstLine <= lastLine {
-            for line in firstLine...lastLine {
-                let y = topInset + CGFloat(line - 1) * lineHeight - contentOffsetY
-                let text = "\(line)" as NSString
-                let size = text.size(withAttributes: attrs)
-                let x = bounds.width - size.width - 8
-                text.draw(at: NSPoint(x: x, y: y), withAttributes: attrs)
-            }
-        }
-
-        NSColor.separatorColor.setStroke()
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: bounds.width - 0.5, y: 0))
-        path.line(to: NSPoint(x: bounds.width - 0.5, y: bounds.height))
-        path.lineWidth = 1
-        path.stroke()
-    }
+private enum ServerPropertiesMode {
+    case visual
+    case raw
 }
