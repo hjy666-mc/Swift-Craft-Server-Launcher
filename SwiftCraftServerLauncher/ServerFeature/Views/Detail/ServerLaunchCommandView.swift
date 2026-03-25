@@ -19,7 +19,6 @@ struct ServerLaunchCommandView: View {
     @State private var customLaunchCommand: String = ""
     @State private var isDirty = false
     @State private var isVerifyingJar = false
-    @State private var selectedSection: ServerDetailSection = .console
     @State private var launchCommandAutoSaveTask: Task<Void, Never>?
     @Namespace private var sectionIndicatorNamespace
     private var isChinese: Bool {
@@ -30,6 +29,17 @@ struct ServerLaunchCommandView: View {
     }
     private var supportsPlugins: Bool {
         server.serverType == .paper
+    }
+    private var currentSection: ServerDetailSection {
+        let requested = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+        switch requested {
+        case .mods where !supportsMods:
+            return .console
+        case .plugins where !supportsPlugins:
+            return .console
+        default:
+            return requested
+        }
     }
 
     var body: some View {
@@ -120,7 +130,14 @@ struct ServerLaunchCommandView: View {
         .onAppear {
             customLaunchCommand = server.launchCommand
             isDirty = false
-            selectedSection = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: server.id) { _, _ in
+            customLaunchCommand = server.launchCommand
+            isDirty = false
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: detailState.serverPanelSection) { _, _ in
             normalizeSelectedSectionIfNeeded()
         }
         .onChange(of: server.serverType) { _, _ in
@@ -142,12 +159,11 @@ struct ServerLaunchCommandView: View {
         let rowButton = Button {
             guard isEnabled else { return }
             withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
-                selectedSection = section
                 detailState.serverPanelSection = section.rawValue
             }
         } label: {
             HStack(spacing: 8) {
-                if selectedSection == section {
+                if currentSection == section {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color.accentColor)
                         .frame(width: 3, height: 16)
@@ -170,7 +186,7 @@ struct ServerLaunchCommandView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .foregroundStyle(isEnabled ? (selectedSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
+            .foregroundStyle(isEnabled ? (currentSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -182,13 +198,11 @@ struct ServerLaunchCommandView: View {
     }
 
     private func normalizeSelectedSectionIfNeeded() {
-        if selectedSection == .mods, !supportsMods {
-            selectedSection = .console
+        if currentSection == .mods, !supportsMods {
             detailState.serverPanelSection = ServerDetailSection.console.rawValue
             return
         }
-        if selectedSection == .plugins, !supportsPlugins {
-            selectedSection = .console
+        if currentSection == .plugins, !supportsPlugins {
             detailState.serverPanelSection = ServerDetailSection.console.rawValue
         }
     }
