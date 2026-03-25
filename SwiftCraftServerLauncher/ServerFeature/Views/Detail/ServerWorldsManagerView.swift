@@ -14,62 +14,46 @@ struct ServerWorldsManagerView: View {
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        CommonSheetView(
-            header: {
-                HStack {
-                    Text("server.worlds.title".localized())
-                        .font(.headline)
-                    Spacer()
-                    Button("server.worlds.open_folder".localized()) { openFolder() }
-                    Button("server.worlds.import".localized()) { showImporter = true }
-                }
-            },
-            body: {
+        ServerDetailPage(
+            title: "server.worlds.title".localized(),
+            content: {
                 if isRemoteServer ? remoteFolders.isEmpty : folders.isEmpty {
-                    Text("common.empty".localized())
-                        .foregroundColor(.secondary)
+                    ServerDetailEmptyState(text: "common.empty".localized())
                 } else {
-                    List {
-                        if isRemoteServer {
-                            ForEach(remoteFolders, id: \.self) { name in
-                                HStack {
-                                    Text(name)
-                                    Spacer()
-                                    Button("common.remove".localized()) {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            if isRemoteServer {
+                                ForEach(Array(remoteFolders.enumerated()), id: \.offset) { index, name in
+                                    row(title: name) {
                                         if generalSettings.confirmDeleteWorld {
                                             pendingRemoteRemoveName = name
                                         } else {
                                             removeRemoteFolder(name)
                                         }
                                     }
+                                    if index < remoteFolders.count - 1 {
+                                        Divider()
+                                    }
                                 }
-                            }
-                        } else {
-                            ForEach(folders, id: \.self) { url in
-                                HStack {
-                                    Text(url.lastPathComponent)
-                                    Spacer()
-                                    Button("common.remove".localized()) {
+                            } else {
+                                ForEach(Array(folders.enumerated()), id: \.offset) { index, url in
+                                    row(title: url.lastPathComponent) {
                                         if generalSettings.confirmDeleteWorld {
                                             pendingLocalRemoveURL = url
                                         } else {
                                             removeFolder(url)
                                         }
                                     }
+                                    if index < folders.count - 1 {
+                                        Divider()
+                                    }
                                 }
                             }
                         }
                     }
-                    .frame(minHeight: 420)
-                }
-            },
-            footer: {
-                HStack {
-                    Spacer()
                 }
             }
         )
-        .frame(minWidth: 760, minHeight: 520)
         .onAppear { loadFolders() }
         .onReceive(autoRefreshTimer) { _ in
             loadFolders()
@@ -81,6 +65,17 @@ struct ServerWorldsManagerView: View {
         ) { result in
             if case .success(let urls) = result {
                 importWorlds(urls)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+            switch action {
+            case .worldsOpenFolder:
+                openFolder()
+            case .worldsImport:
+                showImporter = true
+            default:
+                break
             }
         }
         .confirmationDialog(
@@ -116,6 +111,18 @@ struct ServerWorldsManagerView: View {
                 Text(String(format: "server.worlds.remove.message".localized(), pendingRemoteRemoveName ?? ""))
             }
         }
+    }
+
+    private func row(title: String, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Spacer()
+            Button("common.remove".localized(), action: onRemove)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
     }
 
     private var isRemoteServer: Bool {

@@ -13,61 +13,46 @@ struct ServerPluginsManagerView: View {
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        CommonSheetView(
-            header: {
-                HStack {
-                    Text("server.plugins.title".localized())
-                        .font(.headline)
-                    Spacer()
-                    Button("server.plugins.import".localized()) { showImporter = true }
-                }
-            },
-            body: {
+        ServerDetailPage(
+            title: "server.plugins.title".localized(),
+            content: {
                 if isRemoteServer ? remoteFiles.isEmpty : files.isEmpty {
-                    Text("common.empty".localized())
-                        .foregroundColor(.secondary)
+                    ServerDetailEmptyState(text: "common.empty".localized())
                 } else {
-                    List {
-                        if isRemoteServer {
-                            ForEach(remoteFiles, id: \.self) { fileName in
-                                HStack {
-                                    Text(fileName)
-                                    Spacer()
-                                    Button("common.remove".localized()) {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            if isRemoteServer {
+                                ForEach(Array(remoteFiles.enumerated()), id: \.offset) { index, fileName in
+                                    row(title: fileName) {
                                         if generalSettings.confirmUninstallPluginMod {
                                             pendingRemoteRemoveFileName = fileName
                                         } else {
                                             removeRemoteFile(fileName)
                                         }
                                     }
+                                    if index < remoteFiles.count - 1 {
+                                        Divider()
+                                    }
                                 }
-                            }
-                        } else {
-                            ForEach(files, id: \.self) { url in
-                                HStack {
-                                    Text(url.lastPathComponent)
-                                    Spacer()
-                                    Button("common.remove".localized()) {
+                            } else {
+                                ForEach(Array(files.enumerated()), id: \.offset) { index, url in
+                                    row(title: url.lastPathComponent) {
                                         if generalSettings.confirmUninstallPluginMod {
                                             pendingLocalRemoveURL = url
                                         } else {
                                             removeFile(url)
                                         }
                                     }
+                                    if index < files.count - 1 {
+                                        Divider()
+                                    }
                                 }
                             }
                         }
                     }
-                    .frame(minHeight: 420)
-                }
-            },
-            footer: {
-                HStack {
-                    Spacer()
                 }
             }
         )
-        .frame(minWidth: 760, minHeight: 520)
         .onAppear { loadFiles() }
         .onReceive(autoRefreshTimer) { _ in
             loadFiles()
@@ -79,6 +64,12 @@ struct ServerPluginsManagerView: View {
         ) { result in
             if case .success(let urls) = result {
                 addFiles(urls)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+            if action == .pluginsImport {
+                showImporter = true
             }
         }
         .confirmationDialog(
@@ -114,6 +105,18 @@ struct ServerPluginsManagerView: View {
                 Text(String(format: "server.plugins.remove.message".localized(), pendingRemoteRemoveFileName ?? ""))
             }
         }
+    }
+
+    private func row(title: String, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Spacer()
+            Button("common.remove".localized(), action: onRemove)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
     }
 
     private var isRemoteServer: Bool {

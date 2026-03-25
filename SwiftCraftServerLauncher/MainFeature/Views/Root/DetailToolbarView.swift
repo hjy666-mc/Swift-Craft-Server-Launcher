@@ -24,6 +24,10 @@ public struct DetailToolbarView: ToolbarContent {
         openURL(url)
     }
 
+    private func post(_ action: ServerDetailToolbarAction) {
+        ServerDetailToolbarActionBus.post(action)
+    }
+
     public var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             switch detailState.selectedItem {
@@ -60,13 +64,54 @@ public struct DetailToolbarView: ToolbarContent {
 
                     Spacer()
 
-                    Button {
-                        serverActionManager.showInFinder(server: server)
-                    } label: {
-                        Label("game.path".localized(), systemImage: "folder")
-                            .foregroundStyle(.primary)
+                    if detailState.serverPanelSection == "console" {
+                        Button {
+                            serverActionManager.showInFinder(server: server)
+                        } label: {
+                            Label("game.path".localized(), systemImage: "folder")
+                                .foregroundStyle(.primary)
+                        }
+                        .help("game.path".localized())
                     }
-                    .help("game.path".localized())
+
+                    switch detailState.serverPanelSection {
+                    case "serverConfig":
+                        EmptyView()
+                    case "worlds":
+                        Button {
+                            post(.worldsOpenFolder)
+                        } label: {
+                            Label("server.worlds.open_folder".localized(), systemImage: "folder")
+                        }
+                        .help("server.worlds.open_folder".localized())
+                        Button {
+                            post(.worldsImport)
+                        } label: {
+                            Label("server.worlds.import".localized(), systemImage: "tray.and.arrow.down")
+                        }
+                        .help("server.worlds.import".localized())
+                    case "mods":
+                        Button {
+                            post(.modsImport)
+                        } label: {
+                            Label("server.mods.import".localized(), systemImage: "tray.and.arrow.down")
+                        }
+                        .help("server.mods.import".localized())
+                    case "plugins":
+                        Button {
+                            post(.pluginsImport)
+                        } label: {
+                            Label("server.plugins.import".localized(), systemImage: "tray.and.arrow.down")
+                        }
+                        .help("server.plugins.import".localized())
+                    default:
+                        Button {
+                            post(.consoleClear)
+                        } label: {
+                            Label("common.clear".localized(), systemImage: "trash")
+                        }
+                        .help("common.clear".localized())
+                    }
                 }
             case .resource:
                 if detailState.selectedProjectId != nil {
