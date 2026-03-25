@@ -15,45 +15,44 @@ struct ServerWorldsManagerView: View {
 
     var body: some View {
         ServerDetailPage(
-            title: "server.worlds.title".localized(),
-            content: {
-                if isRemoteServer ? remoteFolders.isEmpty : folders.isEmpty {
-                    ServerDetailEmptyState(text: "common.empty".localized())
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            if isRemoteServer {
-                                ForEach(Array(remoteFolders.enumerated()), id: \.offset) { index, name in
-                                    row(title: name) {
-                                        if generalSettings.confirmDeleteWorld {
-                                            pendingRemoteRemoveName = name
-                                        } else {
-                                            removeRemoteFolder(name)
-                                        }
-                                    }
-                                    if index < remoteFolders.count - 1 {
-                                        Divider()
+            title: "server.worlds.title".localized()
+        ) {
+            if isRemoteServer ? remoteFolders.isEmpty : folders.isEmpty {
+                ServerDetailEmptyState(text: "common.empty".localized())
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if isRemoteServer {
+                            ForEach(Array(remoteFolders.enumerated()), id: \.offset) { index, name in
+                                row(title: name) {
+                                    if generalSettings.confirmDeleteWorld {
+                                        pendingRemoteRemoveName = name
+                                    } else {
+                                        removeRemoteFolder(name)
                                     }
                                 }
-                            } else {
-                                ForEach(Array(folders.enumerated()), id: \.offset) { index, url in
-                                    row(title: url.lastPathComponent) {
-                                        if generalSettings.confirmDeleteWorld {
-                                            pendingLocalRemoveURL = url
-                                        } else {
-                                            removeFolder(url)
-                                        }
+                                if index < remoteFolders.count - 1 {
+                                    Divider()
+                                }
+                            }
+                        } else {
+                            ForEach(Array(folders.enumerated()), id: \.offset) { index, url in
+                                row(title: url.lastPathComponent) {
+                                    if generalSettings.confirmDeleteWorld {
+                                        pendingLocalRemoveURL = url
+                                    } else {
+                                        removeFolder(url)
                                     }
-                                    if index < folders.count - 1 {
-                                        Divider()
-                                    }
+                                }
+                                if index < folders.count - 1 {
+                                    Divider()
                                 }
                             }
                         }
                     }
                 }
             }
-        )
+        }
         .onAppear { loadFolders() }
         .onReceive(autoRefreshTimer) { _ in
             loadFolders()

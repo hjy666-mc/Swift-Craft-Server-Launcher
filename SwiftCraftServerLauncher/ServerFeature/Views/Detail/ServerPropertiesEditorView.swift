@@ -69,16 +69,15 @@ struct ServerPropertiesEditorView: View {
     var body: some View {
         ServerDetailPage(
             title: "server.properties.title".localized(),
-            contentPadding: 0,
-            content: {
-                HSplitView {
-                    if showSidebar {
-                        configSidebar
-                    }
-                    contentArea
+            contentPadding: 0
+        ) {
+            HSplitView {
+                if showSidebar {
+                    configSidebar
                 }
+                contentArea
             }
-        )
+        }
         .fileImporter(
             isPresented: $isImportingFiles,
             allowedContentTypes: [.item],

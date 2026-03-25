@@ -18,7 +18,7 @@ extension Notification.Name {
     static let serverDetailToolbarAction = Notification.Name("serverDetailToolbarAction")
 }
 
-struct ServerDetailToolbarActionBus {
+enum ServerDetailToolbarActionBus {
     static func post(_ action: ServerDetailToolbarAction) {
         NotificationCenter.default.post(
             name: .serverDetailToolbarAction,

@@ -14,45 +14,44 @@ struct ServerPluginsManagerView: View {
 
     var body: some View {
         ServerDetailPage(
-            title: "server.plugins.title".localized(),
-            content: {
-                if isRemoteServer ? remoteFiles.isEmpty : files.isEmpty {
-                    ServerDetailEmptyState(text: "common.empty".localized())
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            if isRemoteServer {
-                                ForEach(Array(remoteFiles.enumerated()), id: \.offset) { index, fileName in
-                                    row(title: fileName) {
-                                        if generalSettings.confirmUninstallPluginMod {
-                                            pendingRemoteRemoveFileName = fileName
-                                        } else {
-                                            removeRemoteFile(fileName)
-                                        }
-                                    }
-                                    if index < remoteFiles.count - 1 {
-                                        Divider()
+            title: "server.plugins.title".localized()
+        ) {
+            if isRemoteServer ? remoteFiles.isEmpty : files.isEmpty {
+                ServerDetailEmptyState(text: "common.empty".localized())
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if isRemoteServer {
+                            ForEach(Array(remoteFiles.enumerated()), id: \.offset) { index, fileName in
+                                row(title: fileName) {
+                                    if generalSettings.confirmUninstallPluginMod {
+                                        pendingRemoteRemoveFileName = fileName
+                                    } else {
+                                        removeRemoteFile(fileName)
                                     }
                                 }
-                            } else {
-                                ForEach(Array(files.enumerated()), id: \.offset) { index, url in
-                                    row(title: url.lastPathComponent) {
-                                        if generalSettings.confirmUninstallPluginMod {
-                                            pendingLocalRemoveURL = url
-                                        } else {
-                                            removeFile(url)
-                                        }
+                                if index < remoteFiles.count - 1 {
+                                    Divider()
+                                }
+                            }
+                        } else {
+                            ForEach(Array(files.enumerated()), id: \.offset) { index, url in
+                                row(title: url.lastPathComponent) {
+                                    if generalSettings.confirmUninstallPluginMod {
+                                        pendingLocalRemoveURL = url
+                                    } else {
+                                        removeFile(url)
                                     }
-                                    if index < files.count - 1 {
-                                        Divider()
-                                    }
+                                }
+                                if index < files.count - 1 {
+                                    Divider()
                                 }
                             }
                         }
                     }
                 }
             }
-        )
+        }
         .onAppear { loadFiles() }
         .onReceive(autoRefreshTimer) { _ in
             loadFiles()

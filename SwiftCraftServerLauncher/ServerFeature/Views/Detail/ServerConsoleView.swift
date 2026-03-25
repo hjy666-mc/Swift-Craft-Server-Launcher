@@ -29,11 +29,10 @@ struct ServerConsoleView: View {
 
     var body: some View {
         ServerDetailPage(
-            title: "server.console.title".localized(),
-            content: {
-                terminalSurface
-            }
-        )
+            title: "server.console.title".localized()
+        ) {
+            terminalSurface
+        }
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
