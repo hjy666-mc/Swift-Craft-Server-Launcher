@@ -40,7 +40,7 @@ private struct ServerConfigTreeNode: Identifiable, Hashable {
 }
 
 private enum FileEditingMode: Equatable {
-    case none
+    case idle
     case newFile
     case newFolder
     case rename(ServerFileItem)
@@ -66,7 +66,7 @@ struct ServerPropertiesEditorView: View {
     @State private var serverPropertiesMode: ServerPropertiesMode = .visual
     @State private var showSidebar = true
     @State private var isImportingFiles = false
-    @State private var editingMode: FileEditingMode = .none
+    @State private var editingMode: FileEditingMode = .idle
     @State private var editingName = ""
     @FocusState private var editingField: EditingField?
     @State private var showDeleteConfirm = false
@@ -785,19 +785,19 @@ struct ServerPropertiesEditorView: View {
             createFolder()
         case .rename:
             renameSelected()
-        case .none:
+        case .idle:
             break
         }
     }
 
     private func cancelEditing() {
-        editingMode = .none
+        editingMode = .idle
         editingName = ""
         editingField = nil
     }
 
     private func finishEditing() {
-        editingMode = .none
+        editingMode = .idle
         editingName = ""
         editingField = nil
     }
