@@ -39,103 +39,104 @@ private struct ServerConfigTreeNode: Identifiable, Hashable {
     }
 }
 
+private enum FileEditingMode: Equatable {
+    case none
+    case newFile
+    case newFolder
+    case rename(ServerFileItem)
+}
+
+private enum EditingField: Hashable {
+    case newFile
+    case newFolder
+    case rename(String)
+}
+
 struct ServerPropertiesEditorView: View {
     let server: ServerInstance
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
-    @State private var properties: [String: String] = [:]
+    @StateObject private var serverActionManager = ServerActionManager.shared
+    @State var properties: [String: String] = [:]
     @State private var isLoaded = false
-    @State private var isDirty = false
-    @State private var searchText: String = ""
+    @State var isDirty = false
+    @State var searchText: String = ""
     @State private var fileItems: [ServerFileItem] = []
     @State private var selectedFile: ServerFileItem?
     @State private var selectedNodeId: String?
     @State private var serverPropertiesMode: ServerPropertiesMode = .visual
     @State private var showSidebar = true
     @State private var isImportingFiles = false
-    @State private var showNewFolderPrompt = false
-    @State private var newFolderName = ""
-    @State private var showNewFilePrompt = false
-    @State private var newFileName = ""
-    @State private var showRenamePrompt = false
-    @State private var renameValue = ""
-    @State private var renameTarget: ServerFileItem?
+    @State private var editingMode: FileEditingMode = .none
+    @State private var editingName = ""
+    @FocusState private var editingField: EditingField?
     @State private var showDeleteConfirm = false
     @State private var deleteTarget: ServerFileItem?
-    @State private var propertiesAutoSaveTask: Task<Void, Never>?
+    @State var propertiesAutoSaveTask: Task<Void, Never>?
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     private let editableExtensions = Set(["properties", "yml", "yaml", "toml", "json", "conf", "cfg", "ini", "txt", "log", "md"])
 
     var body: some View {
-        ServerDetailPage(
+        let page = ServerDetailPage(
             title: "server.properties.title".localized(),
-            contentPadding: 0
-        ) {
-            HSplitView {
-                if showSidebar {
-                    configSidebar
+            contentPadding: 0,
+            actions: { shortcutBar },
+            content: {
+                HSplitView {
+                    if showSidebar {
+                        configSidebar
+                    }
+                    contentArea
                 }
-                contentArea
             }
-        }
-        .fileImporter(
-            isPresented: $isImportingFiles,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                importFiles(urls, to: currentDirectoryPath)
-            case .failure(let error):
-                GlobalErrorHandler.shared.handle(error)
+        )
+        let baseView = page
+            .background(shortcutCommandPanel)
+            .fileImporter(
+                isPresented: $isImportingFiles,
+                allowedContentTypes: [.item],
+                allowsMultipleSelection: true
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    importFiles(urls, to: currentDirectoryPath)
+                case .failure(let error):
+                    GlobalErrorHandler.shared.handle(error)
+                }
             }
-        }
-        .alert("server.files.new_folder".localized(), isPresented: $showNewFolderPrompt) {
-            TextField("server.files.name_placeholder".localized(), text: $newFolderName)
-            Button("common.create".localized()) { createFolder() }
-            Button("common.cancel".localized(), role: .cancel) {}
-        }
-        .alert("server.files.new_file".localized(), isPresented: $showNewFilePrompt) {
-            TextField("server.files.name_placeholder".localized(), text: $newFileName)
-            Button("common.create".localized()) { createFile() }
-            Button("common.cancel".localized(), role: .cancel) {}
-        }
-        .alert("server.files.rename".localized(), isPresented: $showRenamePrompt) {
-            TextField("server.files.name_placeholder".localized(), text: $renameValue)
-            Button("common.confirm".localized()) { renameSelected() }
-            Button("common.cancel".localized(), role: .cancel) {}
-        }
-        .alert("server.files.delete".localized(), isPresented: $showDeleteConfirm) {
-            Button("common.delete".localized(), role: .destructive) { deleteSelected() }
-            Button("common.cancel".localized(), role: .cancel) {}
-        } message: {
-            Text("server.files.delete.confirm".localized())
-        }
-        .onAppear {
-            load()
-            loadFiles()
-        }
-        .onReceive(autoRefreshTimer) { _ in
-            if !isDirty {
+        let lifecycleView = baseView
+            .alert("server.files.delete".localized(), isPresented: $showDeleteConfirm) {
+                Button("common.delete".localized(), role: .destructive) { deleteSelected() }
+                Button("common.cancel".localized(), role: .cancel) {}
+            } message: {
+                Text("server.files.delete.confirm".localized())
+            }
+            .onAppear {
                 load()
+                loadFiles()
             }
-            loadFiles()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
-            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
-            handleToolbarAction(action)
-        }
-        .onDisappear {
-            propertiesAutoSaveTask?.cancel()
-            save()
-        }
-        .onChange(of: selectedNodeId) { _, newValue in
-            guard let newValue, let item = configItemById[newValue] else { return }
-            selectedFile = item
-        }
-        .onChange(of: selectedFile) { _, newValue in
-            selectedNodeId = newValue?.id
-        }
+            .onReceive(autoRefreshTimer) { _ in
+                if !isDirty {
+                    load()
+                }
+                loadFiles()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+                guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+                handleToolbarAction(action)
+            }
+            .onDisappear {
+                propertiesAutoSaveTask?.cancel()
+                save()
+            }
+            .onChange(of: selectedNodeId) { _, newValue in
+                guard let newValue, let item = configItemById[newValue] else { return }
+                selectedFile = item
+            }
+            .onChange(of: selectedFile) { _, newValue in
+                selectedNodeId = newValue?.id
+            }
+        return lifecycleView
     }
 
     private func load() {
@@ -165,7 +166,7 @@ struct ServerPropertiesEditorView: View {
         }
     }
 
-    private func save() {
+    func save() {
         if server.nodeId != ServerNode.local.id || server.javaPath == "java" {
             Task {
                 guard let node = serverNodeRepository.getNode(by: server.nodeId) else { return }
@@ -258,16 +259,30 @@ struct ServerPropertiesEditorView: View {
 
     private var configSidebar: some View {
         List(selection: $selectedNodeId) {
+            if editingMode == .newFile || editingMode == .newFolder {
+                editingRow(isFolder: editingMode == .newFolder)
+            }
             OutlineGroup(configTree, children: \.children) { node in
                 let row = HStack(spacing: 8) {
                     Image(systemName: node.isFolder ? "folder" : "doc.text")
                         .foregroundStyle(.secondary)
-                    Text(node.name)
-                        .lineLimit(1)
+                    if case .rename(let target) = editingMode, target.id == node.id {
+                        TextField("server.files.name_placeholder".localized(), text: $editingName)
+                            .textFieldStyle(.plain)
+                            .onSubmit { commitEditing() }
+                            .focused($editingField, equals: .rename(target.id))
+                    } else {
+                        Text(node.name)
+                            .lineLimit(1)
+                    }
                 }
                 .contentShape(Rectangle())
                 .contextMenu {
                     if let item = itemForNode(node) {
+                        Button("server.files.open_in_finder".localized()) {
+                            openInFinder(item)
+                        }
+                        Divider()
                         Button("server.files.rename".localized()) {
                             beginRename(item)
                         }
@@ -280,10 +295,10 @@ struct ServerPropertiesEditorView: View {
                         isImportingFiles = true
                     }
                     Button("server.files.new_folder".localized()) {
-                        showNewFolderPrompt = true
+                        beginNewFolder()
                     }
                     Button("server.files.new_file".localized()) {
-                        showNewFilePrompt = true
+                        beginNewFile()
                     }
                 }
                 let droppableRow: some View = {
@@ -308,14 +323,18 @@ struct ServerPropertiesEditorView: View {
             handleDrop(providers, to: "")
         }
         .contextMenu {
+            Button("server.files.open_in_finder".localized()) {
+                serverActionManager.showInFinder(server: server)
+            }
+            Divider()
             Button("server.files.upload".localized()) {
                 isImportingFiles = true
             }
             Button("server.files.new_folder".localized()) {
-                showNewFolderPrompt = true
+                beginNewFolder()
             }
             Button("server.files.new_file".localized()) {
-                showNewFilePrompt = true
+                beginNewFile()
             }
         }
         .frame(minWidth: 150, idealWidth: 190, maxWidth: 260, maxHeight: .infinity)
@@ -564,7 +583,7 @@ struct ServerPropertiesEditorView: View {
     }
 
     private func createFolder() {
-        let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let targetPath = currentDirectoryPath.isEmpty ? trimmed : "\(currentDirectoryPath)/\(trimmed)"
         if isRemoteServer {
@@ -573,7 +592,7 @@ struct ServerPropertiesEditorView: View {
                 do {
                     try await SSHNodeService.createRemoteDirectory(node: node, serverName: server.name, relativePath: targetPath)
                     await MainActor.run {
-                        newFolderName = ""
+                        finishEditing()
                         loadFiles()
                     }
                 } catch {
@@ -586,7 +605,7 @@ struct ServerPropertiesEditorView: View {
         let url = root.appendingPathComponent(targetPath)
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            newFolderName = ""
+            finishEditing()
             loadFiles()
         } catch {
             GlobalErrorHandler.shared.handle(error)
@@ -594,7 +613,7 @@ struct ServerPropertiesEditorView: View {
     }
 
     private func createFile() {
-        let trimmed = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let targetPath = currentDirectoryPath.isEmpty ? trimmed : "\(currentDirectoryPath)/\(trimmed)"
         if isRemoteServer {
@@ -603,7 +622,7 @@ struct ServerPropertiesEditorView: View {
                 do {
                     try await SSHNodeService.writeRemoteConfigFile(node: node, serverName: server.name, relativePath: targetPath, content: "")
                     await MainActor.run {
-                        newFileName = ""
+                        finishEditing()
                         loadFiles()
                     }
                 } catch {
@@ -619,7 +638,7 @@ struct ServerPropertiesEditorView: View {
             if !FileManager.default.fileExists(atPath: url.path) {
                 FileManager.default.createFile(atPath: url.path, contents: nil)
             }
-            newFileName = ""
+            finishEditing()
             loadFiles()
         } catch {
             GlobalErrorHandler.shared.handle(error)
@@ -632,14 +651,16 @@ struct ServerPropertiesEditorView: View {
     }
 
     private func beginRename(_ item: ServerFileItem) {
-        renameTarget = item
-        renameValue = item.fileName
-        showRenamePrompt = true
+        editingMode = .rename(item)
+        editingName = item.fileName
+        DispatchQueue.main.async {
+            editingField = .rename(item.id)
+        }
     }
 
     private func renameSelected() {
-        guard let target = renameTarget else { return }
-        let trimmed = renameValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard case .rename(let target) = editingMode else { return }
+        let trimmed = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let newPath = target.folderPath.isEmpty ? trimmed : "\(target.folderPath)/\(trimmed)"
         if isRemoteServer {
@@ -648,8 +669,7 @@ struct ServerPropertiesEditorView: View {
                 do {
                     try await SSHNodeService.moveRemotePath(node: node, serverName: server.name, from: target.relativePath, to: newPath)
                     await MainActor.run {
-                        self.renameTarget = nil
-                        renameValue = ""
+                        finishEditing()
                         loadFiles()
                     }
                 } catch {
@@ -663,8 +683,7 @@ struct ServerPropertiesEditorView: View {
         let targetURL = root.appendingPathComponent(newPath)
         do {
             try FileManager.default.moveItem(at: sourceURL, to: targetURL)
-            self.renameTarget = nil
-            renameValue = ""
+            finishEditing()
             loadFiles()
         } catch {
             GlobalErrorHandler.shared.handle(error)
@@ -716,9 +735,9 @@ struct ServerPropertiesEditorView: View {
         case .configUpload:
             isImportingFiles = true
         case .configNewFolder:
-            showNewFolderPrompt = true
+            beginNewFolder()
         case .configNewFile:
-            showNewFilePrompt = true
+            beginNewFile()
         case .configRename:
             beginRenameSelected()
         case .configDelete:
@@ -728,132 +747,99 @@ struct ServerPropertiesEditorView: View {
         }
     }
 
-    private var filteredKeys: [String] {
-        let keys = properties.keys.sorted()
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return keys }
-        return keys.filter { key in
-            let value = properties[key]?.lowercased() ?? ""
-            let localized = localizedName(for: key).lowercased()
-            return key.lowercased().contains(query) || localized.contains(query) || value.contains(query)
+    private func openInFinder(_ item: ServerFileItem) {
+        if server.nodeId != ServerNode.local.id {
+            serverActionManager.showInFinder(server: server)
+            return
+        }
+        let root = AppPaths.serverDirectory(serverName: server.name)
+        let targetURL = root.appendingPathComponent(item.relativePath)
+        if item.isDirectory {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: targetURL.path)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([targetURL])
         }
     }
 
-    private func propertyRow(key: String) -> some View {
-        let value = properties[key] ?? ""
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) {
-                Text(key)
-                    .frame(width: 160, alignment: .leading)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(localizedName(for: key))
-                    .frame(width: 160, alignment: .leading)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                valueEditor(for: key, value: value)
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(key)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(localizedName(for: key))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                valueEditor(for: key, value: value)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    private func beginNewFile() {
+        editingMode = .newFile
+        editingName = ""
+        DispatchQueue.main.async {
+            editingField = .newFile
         }
     }
 
-    private func valueEditor(for key: String, value: String) -> some View {
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalized == "true" || normalized == "false" {
-            return AnyView(
-                Toggle("", isOn: Binding(
-                    get: { normalized == "true" },
-                    set: { newValue in
-                        properties[key] = newValue ? "true" : "false"
-                        markPropertiesDirtyAndAutoSave()
-                    }
-                ))
-                .labelsHidden()
-            )
+    private func beginNewFolder() {
+        editingMode = .newFolder
+        editingName = ""
+        DispatchQueue.main.async {
+            editingField = .newFolder
         }
-        return AnyView(
-            TextField("", text: Binding(
-                get: { properties[key] ?? "" },
-                set: { newValue in
-                    properties[key] = newValue
-                    markPropertiesDirtyAndAutoSave()
-                }
-            ))
-            .textFieldStyle(.roundedBorder)
+    }
+
+    private func commitEditing() {
+        switch editingMode {
+        case .newFile:
+            createFile()
+        case .newFolder:
+            createFolder()
+        case .rename:
+            renameSelected()
+        case .none:
+            break
+        }
+    }
+
+    private func cancelEditing() {
+        editingMode = .none
+        editingName = ""
+        editingField = nil
+    }
+
+    private func finishEditing() {
+        editingMode = .none
+        editingName = ""
+        editingField = nil
+    }
+
+    private func editingRow(isFolder: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isFolder ? "folder.badge.plus" : "doc.badge.plus")
+                .foregroundStyle(.secondary)
+            TextField("server.files.name_placeholder".localized(), text: $editingName)
+                .textFieldStyle(.plain)
+                .onSubmit { commitEditing() }
+                .focused($editingField, equals: isFolder ? .newFolder : .newFile)
+            Button {
+                cancelEditing()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var shortcutCommandPanel: some View {
+        ServerPropertiesShortcutCommands(
+            showSidebar: $showSidebar,
+            isImportingFiles: $isImportingFiles,
+            showNewFolderPrompt: Binding(
+                get: { editingMode == .newFolder },
+                set: { if $0 { beginNewFolder() } else { cancelEditing() } }
+            ),
+            showNewFilePrompt: Binding(
+                get: { editingMode == .newFile },
+                set: { if $0 { beginNewFile() } else { cancelEditing() } }
+            ),
+            beginRenameSelected: beginRenameSelected,
+            confirmDeleteSelected: confirmDeleteSelected
         )
     }
 
-    private func markPropertiesDirtyAndAutoSave() {
-        isDirty = true
-        propertiesAutoSaveTask?.cancel()
-        propertiesAutoSaveTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                save()
-            }
-        }
-    }
-
-    private func localizedName(for key: String) -> String {
-        switch key {
-        case "server-port": return "server.properties.name.server-port".localized()
-        case "server-ip": return "server.properties.name.server-ip".localized()
-        case "online-mode": return "server.properties.name.online-mode".localized()
-        case "enable-command-block": return "server.properties.name.enable-command-block".localized()
-        case "view-distance": return "server.properties.name.view-distance".localized()
-        case "simulation-distance": return "server.properties.name.simulation-distance".localized()
-        case "max-players": return "server.properties.name.max-players".localized()
-        case "motd": return "server.properties.name.motd".localized()
-        case "level-name": return "server.properties.name.level-name".localized()
-        case "level-seed": return "server.properties.name.level-seed".localized()
-        case "level-type": return "server.properties.name.level-type".localized()
-        case "difficulty": return "server.properties.name.difficulty".localized()
-        case "gamemode": return "server.properties.name.gamemode".localized()
-        case "pvp": return "server.properties.name.pvp".localized()
-        case "allow-flight": return "server.properties.name.allow-flight".localized()
-        case "spawn-protection": return "server.properties.name.spawn-protection".localized()
-        case "white-list": return "server.properties.name.white-list".localized()
-        case "enforce-whitelist": return "server.properties.name.enforce-whitelist".localized()
-        case "generate-structures": return "server.properties.name.generate-structures".localized()
-        case "allow-nether": return "server.properties.name.allow-nether".localized()
-        case "hardcore": return "server.properties.name.hardcore".localized()
-        case "max-world-size": return "server.properties.name.max-world-size".localized()
-        case "resource-pack": return "server.properties.name.resource-pack".localized()
-        case "resource-pack-sha1": return "server.properties.name.resource-pack-sha1".localized()
-        case "enable-status": return "server.properties.name.enable-status".localized()
-        case "broadcast-rcon-to-ops": return "server.properties.name.broadcast-rcon-to-ops".localized()
-        case "broadcast-console-to-ops": return "server.properties.name.broadcast-console-to-ops".localized()
-        case "enable-rcon": return "server.properties.name.enable-rcon".localized()
-        case "rcon.port": return "server.properties.name.rcon.port".localized()
-        case "rcon.password": return "server.properties.name.rcon.password".localized()
-        case "enable-query": return "server.properties.name.enable-query".localized()
-        case "query.port": return "server.properties.name.query.port".localized()
-        case "prevent-proxy-connections": return "server.properties.name.prevent-proxy-connections".localized()
-        case "use-native-transport": return "server.properties.name.use-native-transport".localized()
-        case "hide-online-players": return "server.properties.name.hide-online-players".localized()
-        case "spawn-monsters": return "server.properties.name.spawn-monsters".localized()
-        case "spawn-animals": return "server.properties.name.spawn-animals".localized()
-        case "spawn-npcs": return "server.properties.name.spawn-npcs".localized()
-        case "spawn-protection-radius": return "server.properties.name.spawn-protection-radius".localized()
-        default: return key
-        }
+    private var shortcutBar: some View {
+        ServerPropertiesShortcutBar()
     }
 }
 
