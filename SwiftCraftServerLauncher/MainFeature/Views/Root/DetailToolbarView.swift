@@ -104,13 +104,15 @@ public struct DetailToolbarView: ToolbarContent {
                             Label("server.plugins.import".localized(), systemImage: "tray.and.arrow.down")
                         }
                         .help("server.plugins.import".localized())
-                    default:
+                    case "console":
                         Button {
                             post(.consoleClear)
                         } label: {
                             Label("common.clear".localized(), systemImage: "trash")
                         }
                         .help("common.clear".localized())
+                    default:
+                        EmptyView()
                     }
                 }
             case .resource:

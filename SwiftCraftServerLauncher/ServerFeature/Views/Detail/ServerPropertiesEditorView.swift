@@ -56,6 +56,7 @@ struct ServerPropertiesEditorView: View {
     let server: ServerInstance
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @StateObject private var serverActionManager = ServerActionManager.shared
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State var properties: [String: String] = [:]
     @State private var isLoaded = false
     @State var isDirty = false
@@ -80,7 +81,13 @@ struct ServerPropertiesEditorView: View {
         let page = ServerDetailPage(
             title: "server.properties.title".localized(),
             contentPadding: 0,
-            actions: { shortcutBar },
+            actions: {
+                if generalSettings.serverFileManagerShowShortcuts {
+                    shortcutBar
+                } else {
+                    EmptyView()
+                }
+            },
             content: {
                 HSplitView {
                     if showSidebar {

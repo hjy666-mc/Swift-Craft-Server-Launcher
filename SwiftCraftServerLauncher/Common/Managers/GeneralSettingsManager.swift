@@ -109,6 +109,53 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         }
     }
 
+    // MARK: - 服务器管理外观
+
+    @AppStorage("serverTabConsoleEnabled")
+    var serverTabConsoleEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabConfigEnabled")
+    var serverTabConfigEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabPlayersEnabled")
+    var serverTabPlayersEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabWorldsEnabled")
+    var serverTabWorldsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabModsEnabled")
+    var serverTabModsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabPluginsEnabled")
+    var serverTabPluginsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabSchedulesEnabled")
+    var serverTabSchedulesEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabLogsEnabled")
+    var serverTabLogsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverFileManagerShowShortcuts")
+    var serverFileManagerShowShortcuts: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
     // MARK: - 启动 / 更新
     @AppStorage("launchAtLoginEnabled")
     var launchAtLoginEnabled: Bool = false {

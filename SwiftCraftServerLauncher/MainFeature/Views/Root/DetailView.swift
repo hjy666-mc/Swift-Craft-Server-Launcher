@@ -79,6 +79,10 @@ struct DetailView: View {
                     } else {
                         ServerConsoleView(server: server)
                     }
+                case "schedules":
+                    ServerSchedulesView(server: server)
+                case "logs":
+                    ServerLogManagerView(server: server)
                 default:
                     ServerConsoleView(server: server)
                 }
