@@ -28,22 +28,11 @@ struct ServerConsoleView: View {
     @State private var scrollToLeadingToken: Int = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("server.console.title".localized())
-                    .font(.headline)
-                Spacer()
-                Button {
-                    clearConsole()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.plain)
-                .help("common.clear".localized())
-            }
+        ServerDetailPage(
+            title: "server.console.title".localized()
+        ) {
             terminalSurface
         }
-        .padding(12)
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
@@ -91,6 +80,12 @@ struct ServerConsoleView: View {
         .onReceive(console.$latestEvent) { event in
             guard let event, event.serverId == server.id else { return }
             consoleEvent = event
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+            if action == .consoleClear {
+                clearConsole()
+            }
         }
     }
 
@@ -847,9 +842,9 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = false
-        scrollView.hasHorizontalScroller = true
+        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
-        scrollView.horizontalScrollElasticity = .automatic
+        scrollView.horizontalScrollElasticity = .none
 
         guard let textView = scrollView.documentView as? NSTextView else {
             return scrollView
@@ -858,8 +853,8 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         textView.isSelectable = true
         textView.isRichText = true
         textView.drawsBackground = false
-        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.textContainerInset = NSSize(width: 8, height: 6)
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+        textView.textContainerInset = NSSize(width: 10, height: 8)
         textView.textColor = .textColor
         textView.insertionPointColor = .textColor
         textView.isHorizontallyResizable = false
@@ -874,6 +869,7 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         )
         textView.isVerticallyResizable = true
         textView.maxSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.setFrameSize(NSSize(width: scrollView.contentSize.width, height: textView.frame.size.height))
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
@@ -886,11 +882,15 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         context.coordinator.enableColor = enableColor
         if let textView = context.coordinator.textView {
-            textView.maxSize = NSSize(width: nsView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            let width = nsView.contentSize.width
+            textView.textContainer?.widthTracksTextView = true
             textView.textContainer?.containerSize = NSSize(
-                width: nsView.contentSize.width,
+                width: width,
                 height: CGFloat.greatestFiniteMagnitude
             )
+            textView.minSize = NSSize(width: width, height: 0)
+            textView.maxSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+            textView.setFrameSize(NSSize(width: width, height: textView.frame.size.height))
         }
         context.coordinator.updateInitialIfNeeded(lines: initialLines)
         context.coordinator.apply(event: event)

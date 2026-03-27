@@ -7,9 +7,6 @@
     "—" : {
 
     },
-    ":" : {
-      "shouldTranslate" : false
-    },
     "…" : {
       "shouldTranslate" : false
     },
@@ -45,6 +42,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ (%2$lld)"
+          }
+        }
+      }
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
           }
         }
       }
@@ -7557,9 +7564,6 @@
         }
       }
     },
-    "http://localhost:11434" : {
-      "shouldTranslate" : false
-    },
     "launcher.import.button" : {
       "comment" : "Launcher import button text",
       "extractionState" : "manual",
@@ -11147,6 +11151,40 @@
     "Server" : {
 
     },
+    "server.configs.folder.root" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Root"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "根目录"
+          }
+        }
+      }
+    },
+    "server.configs.toggle_sidebar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示或隐藏边栏"
+          }
+        }
+      }
+    },
     "server.console.load_earlier_history" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11398,6 +11436,278 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "其他配置文件"
+          }
+        }
+      }
+    },
+    "server.files.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除"
+          }
+        }
+      }
+    },
+    "server.files.delete.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This will remove the file or folder."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将删除该文件或文件夹。"
+          }
+        }
+      }
+    },
+    "server.files.folder_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop files here or use the toolbar to add items."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可拖拽文件到这里，或使用上方按钮添加。"
+          }
+        }
+      }
+    },
+    "server.files.name_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称"
+          }
+        }
+      }
+    },
+    "server.files.new_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件"
+          }
+        }
+      }
+    },
+    "server.files.new_folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹"
+          }
+        }
+      }
+    },
+    "server.files.not_editable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file type cannot be edited here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该文件类型无法在此编辑。"
+          }
+        }
+      }
+    },
+    "server.files.open_in_finder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show in Finder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在访达中显示"
+          }
+        }
+      }
+    },
+    "server.files.rename" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘⌫ Delete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘⌫ 删除"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.new_file" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘N New File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘N 新建文件"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.new_folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧⌘N New Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧⌘N 新建文件夹"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.rename" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘R Rename"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘R 重命名"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.sidebar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘\\ Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘\\ 边栏"
+          }
+        }
+      }
+    },
+    "server.files.shortcut.upload" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘U Upload"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘U 上传"
+          }
+        }
+      }
+    },
+    "server.files.upload" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传"
           }
         }
       }
@@ -11788,13 +12098,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Server Config"
+            "value" : "File Management"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务器配置"
+            "state" : "needs_review",
+            "value" : "文件管理"
           }
         }
       }
@@ -11921,6 +12231,142 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "世界管理"
+          }
+        }
+      }
+    },
+    "server.logs.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No log files."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无日志文件。"
+          }
+        }
+      }
+    },
+    "server.logs.empty.archives" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No archived logs."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无已打包日志。"
+          }
+        }
+      }
+    },
+    "server.logs.empty.crash_reports" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No crash reports."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无错误报告。"
+          }
+        }
+      }
+    },
+    "server.logs.open_folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示"
+          }
+        }
+      }
+    },
+    "server.logs.remote_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote logs are not available yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "远程节点日志暂不支持。"
+          }
+        }
+      }
+    },
+    "server.logs.section.archives" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived Logs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已打包日志"
+          }
+        }
+      }
+    },
+    "server.logs.section.crash_reports" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crash Reports"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "错误报告"
+          }
+        }
+      }
+    },
+    "server.logs.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log Manager"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日志管理"
           }
         }
       }
@@ -12329,6 +12775,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原始编辑"
+          }
+        }
+      }
+    },
+    "server.properties.mode.raw" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raw"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原始"
+          }
+        }
+      }
+    },
+    "server.properties.mode.visual" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visual"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可视化"
           }
         }
       }
@@ -13036,13 +13516,540 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Server Properties"
+            "value" : "File Management"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "服务器配置"
+            "value" : "文件管理"
+          }
+        }
+      }
+    },
+    "server.schedules.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "动作"
+          }
+        }
+      }
+    },
+    "server.schedules.action.command" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送命令"
+          }
+        }
+      }
+    },
+    "server.schedules.action.restart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重启"
+          }
+        }
+      }
+    },
+    "server.schedules.action.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动"
+          }
+        }
+      }
+    },
+    "server.schedules.action.stop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止"
+          }
+        }
+      }
+    },
+    "server.schedules.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建任务"
+          }
+        }
+      }
+    },
+    "server.schedules.command" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "命令"
+          }
+        }
+      }
+    },
+    "server.schedules.command.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. stop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "例如 stop"
+          }
+        }
+      }
+    },
+    "server.schedules.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create Schedule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建定时任务"
+          }
+        }
+      }
+    },
+    "server.schedules.days" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Days"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日期"
+          }
+        }
+      }
+    },
+    "server.schedules.days.everyday" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every day"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每天"
+          }
+        }
+      }
+    },
+    "server.schedules.default_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scheduled Task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时任务"
+          }
+        }
+      }
+    },
+    "server.schedules.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除"
+          }
+        }
+      }
+    },
+    "server.schedules.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑"
+          }
+        }
+      }
+    },
+    "server.schedules.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No schedules yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无定时任务。"
+          }
+        }
+      }
+    },
+    "server.schedules.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用"
+          }
+        }
+      }
+    },
+    "server.schedules.last_run" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last run:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次执行："
+          }
+        }
+      }
+    },
+    "server.schedules.name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称"
+          }
+        }
+      }
+    },
+    "server.schedules.next_run" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next run:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下次执行："
+          }
+        }
+      }
+    },
+    "server.schedules.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No scheduled tasks yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无定时任务。"
+          }
+        }
+      }
+    },
+    "server.schedules.run_now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即执行"
+          }
+        }
+      }
+    },
+    "server.schedules.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automate server actions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动执行服务器操作"
+          }
+        }
+      }
+    },
+    "server.schedules.time" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时间"
+          }
+        }
+      }
+    },
+    "server.schedules.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedules"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时任务"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.fri" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周五"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.mon" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周一"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.sat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sat"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周六"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.sun" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sun"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周日"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.thu" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周四"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.tue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周二"
+          }
+        }
+      }
+    },
+    "server.schedules.weekday.wed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周三"
           }
         }
       }
@@ -13484,7 +14491,287 @@
         }
       }
     },
-    "settings.appearance.tab" : {
+    "settings.appearance.server_file_shortcuts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File manager shortcuts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件管理快捷键"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_file_shortcuts.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show shortcut badges in server file manager."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在服务器文件管理中显示快捷键提示。"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_file_shortcuts.enable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show shortcut hints"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示快捷键提示"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_management" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server management"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.console" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Console"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制台"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.logs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日志管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.mods" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mods"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模组管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.players" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Players"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "玩家管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.plugins" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plugins"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插件管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.schedules" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedules"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定时任务"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.server_config" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server Config"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器配置"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tab.worlds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worlds"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "世界管理"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tabs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visible tabs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可见标签页"
+          }
+        }
+      }
+    },
+    "settings.appearance.server_tabs.select" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择"
+          }
+        }
+      }
+    },
+        "settings.appearance.section.console.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Console rendering preferences"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "控制台渲染相关设置"}}
+      }
+    },
+    "settings.appearance.section.console.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Console"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "控制台"}}
+      }
+    },
+    "settings.appearance.section.server.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Manage server detail tabs"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "管理服务器详情页可见内容"}}
+      }
+    },
+    "settings.appearance.section.server.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Server Management"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "服务器管理"}}
+      }
+    },
+    "settings.appearance.section.theme.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "App appearance theme"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "应用外观主题设置"}}
+      }
+    },
+    "settings.appearance.section.theme.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Theme"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "主题"}}
+      }
+    },
+"settings.appearance.tab" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -14958,7 +16245,63 @@
         }
       }
     },
-    "settings.general.backup.tab" : {
+        "settings.general.section.backup.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Automatic and manual backups"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "自动与手动备份设置"}}
+      }
+    },
+    "settings.general.section.backup.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Backup"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "备份"}}
+      }
+    },
+    "settings.general.section.basic.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Language and working directory"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "语言与工作目录相关设置"}}
+      }
+    },
+    "settings.general.section.basic.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Basic"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "基础"}}
+      }
+    },
+    "settings.general.section.safety.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Confirmation preferences"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "操作确认相关设置"}}
+      }
+    },
+    "settings.general.section.safety.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Safety"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "二次确认"}}
+      }
+    },
+    "settings.general.section.update.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Download and update behavior"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "下载与更新行为设置"}}
+      }
+    },
+    "settings.general.section.update.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {"stringUnit" : {"state" : "translated", "value" : "Update"}},
+        "zh-Hans" : {"stringUnit" : {"state" : "translated", "value" : "更新"}}
+      }
+    },
+"settings.general.backup.tab" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

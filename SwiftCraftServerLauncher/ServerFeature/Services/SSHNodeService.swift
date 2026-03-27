@@ -907,6 +907,66 @@ enum SSHNodeService {
         return files
     }
 
+    struct RemoteFileEntry: Hashable {
+        let relativePath: String
+        let isDirectory: Bool
+    }
+
+    static func listRemoteServerFiles(node: ServerNode, serverName: String) async throws -> [RemoteFileEntry] {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let marker = "__SCSL_FILE__"
+        let command = """
+        cd '\(escapeSingleQuotes(serverDir))' && find . -mindepth 1 -print | while IFS= read -r p; do if [ -d "$p" ]; then printf '\(marker)D|%s\\n' "${p#./}"; else printf '\(marker)F|%s\\n' "${p#./}"; fi; done
+        """
+        let output = try await execute(node: node, remoteCommand: command)
+        let entries = output
+            .components(separatedBy: marker)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .compactMap { line -> RemoteFileEntry? in
+                guard line.count > 2 else { return nil }
+                let parts = line.split(separator: "|", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { return nil }
+                let kind = parts[0]
+                let path = parts[1]
+                guard isValidRemoteConfigPath(path) else { return nil }
+                return RemoteFileEntry(relativePath: path, isDirectory: kind == "D")
+            }
+        return entries.sorted { $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending }
+    }
+
+    static func createRemoteDirectory(node: ServerNode, serverName: String, relativePath: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = "cd '\(escapeSingleQuotes(serverDir))' && mkdir -p '\(escapeSingleQuotes(relativePath))'"
+        _ = try await execute(node: node, remoteCommand: command)
+    }
+
+    static func moveRemotePath(node: ServerNode, serverName: String, from: String, to: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = "cd '\(escapeSingleQuotes(serverDir))' && mv '\(escapeSingleQuotes(from))' '\(escapeSingleQuotes(to))'"
+        _ = try await execute(node: node, remoteCommand: command)
+    }
+
+    static func removeRemotePath(node: ServerNode, serverName: String, relativePath: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let command = "cd '\(escapeSingleQuotes(serverDir))' && rm -rf '\(escapeSingleQuotes(relativePath))'"
+        _ = try await execute(node: node, remoteCommand: command)
+    }
+
+    static func uploadRemoteFile(node: ServerNode, serverName: String, localURL: URL, remoteDirectory: String) async throws {
+        let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverDir = "\(root)/servers/\(serverName)"
+        let targetDir = remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let remoteDirPath = targetDir.isEmpty ? serverDir : "\(serverDir)/\(targetDir)"
+        _ = try await execute(node: node, remoteCommand: "mkdir -p '\(escapeSingleQuotes(remoteDirPath))'")
+        let remotePath = "\(remoteDirPath)/\(localURL.lastPathComponent)"
+        try await scpToRemote(node: node, localPath: localURL.path, remotePath: remotePath, recursive: localURL.hasDirectoryPath)
+    }
+
     static func readRemoteConfigFile(node: ServerNode, serverName: String, relativePath: String) async throws -> String {
         let root = node.remoteRootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let serverDir = "\(root)/servers/\(serverName)"

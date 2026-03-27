@@ -63,6 +63,9 @@ public struct GeneralSettingsView: View {
   public var body: some View {
     Form {
       if sections.contains(.basic) {
+        Section(
+          header: Text("settings.general.section.basic.header".localized())
+        ) {
         LabeledContent("settings.language.picker".localized()) {
           HStack(alignment: .top, spacing: 8) {
             Picker("", selection: $selectedLanguage) {
@@ -103,35 +106,11 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom)
-        .padding(.bottom, 10)
+        .padding(.bottom, 4)
 
         LabeledContent("settings.launcher_working_directory".localized()) {
           HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
-              if !workingPathOptions.isEmpty {
-                Picker(
-                  "",
-                  selection: Binding(
-                    get: {
-                      generalSettings.launcherWorkingDirectory.isEmpty
-                        ? defaultWorkingDirectory
-                        : generalSettings.launcherWorkingDirectory
-                    },
-                    set: { generalSettings.launcherWorkingDirectory = $0 }
-                  )
-                ) {
-                  ForEach(workingPathOptions, id: \.path) { item in
-                    Text(workingPathDisplayString(for: item))
-                      .lineLimit(1)
-                      .truncationMode(.middle)
-                      .tag(item.path)
-                      .help(item.path)
-                  }
-                }
-                .labelsHidden()
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 320)
-              }
               DirectorySettingRow(
                 title: "settings.launcher_working_directory".localized(),
                 path: generalSettings.launcherWorkingDirectory.isEmpty
@@ -142,7 +121,6 @@ public struct GeneralSettingsView: View {
                 onReset: { resetWorkingDirectorySafely() },
                 showsResetButton: false
               )
-              .fixedSize()
               .fileImporter(
                 isPresented: $showDirectoryPicker,
                 allowedContentTypes: [.folder],
@@ -242,7 +220,7 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom(alignment: .firstTextBaseline))
-        .padding(.top, 10)
+        .padding(.top, 4)
 
         LabeledContent("settings.resource_cache.label".localized()) {
           HStack(alignment: .top, spacing: 8) {
@@ -260,20 +238,18 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom)
-        .padding(.top, 6)
+        .padding(.top, 4)
+        }
       }
 
       if sections.contains(.update) {
+        Section(
+          header: Text("settings.general.section.update.header".localized())
+        ) {
         LabeledContent("settings.general.launch_at_login".localized()) {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.launchAtLoginEnabled)
               .labelsHidden()
-            Text(
-              generalSettings.launchAtLoginEnabled
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.launchAtLoginEnabled == defaultLaunchAtLoginEnabled
@@ -288,12 +264,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.updateAutoCheckEnabled)
               .labelsHidden()
-            Text(
-              generalSettings.updateAutoCheckEnabled
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.updateAutoCheckEnabled == defaultUpdateAutoCheckEnabled
@@ -308,12 +278,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.updateAutoDownloadEnabled)
               .labelsHidden()
-            Text(
-              generalSettings.updateAutoDownloadEnabled
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.updateAutoDownloadEnabled
@@ -324,19 +288,17 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom)
+        }
       }
 
       if sections.contains(.safety) {
+        Section(
+          header: Text("settings.general.section.safety.header".localized())
+        ) {
         LabeledContent("settings.general.confirm.delete_server".localized()) {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.confirmDeleteServer)
               .labelsHidden()
-            Text(
-              generalSettings.confirmDeleteServer
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.confirmDeleteServer == defaultConfirmDeleteServer
@@ -351,12 +313,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.confirmDeleteWorld)
               .labelsHidden()
-            Text(
-              generalSettings.confirmDeleteWorld
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.confirmDeleteWorld == defaultConfirmDeleteWorld
@@ -371,12 +327,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.confirmUninstallPluginMod)
               .labelsHidden()
-            Text(
-              generalSettings.confirmUninstallPluginMod
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.confirmUninstallPluginMod
@@ -392,12 +342,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.confirmExitWhileRunning)
               .labelsHidden()
-            Text(
-              generalSettings.confirmExitWhileRunning
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.confirmExitWhileRunning == defaultConfirmExitWhileRunning
@@ -407,19 +351,17 @@ public struct GeneralSettingsView: View {
           }
         }
         .labeledContentStyle(.custom)
+        }
       }
 
       if sections.contains(.backup) {
+        Section(
+          header: Text("settings.general.section.backup.header".localized())
+        ) {
         LabeledContent("settings.general.backup.enable".localized()) {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.backupAutoEnabled)
               .labelsHidden()
-            Text(
-              generalSettings.backupAutoEnabled
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.backupAutoEnabled == defaultBackupAutoEnabled
@@ -466,12 +408,6 @@ public struct GeneralSettingsView: View {
           HStack(alignment: .top, spacing: 8) {
             Toggle("", isOn: $generalSettings.backupBeforeUpdate)
               .labelsHidden()
-            Text(
-              generalSettings.backupBeforeUpdate
-                ? "settings.state.enabled".localized()
-                : "settings.state.disabled".localized()
-            )
-            .foregroundStyle(.secondary)
 
             resetIconButton(
               disabled: generalSettings.backupBeforeUpdate == defaultBackupBeforeUpdate
@@ -494,7 +430,6 @@ public struct GeneralSettingsView: View {
               },
               showsResetButton: false
             )
-            .fixedSize()
             .fileImporter(
               isPresented: $showBackupDirectoryPicker,
               allowedContentTypes: [.folder],
@@ -550,6 +485,7 @@ public struct GeneralSettingsView: View {
           }
           .labeledContentStyle(.custom)
         }
+        }
       }
     }
     .onAppear {
@@ -579,6 +515,7 @@ public struct GeneralSettingsView: View {
     .onChange(of: generalSettings.backupKeepCount) { _, _ in
       BackupService.shared.reloadAutoBackupScheduler()
     }
+    .formStyle(.grouped)
     .globalErrorHandler()
     .alert(
       "error.notification.validation.title".localized(),

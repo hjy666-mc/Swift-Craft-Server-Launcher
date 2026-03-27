@@ -7,6 +7,8 @@ private enum ServerDetailSection: String, CaseIterable, Identifiable {
     case worlds
     case mods
     case plugins
+    case schedules
+    case logs
 
     var id: String { rawValue }
 }
@@ -16,10 +18,10 @@ struct ServerLaunchCommandView: View {
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @EnvironmentObject var detailState: ResourceDetailState
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State private var customLaunchCommand: String = ""
     @State private var isDirty = false
     @State private var isVerifyingJar = false
-    @State private var selectedSection: ServerDetailSection = .console
     @State private var launchCommandAutoSaveTask: Task<Void, Never>?
     @Namespace private var sectionIndicatorNamespace
     private var isChinese: Bool {
@@ -30,6 +32,31 @@ struct ServerLaunchCommandView: View {
     }
     private var supportsPlugins: Bool {
         server.serverType == .paper
+    }
+    private var tabSettingsToken: String {
+        [
+            generalSettings.serverTabConsoleEnabled,
+            generalSettings.serverTabConfigEnabled,
+            generalSettings.serverTabPlayersEnabled,
+            generalSettings.serverTabWorldsEnabled,
+            generalSettings.serverTabModsEnabled,
+            generalSettings.serverTabPluginsEnabled,
+            generalSettings.serverTabSchedulesEnabled,
+            generalSettings.serverTabLogsEnabled,
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined()
+    }
+    private var currentSection: ServerDetailSection {
+        let requested = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+        switch requested {
+        case .mods where !supportsMods:
+            return .console
+        case .plugins where !supportsPlugins:
+            return .console
+        default:
+            return requested
+        }
     }
 
     var body: some View {
@@ -75,40 +102,15 @@ struct ServerLaunchCommandView: View {
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    sectionRow(
-                        section: .console,
-                        title: "server.console.title".localized(),
-                        icon: "terminal"
-                    )
-                    sectionRow(
-                        section: .serverConfig,
-                        title: "server.launch.server_config".localized(),
-                        icon: "slider.horizontal.3"
-                    )
-                    sectionRow(
-                        section: .players,
-                        title: "server.launch.players".localized(),
-                        icon: "person.3"
-                    )
-                    sectionRow(
-                        section: .worlds,
-                        title: "server.launch.worlds".localized(),
-                        icon: "globe.americas"
-                    )
-                    sectionRow(
-                        section: .mods,
-                        title: "server.launch.mods".localized(),
-                        icon: "puzzlepiece.extension",
-                        isEnabled: supportsMods,
-                        disabledHint: "server.launch.hint.mods_only".localized()
-                    )
-                    sectionRow(
-                        section: .plugins,
-                        title: "server.launch.plugins".localized(),
-                        icon: "powerplug",
-                        isEnabled: supportsPlugins,
-                        disabledHint: "server.launch.hint.plugins_only".localized()
-                    )
+                    ForEach(sectionItems) { item in
+                        sectionRow(
+                            section: item.section,
+                            title: item.title,
+                            icon: item.icon,
+                            isEnabled: item.isEnabled,
+                            disabledHint: item.disabledHint
+                        )
+                    }
                 }
                 .frame(width: 180, alignment: .topLeading)
             }
@@ -120,7 +122,17 @@ struct ServerLaunchCommandView: View {
         .onAppear {
             customLaunchCommand = server.launchCommand
             isDirty = false
-            selectedSection = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: server.id) { _, _ in
+            customLaunchCommand = server.launchCommand
+            isDirty = false
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: detailState.serverPanelSection) { _, _ in
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: tabSettingsToken) { _, _ in
             normalizeSelectedSectionIfNeeded()
         }
         .onChange(of: server.serverType) { _, _ in
@@ -130,6 +142,102 @@ struct ServerLaunchCommandView: View {
             launchCommandAutoSaveTask?.cancel()
             saveLaunchCommandIfNeeded()
         }
+    }
+
+    private struct SectionItem: Identifiable {
+        let section: ServerDetailSection
+        let title: String
+        let icon: String
+        let isEnabled: Bool
+        let disabledHint: String?
+
+        var id: String { section.rawValue }
+    }
+
+    private var sectionItems: [SectionItem] {
+        var items: [SectionItem] = []
+        if generalSettings.serverTabConsoleEnabled {
+            items.append(.init(
+                section: .console,
+                title: "server.console.title".localized(),
+                icon: "terminal",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabConfigEnabled {
+            items.append(.init(
+                section: .serverConfig,
+                title: "server.launch.server_config".localized(),
+                icon: "slider.horizontal.3",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabPlayersEnabled {
+            items.append(.init(
+                section: .players,
+                title: "server.launch.players".localized(),
+                icon: "person.3",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabWorldsEnabled {
+            items.append(.init(
+                section: .worlds,
+                title: "server.launch.worlds".localized(),
+                icon: "globe.americas",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabModsEnabled {
+            items.append(.init(
+                section: .mods,
+                title: "server.launch.mods".localized(),
+                icon: "puzzlepiece.extension",
+                isEnabled: supportsMods,
+                disabledHint: "server.launch.hint.mods_only".localized()
+            ))
+        }
+        if generalSettings.serverTabPluginsEnabled {
+            items.append(.init(
+                section: .plugins,
+                title: "server.launch.plugins".localized(),
+                icon: "powerplug",
+                isEnabled: supportsPlugins,
+                disabledHint: "server.launch.hint.plugins_only".localized()
+            ))
+        }
+        if generalSettings.serverTabSchedulesEnabled {
+            items.append(.init(
+                section: .schedules,
+                title: "server.schedules.title".localized(),
+                icon: "clock.arrow.circlepath",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabLogsEnabled {
+            items.append(.init(
+                section: .logs,
+                title: "server.logs.title".localized(),
+                icon: "doc.text.magnifyingglass",
+                isEnabled: true,
+                disabledHint: nil,
+            ))
+        }
+        if items.isEmpty {
+            items.append(.init(
+                section: .console,
+                title: "server.console.title".localized(),
+                icon: "terminal",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        return items
     }
 
     private func sectionRow(
@@ -142,12 +250,11 @@ struct ServerLaunchCommandView: View {
         let rowButton = Button {
             guard isEnabled else { return }
             withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
-                selectedSection = section
                 detailState.serverPanelSection = section.rawValue
             }
         } label: {
             HStack(spacing: 8) {
-                if selectedSection == section {
+                if currentSection == section {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color.accentColor)
                         .frame(width: 3, height: 16)
@@ -170,7 +277,7 @@ struct ServerLaunchCommandView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .foregroundStyle(isEnabled ? (selectedSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
+            .foregroundStyle(isEnabled ? (currentSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -182,14 +289,18 @@ struct ServerLaunchCommandView: View {
     }
 
     private func normalizeSelectedSectionIfNeeded() {
-        if selectedSection == .mods, !supportsMods {
-            selectedSection = .console
-            detailState.serverPanelSection = ServerDetailSection.console.rawValue
+        let allowed = sectionItems.filter { $0.isEnabled }.map(\.section)
+        let fallback = allowed.first ?? .console
+        if !allowed.contains(currentSection) {
+            detailState.serverPanelSection = fallback.rawValue
             return
         }
-        if selectedSection == .plugins, !supportsPlugins {
-            selectedSection = .console
-            detailState.serverPanelSection = ServerDetailSection.console.rawValue
+        if currentSection == .mods, !supportsMods {
+            detailState.serverPanelSection = fallback.rawValue
+            return
+        }
+        if currentSection == .plugins, !supportsPlugins {
+            detailState.serverPanelSection = fallback.rawValue
         }
     }
 
