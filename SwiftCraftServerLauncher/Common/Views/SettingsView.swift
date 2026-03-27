@@ -63,21 +63,14 @@ struct CustomLabeledContentStyle: LabeledContentStyle {
     // 保留系统布局
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: alignment) {
-            // 使用系统的标签布局
-            HStack(spacing: 0) {
-                configuration.label
-                Text(":")
-            }
-            .layoutPriority(1)  // 保持标签优先级
-            .multilineTextAlignment(.trailing)
-            .frame(minWidth: 320, alignment: .trailing)  // 容器右对齐
-            // 右侧内容
+            configuration.label
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             configuration.content
                 .foregroundColor(.secondary)
-            .multilineTextAlignment(.leading)  // 文字左对齐
-                .frame(maxWidth: .infinity, alignment: .leading)  // 容器左对齐
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 
