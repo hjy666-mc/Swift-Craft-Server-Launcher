@@ -3,11 +3,10 @@ import Foundation
 
 /// 设置标签页枚举
 enum SettingsTab: Int {
-    case generalBasic = 0
-    case generalUpdate = 1
-    case generalSafety = 2
-    case generalBackup = 3
-    case appearance = 4
+    case general = 0
+    case generalBackup = 1
+    case appearance = 2
+    case ai = 3
 }
 
 /// 通用设置视图
@@ -19,23 +18,11 @@ public struct SettingsView: View {
 
     public var body: some View {
         TabView(selection: $settingsNavigation.selectedTab) {
-            GeneralSettingsView(sections: [.basic])
+            GeneralSettingsView(sections: [.basic, .update, .safety])
                 .tabItem {
                     Label("settings.general.basic.tab".localized(), systemImage: "gearshape")
                 }
-                .tag(SettingsTab.generalBasic)
-
-            GeneralSettingsView(sections: [.update])
-                .tabItem {
-                    Label("settings.general.update.tab".localized(), systemImage: "arrow.triangle.2.circlepath")
-                }
-                .tag(SettingsTab.generalUpdate)
-
-            GeneralSettingsView(sections: [.safety])
-                .tabItem {
-                    Label("settings.general.confirmation.tab".localized(), systemImage: "checkmark.shield")
-                }
-                .tag(SettingsTab.generalSafety)
+                .tag(SettingsTab.general)
 
             GeneralSettingsView(sections: [.backup])
                 .tabItem {
@@ -48,6 +35,12 @@ public struct SettingsView: View {
                     Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
                 }
                 .tag(SettingsTab.appearance)
+
+            AISettingsView()
+                .tabItem {
+                    Label("settings.ai.tab".localized(), systemImage: "sparkles")
+                }
+                .tag(SettingsTab.ai)
         }
         .padding()
     }

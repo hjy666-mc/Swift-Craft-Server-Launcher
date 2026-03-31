@@ -104,6 +104,5 @@ final class AppIdleManager: ObservableObject {
         ResourceImageCacheManager.shared.clearMemoryCache()
         ContributorAvatarCache.shared.clearCache()
         StaticContributorAvatarCache.shared.clearCache()
-        MinecraftSkinUtils.clearCache()
     }
 }

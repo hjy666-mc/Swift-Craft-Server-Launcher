@@ -13,7 +13,7 @@ public struct AppearanceSettingsView: View {
     public var body: some View {
         Form {
             Section(
-                header: Text("settings.appearance.section.theme.header".localized())
+                header: Text("settings.appearance.section.global.header".localized())
             ) {
                 LabeledContent("settings.appearance.theme".localized()) {
                     HStack(alignment: .top, spacing: 8) {
@@ -26,74 +26,141 @@ public struct AppearanceSettingsView: View {
                     }
                 }
                 .labeledContentStyle(.custom)
-            }
 
-            Section(
-                header: Text("settings.appearance.section.console.header".localized())
-            ) {
-                LabeledContent("settings.appearance.console_color_output".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Toggle(
-                                "settings.appearance.console_color_output.enable".localized(),
-                                isOn: $generalSettings.enableConsoleColoredOutput
-                            )
-                            .toggleStyle(.checkbox)
-
-                            Text("settings.appearance.console_color_output.description".localized())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        resetIconButton(disabled: generalSettings.enableConsoleColoredOutput == defaultEnableConsoleColoredOutput) {
-                            generalSettings.enableConsoleColoredOutput = defaultEnableConsoleColoredOutput
-                        }
+                LabeledContent("settings.appearance.resource_card.style".localized()) {
+                    Picker("", selection: $generalSettings.resourceCardStyle) {
+                        Text("settings.appearance.resource_card.compact".localized()).tag(ResourceCardStyle.compact)
+                        Text("settings.appearance.resource_card.card".localized()).tag(ResourceCardStyle.card)
                     }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
                 }
-                .labeledContentStyle(.custom(alignment: .firstTextBaseline))
-                .padding(.top, 6)
+                .labeledContentStyle(.custom)
             }
 
             Section(
                 header: Text("settings.appearance.section.server.header".localized())
             ) {
-                LabeledContent("settings.appearance.server_tabs".localized()) {
-                    Menu {
-                        ForEach(tabOptions) { option in
-                            Toggle(option.title, isOn: Binding(
-                                get: { option.isOn() },
-                                set: { option.set($0) }
-                            ))
-                        }
-                    } label: {
-                        Text("settings.appearance.server_tabs.select".localized())
-                            .frame(minWidth: 140, alignment: .leading)
-                    }
-                    .menuStyle(.automatic)
-                    .controlSize(.small)
-                }
-                .labeledContentStyle(.custom(alignment: .top))
+                Group {
+                    LabeledContent("settings.appearance.console_color_output".localized()) {
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Toggle(
+                                    "settings.appearance.console_color_output.enable".localized(),
+                                    isOn: $generalSettings.enableConsoleColoredOutput
+                                )
+                                .toggleStyle(.checkbox)
 
-                LabeledContent("settings.appearance.server_file_shortcuts".localized()) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Toggle(
-                                "settings.appearance.server_file_shortcuts.enable".localized(),
-                                isOn: $generalSettings.serverFileManagerShowShortcuts
-                            )
-                            .toggleStyle(.checkbox)
+                                Text("settings.appearance.console_color_output.description".localized())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
 
-                            Text("settings.appearance.server_file_shortcuts.description".localized())
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        resetIconButton(disabled: generalSettings.serverFileManagerShowShortcuts == defaultServerFileManagerShowShortcuts) {
-                            generalSettings.serverFileManagerShowShortcuts = defaultServerFileManagerShowShortcuts
+                            resetIconButton(disabled: generalSettings.enableConsoleColoredOutput == defaultEnableConsoleColoredOutput) {
+                                generalSettings.enableConsoleColoredOutput = defaultEnableConsoleColoredOutput
+                            }
                         }
                     }
+                    .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+
+                    LabeledContent("settings.appearance.console.font".localized()) {
+                        Picker("", selection: $generalSettings.consoleFontStyle) {
+                            Text("settings.appearance.font.system".localized()).tag(ConsoleFontStyle.system)
+                            Text("settings.appearance.font.monospaced".localized()).tag(ConsoleFontStyle.monospaced)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    .labeledContentStyle(.custom)
+
+                    LabeledContent("settings.appearance.console.line_spacing".localized()) {
+                        HStack(spacing: 8) {
+                            Text("\(Int(generalSettings.consoleLineSpacing))")
+                                .frame(minWidth: 24, alignment: .trailing)
+                                .monospacedDigit()
+                            Slider(value: $generalSettings.consoleLineSpacing, in: 0...8, step: 1)
+                                .frame(width: 200)
+                        }
+                    }
+                    .labeledContentStyle(.custom)
+
+                    LabeledContent("settings.appearance.console.highlight".localized()) {
+                        Picker("", selection: $generalSettings.consoleHighlightStyle) {
+                            Text("settings.appearance.highlight.system".localized()).tag(HighlightStyle.system)
+                            Text("settings.appearance.highlight.vivid".localized()).tag(HighlightStyle.vivid)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    .labeledContentStyle(.custom)
                 }
-                .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+
+                Group {
+                    LabeledContent("settings.appearance.editor.font".localized()) {
+                        Picker("", selection: $generalSettings.editorFontStyle) {
+                            Text("settings.appearance.font.system".localized()).tag(EditorFontStyle.system)
+                            Text("settings.appearance.font.monospaced".localized()).tag(EditorFontStyle.monospaced)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    .labeledContentStyle(.custom)
+
+                    LabeledContent("settings.appearance.editor.highlight".localized()) {
+                        Picker("", selection: $generalSettings.editorHighlightStyle) {
+                            Text("settings.appearance.highlight.system".localized()).tag(HighlightStyle.system)
+                            Text("settings.appearance.highlight.vivid".localized()).tag(HighlightStyle.vivid)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    .labeledContentStyle(.custom)
+                }
+
+                Group {
+                    LabeledContent("settings.appearance.server_tabs".localized()) {
+                        Menu {
+                            ForEach(tabOptions) { option in
+                                Toggle(option.title, isOn: Binding(
+                                    get: { option.isOn() },
+                                    set: { option.set($0) }
+                                ))
+                            }
+                        } label: {
+                            Text("settings.appearance.server_tabs.select".localized())
+                                .frame(minWidth: 140, alignment: .leading)
+                        }
+                        .menuStyle(.automatic)
+                        .controlSize(.small)
+                    }
+                    .labeledContentStyle(.custom(alignment: .top))
+
+                    LabeledContent("settings.appearance.server_file_shortcuts".localized()) {
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Toggle(
+                                    "settings.appearance.server_file_shortcuts.enable".localized(),
+                                    isOn: $generalSettings.serverFileManagerShowShortcuts
+                                )
+                                .toggleStyle(.checkbox)
+
+                                Text("settings.appearance.server_file_shortcuts.description".localized())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            resetIconButton(disabled: generalSettings.serverFileManagerShowShortcuts == defaultServerFileManagerShowShortcuts) {
+                                generalSettings.serverFileManagerShowShortcuts = defaultServerFileManagerShowShortcuts
+                            }
+                        }
+                    }
+                    .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+                }
             }
         }
         .formStyle(.grouped)

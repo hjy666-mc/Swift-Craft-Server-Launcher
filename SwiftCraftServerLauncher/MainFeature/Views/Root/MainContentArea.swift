@@ -193,21 +193,7 @@ struct MainContentArea: View {
                 title: "settings.general.basic.tab".localized(),
                 subtitle: "command.palette.section.settings".localized(),
                 systemImage: "gearshape",
-                settingsTab: .generalBasic
-            ),
-            CommandPaletteNode(
-                id: "settings.update",
-                title: "settings.general.update.tab".localized(),
-                subtitle: "command.palette.section.settings".localized(),
-                systemImage: "arrow.triangle.2.circlepath",
-                settingsTab: .generalUpdate
-            ),
-            CommandPaletteNode(
-                id: "settings.safety",
-                title: "settings.general.confirmation.tab".localized(),
-                subtitle: "command.palette.section.settings".localized(),
-                systemImage: "checkmark.shield",
-                settingsTab: .generalSafety
+                settingsTab: .general
             ),
             CommandPaletteNode(
                 id: "settings.backup",
@@ -440,7 +426,7 @@ struct MainContentArea: View {
 
         if node.id == "settings" {
             openSettings()
-            settingsNavigationManager.selectedTab = .generalBasic
+            settingsNavigationManager.selectedTab = .general
             return true
         }
 

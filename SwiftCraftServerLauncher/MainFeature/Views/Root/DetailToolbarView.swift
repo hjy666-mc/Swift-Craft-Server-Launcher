@@ -111,6 +111,13 @@ public struct DetailToolbarView: ToolbarContent {
                             Label("common.clear".localized(), systemImage: "trash")
                         }
                         .help("common.clear".localized())
+                    case "schedules":
+                        Button {
+                            post(.schedulesNew)
+                        } label: {
+                            Label("server.schedules.add".localized(), systemImage: "note.text.badge.plus")
+                        }
+                        .help("server.schedules.add".localized())
                     default:
                         EmptyView()
                     }
