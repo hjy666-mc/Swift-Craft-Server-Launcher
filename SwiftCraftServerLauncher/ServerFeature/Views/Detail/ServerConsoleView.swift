@@ -36,6 +36,7 @@ struct ServerConsoleView: View {
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
+            commandText = console.commandDraft(for: server.id)
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
@@ -60,6 +61,7 @@ struct ServerConsoleView: View {
             rconPassword = server.rconPassword
             commandHistory = []
             historyIndex = nil
+            commandText = console.commandDraft(for: server.id)
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
@@ -86,6 +88,9 @@ struct ServerConsoleView: View {
             if action == .consoleClear {
                 clearConsole()
             }
+        }
+        .onChange(of: commandText) { _, newValue in
+            console.setCommandDraft(newValue, for: server.id)
         }
     }
 
@@ -181,8 +186,12 @@ struct ServerConsoleView: View {
         let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commandText = ""
+        console.setCommandDraft("", for: server.id)
         appendHistory(text)
         historyIndex = nil
+        if text.lowercased() == "stop", isRemoteServer == false {
+            scheduleStopStatusCheck()
+        }
         if isRemoteServer {
             sendRemoteDirectCommand(text)
             return
@@ -206,6 +215,22 @@ struct ServerConsoleView: View {
             return
         }
         sendLocalRCONCommand(text)
+    }
+
+    private func scheduleStopStatusCheck() {
+        Task {
+            for _ in 0..<16 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if ServerProcessManager.shared.isServerRunning(serverId: server.id) == false,
+                   LocalServerDirectService.isDirectModeAvailable(server: server) == false {
+                    await MainActor.run {
+                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                        ServerConsoleManager.shared.detach(serverId: server.id)
+                    }
+                    break
+                }
+            }
+        }
     }
 
     private func clearConsole() {

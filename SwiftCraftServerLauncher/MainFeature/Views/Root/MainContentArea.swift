@@ -9,6 +9,7 @@ struct MainContentArea: View {
     @StateObject private var filterState = ResourceFilterState()
     @StateObject private var detailState = ResourceDetailState()
     @StateObject private var generalSettings = GeneralSettingsManager.shared
+    @StateObject private var serverStatusManager = ServerStatusManager.shared
     @State private var pendingSpotlightIdentifier: String?
     @State private var spotlightRetryCount = 0
     @EnvironmentObject var serverRepository: ServerRepository
@@ -53,11 +54,14 @@ struct MainContentArea: View {
             SpotlightIndexService.shared.ensureIndexedIfNeeded(nodes: commandPaletteNodes)
             ServerScheduleService.shared.attach(nodeRepository: serverNodeRepository)
             ServerScheduleService.shared.refreshServers(serverRepository.servers)
+            serverStatusManager.reconcileLoadedServers(serverRepository.servers)
             processPendingSpotlight()
+            startServerStatusPollingIfNeeded()
         }
         .onChange(of: serverRepository.servers) { _, _ in
             SpotlightIndexService.shared.scheduleIndex(nodes: commandPaletteNodes)
             ServerScheduleService.shared.refreshServers(serverRepository.servers)
+            serverStatusManager.reconcileLoadedServers(serverRepository.servers)
             processPendingSpotlight()
         }
         .onReceive(SpotlightActionCenter.shared.publisher) { identifier in
@@ -95,26 +99,45 @@ struct MainContentArea: View {
             break
         case (.node, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.node, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case (_, .node):
             detailState.serverId = nil
             detailState.selectedProjectId = nil
             filterState.clearSearchText()
+            serverStatusManager.stopPolling()
         case (.resource, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.game, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case (.game, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.server, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case let (.server(oldId), .server(newId)):
             handleServerToServerTransition(from: oldId, to: newId)
+            if oldId != newId {
+                serverStatusManager.startPolling(serverId: newId)
+            }
         case (.resource, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         default:
             break
+        }
+    }
+
+    private func startServerStatusPollingIfNeeded() {
+        if case .server(let id) = detailState.selectedItem {
+            serverStatusManager.startPolling(serverId: id)
+        } else {
+            serverStatusManager.stopPolling()
         }
     }
 

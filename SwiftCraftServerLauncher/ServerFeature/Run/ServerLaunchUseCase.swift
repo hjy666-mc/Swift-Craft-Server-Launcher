@@ -81,16 +81,7 @@ final class ServerLaunchUseCase: ObservableObject {
             await stopRemoteServer(server: server)
             return
         }
-        _ = try? await Task.detached(priority: .userInitiated) {
-            try LocalServerDirectService.stop(server: server)
-        }.value
-        _ = ServerProcessManager.shared.stopProcess(for: server.id)
-        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
-        ServerConsoleManager.shared.detach(serverId: server.id)
-        ServerConsoleManager.shared.appendSystemMessage(
-            serverId: server.id,
-            message: "server.console.message.server_stopped".localized()
-        )
+        await stopLocalServer(server: server)
     }
 
     @MainActor
@@ -134,6 +125,37 @@ final class ServerLaunchUseCase: ObservableObject {
             GlobalErrorHandler.shared.handle(error)
         }
         ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+        ServerConsoleManager.shared.appendSystemMessage(
+            serverId: server.id,
+            message: "server.console.message.server_stopped".localized()
+        )
+    }
+
+    @MainActor
+    private func stopLocalServer(server: ServerInstance) async {
+        let hasProcess = ServerProcessManager.shared.getProcess(for: server.id) != nil
+        let canDirect = LocalServerDirectService.isDirectModeAvailable(server: server)
+        if hasProcess || canDirect {
+            _ = try? await Task.detached(priority: .userInitiated) {
+                try LocalServerDirectService.sendCommand(server: server, command: "stop")
+            }.value
+            // wait for graceful shutdown (up to 8s)
+            for _ in 0..<16 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if ServerProcessManager.shared.isServerRunning(serverId: server.id) == false,
+                   LocalServerDirectService.isDirectModeAvailable(server: server) == false {
+                    ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                    ServerConsoleManager.shared.detach(serverId: server.id)
+                    return
+                }
+            }
+        }
+        _ = try? await Task.detached(priority: .userInitiated) {
+            try LocalServerDirectService.stop(server: server)
+        }.value
+        _ = ServerProcessManager.shared.stopProcess(for: server.id)
+        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+        ServerConsoleManager.shared.detach(serverId: server.id)
         ServerConsoleManager.shared.appendSystemMessage(
             serverId: server.id,
             message: "server.console.message.server_stopped".localized()

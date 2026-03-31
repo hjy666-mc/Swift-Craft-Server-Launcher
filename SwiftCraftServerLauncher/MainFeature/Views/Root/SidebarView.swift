@@ -12,6 +12,7 @@ public struct SidebarView: View {
     @StateObject private var serverActionManager = ServerActionManager.shared
     @StateObject private var generalSettings = GeneralSettingsManager.shared
     @StateObject private var downloadCenter = DownloadCenter.shared
+    @StateObject private var serverStatusManager = ServerStatusManager.shared
     @State private var showDownloadTip = false
     @State private var isHoveringDownloadBar = false
     @State private var hoveredNodeInfoId: String?
@@ -153,6 +154,11 @@ public struct SidebarView: View {
                                 Text(server.name)
                                     .lineLimit(1)
                                 Spacer()
+                                if serverStatusManager.isServerRunning(serverId: server.id) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 6, height: 6)
+                                }
                             }
                         }
                         .contextMenu {
