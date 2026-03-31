@@ -38,6 +38,29 @@ extension View {
     }
 }
 
+/// 仅设置窗口 identifier 的修饰符
+struct WindowIdentifierConfig: ViewModifier {
+    let windowID: WindowID
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                WindowAccessor(synchronous: false) { window in
+                    if window.identifier?.rawValue != windowID.rawValue {
+                        window.identifier = NSUserInterfaceItemIdentifier(windowID.rawValue)
+                    }
+                }
+            )
+    }
+}
+
+extension View {
+    /// 仅设置窗口 identifier，不调整样式
+    func windowIdentifierConfig(for windowID: WindowID) -> some View {
+        modifier(WindowIdentifierConfig(windowID: windowID))
+    }
+}
+
 /// 窗口清理修饰符
 struct WindowCleanup: ViewModifier {
     func body(content: Content) -> some View {

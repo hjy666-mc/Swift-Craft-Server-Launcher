@@ -162,6 +162,12 @@ public struct SidebarView: View {
                             }
                         }
                         .contextMenu {
+                            Button {
+                                ServerDetailWindowCoordinator.shared.open(serverId: server.id)
+                            } label: {
+                                Label("sidebar.context_menu.open_in_new_window".localized(), systemImage: "macwindow")
+                            }
+
                             Button(role: .destructive) {
                                 if generalSettings.confirmDeleteServer {
                                     pendingDeleteServer = server

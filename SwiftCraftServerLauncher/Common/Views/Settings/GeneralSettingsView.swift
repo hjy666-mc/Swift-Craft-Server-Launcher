@@ -48,6 +48,7 @@ public struct GeneralSettingsView: View {
   let defaultConfirmDeleteWorld = true
   let defaultConfirmUninstallPluginMod = true
   let defaultConfirmExitWhileRunning = true
+  let defaultOpenServerInNewWindow = false
   let defaultBackupAutoEnabled = false
   let defaultBackupIntervalMinutes = 60
   let defaultBackupKeepCount = 10
@@ -146,6 +147,24 @@ public struct GeneralSettingsView: View {
             workingPathOptions = await gameRepository.fetchAllWorkingPathsWithCounts()
           }
         }
+        }
+
+        Section(
+          header: Text("settings.general.section.server.header".localized())
+        ) {
+          LabeledContent("settings.server.open_in_new_window".localized()) {
+            HStack(alignment: .top, spacing: 8) {
+              Toggle("", isOn: $generalSettings.openServerInNewWindow)
+                .labelsHidden()
+
+              resetIconButton(
+                disabled: generalSettings.openServerInNewWindow == defaultOpenServerInNewWindow
+              ) {
+                generalSettings.openServerInNewWindow = defaultOpenServerInNewWindow
+              }
+            }
+          }
+          .labeledContentStyle(.custom)
         }
 
         Section(

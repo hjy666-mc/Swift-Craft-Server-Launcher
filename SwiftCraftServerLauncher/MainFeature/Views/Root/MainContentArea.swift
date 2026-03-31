@@ -149,6 +149,7 @@ struct MainContentArea: View {
         if detailState.serverPanelSection == "console" {
             detailState.serverPanelSection = "console"
         }
+        openServerWindowIfNeeded(serverId: serverId)
     }
 
     private func handleServerToServerTransition(
@@ -162,6 +163,15 @@ struct MainContentArea: View {
         if detailState.serverPanelSection == "console" {
             detailState.serverPanelSection = "console"
         }
+        openServerWindowIfNeeded(serverId: newId)
+    }
+
+    private func openServerWindowIfNeeded(serverId: String) {
+        guard generalSettings.openServerInNewWindow else { return }
+        ServerDetailWindowCoordinator.shared.open(
+            serverId: serverId,
+            preferredSection: detailState.serverPanelSection
+        )
     }
 
     private func resetToResourceDefaults() {

@@ -1475,6 +1475,23 @@
         }
       }
     },
+    "server.window.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器"
+          }
+        }
+      }
+    },
     "download.core.title": {
       "comment": "Download Progress",
       "extractionState": "manual",
@@ -17378,6 +17395,40 @@
         }
       }
     },
+    "settings.general.section.server.header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器"
+          }
+        }
+      }
+    },
+    "settings.server.open_in_new_window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open server in a separate window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在单独窗口打开服务器界面"
+          }
+        }
+      }
+    },
     "settings.general.tab": {
       "extractionState": "manual",
       "localizations": {
@@ -17988,6 +18039,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除游戏"
+          }
+        }
+      }
+    },
+    "sidebar.context_menu.open_in_new_window": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in New Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新窗口打开"
           }
         }
       }

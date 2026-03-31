@@ -297,6 +297,11 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         didSet { objectWillChange.send() }
     }
 
+    @AppStorage("openServerInNewWindow")
+    var openServerInNewWindow: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
     // MARK: - 备份
     @AppStorage("backupAutoEnabled")
     var backupAutoEnabled: Bool = false {
