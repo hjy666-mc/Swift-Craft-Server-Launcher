@@ -6,20 +6,16 @@ class ServerStatusManager: ObservableObject {
 
     @Published private var serverRunningStates: [String: Bool] = [:]
     @Published private var serverLaunchingStates: [String: Bool] = [:]
+    private var serverIdToName: [String: String] = [:]
+    private var launchStartTimes: [String: Date] = [:]
+    private var statusPollTimer: Timer?
+    private var pollingServerId: String?
 
     private init() {
         serverRunningStates = UserDefaults.standard.dictionary(forKey: Self.runningStatesStorageKey) as? [String: Bool] ?? [:]
     }
 
     func isServerRunning(serverId: String) -> Bool {
-        let hasLocalProcess = ServerProcessManager.shared.getProcess(for: serverId) != nil
-        if hasLocalProcess {
-            let actuallyRunning = ServerProcessManager.shared.isServerRunning(serverId: serverId)
-            DispatchQueue.main.async {
-                self.updateServerStatusIfNeeded(serverId: serverId, actuallyRunning: actuallyRunning)
-            }
-            return actuallyRunning
-        }
         return serverRunningStates[serverId] ?? false
     }
 
@@ -46,12 +42,52 @@ class ServerStatusManager: ObservableObject {
         }
     }
 
+    func startPolling(serverId: String) {
+        applyOnMain { [weak self] in
+            guard let self else { return }
+            if self.pollingServerId == serverId, self.statusPollTimer != nil {
+                return
+            }
+            self.pollingServerId = serverId
+            self.statusPollTimer?.invalidate()
+            let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+                self?.refreshRunningState(serverId: serverId)
+            }
+            self.statusPollTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+            self.refreshRunningState(serverId: serverId)
+        }
+    }
+
+    func stopPolling() {
+        applyOnMain { [weak self] in
+            guard let self else { return }
+            self.statusPollTimer?.invalidate()
+            self.statusPollTimer = nil
+            self.pollingServerId = nil
+        }
+    }
+
+    private func refreshRunningState(serverId: String) {
+        let actuallyRunning = ServerProcessManager.shared.isServerRunning(serverId: serverId)
+            || isDirectModeRunning(serverId: serverId)
+        if shouldSkipFalseUpdate(serverId: serverId, actual: actuallyRunning) {
+            return
+        }
+        updateServerStatusIfNeeded(serverId: serverId, actuallyRunning: actuallyRunning)
+    }
+
     func setServerLaunching(serverId: String, isLaunching: Bool) {
         applyOnMain { [weak self] in
             guard let self else { return }
             let currentState = self.serverLaunchingStates[serverId] ?? false
             if currentState != isLaunching {
                 self.serverLaunchingStates[serverId] = isLaunching
+                if isLaunching {
+                    self.launchStartTimes[serverId] = Date()
+                } else {
+                    self.launchStartTimes.removeValue(forKey: serverId)
+                }
                 Logger.shared.debug("服务器启动中状态更新: \(serverId) -> \(isLaunching ? "启动中" : "非启动中")")
             }
         }
@@ -65,6 +101,8 @@ class ServerStatusManager: ObservableObject {
         applyOnMain { [weak self] in
             self?.serverRunningStates.removeValue(forKey: serverId)
             self?.serverLaunchingStates.removeValue(forKey: serverId)
+            self?.launchStartTimes.removeValue(forKey: serverId)
+            self?.serverIdToName.removeValue(forKey: serverId)
             self?.persistRunningStates()
         }
     }
@@ -73,15 +111,28 @@ class ServerStatusManager: ObservableObject {
         applyOnMain { [weak self] in
             guard let self else { return }
             var changed = false
+            let localIds = Set(servers.filter { $0.nodeId == ServerNode.local.id }.map(\.id))
             for server in servers where server.nodeId == ServerNode.local.id {
-                let actual = LocalServerDirectService.isDirectModeAvailable(server: server)
-                if self.serverRunningStates[server.id] != actual {
+                self.serverIdToName[server.id] = server.name
+            }
+            for server in servers where server.nodeId == ServerNode.local.id {
+                let actual = LocalServerDirectService.isDirectModeRunning(serverName: server.name)
+                    || ServerProcessManager.shared.isServerRunning(serverId: server.id)
+                if self.serverRunningStates[server.id] != actual,
+                   shouldSkipFalseUpdate(serverId: server.id, actual: actual) == false {
                     self.serverRunningStates[server.id] = actual
                     changed = true
                 }
                 if !actual, self.serverLaunchingStates[server.id] == true {
                     self.serverLaunchingStates[server.id] = false
                 }
+            }
+            for id in self.serverRunningStates.keys where localIds.contains(id) == false {
+                self.serverRunningStates[id] = false
+                changed = true
+            }
+            for id in self.serverIdToName.keys where localIds.contains(id) == false {
+                self.serverIdToName.removeValue(forKey: id)
             }
             if changed {
                 self.persistRunningStates()
@@ -91,6 +142,26 @@ class ServerStatusManager: ObservableObject {
 
     private func persistRunningStates() {
         UserDefaults.standard.set(serverRunningStates, forKey: Self.runningStatesStorageKey)
+    }
+
+    private func isDirectModeRunning(serverId: String) -> Bool {
+        guard let name = serverIdToName[serverId] else {
+            return false
+        }
+        return LocalServerDirectService.isDirectModeRunning(serverName: name)
+    }
+
+    private func shouldSkipFalseUpdate(serverId: String, actual: Bool) -> Bool {
+        if actual {
+            return false
+        }
+        guard serverLaunchingStates[serverId] == true else {
+            return false
+        }
+        guard let startedAt = launchStartTimes[serverId] else {
+            return false
+        }
+        return Date().timeIntervalSince(startedAt) < 10
     }
 
     private func applyOnMain(_ action: @escaping () -> Void) {
