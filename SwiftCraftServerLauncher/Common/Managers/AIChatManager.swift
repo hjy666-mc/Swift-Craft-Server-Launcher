@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 
-@MainActor
 class AIChatManager: ObservableObject {
     static let shared = AIChatManager()
 
@@ -63,8 +62,10 @@ class AIChatManager: ObservableObject {
         }
 
         // 构建消息历史
-        let historyMessages = chatState.messages.dropLast(2)
-        var allMessages: [ChatMessage] = Array(historyMessages)
+        let historyMessages = await MainActor.run {
+            Array(chatState.messages.dropLast(2))
+        }
+        var allMessages: [ChatMessage] = historyMessages
         allMessages.append(userMessage)
 
         do {
@@ -178,8 +179,9 @@ class AIChatManager: ObservableObject {
                 }
 
                 accumulatedContent += content
+                let snapshot = accumulatedContent
                 await MainActor.run {
-                    chatState.updateLastMessage(accumulatedContent)
+                    chatState.updateLastMessage(snapshot)
                 }
             }
         }
@@ -297,8 +299,9 @@ class AIChatManager: ObservableObject {
             if let message = json["message"] as? [String: Any],
                let content = message["content"] as? String {
                 accumulatedContent += content
+                let snapshot = accumulatedContent
                 await MainActor.run {
-                    chatState.updateLastMessage(accumulatedContent)
+                    chatState.updateLastMessage(snapshot)
                 }
             }
 
@@ -413,8 +416,9 @@ class AIChatManager: ObservableObject {
             }
 
             accumulatedContent += text
+            let snapshot = accumulatedContent
             await MainActor.run {
-                chatState.updateLastMessage(accumulatedContent)
+                chatState.updateLastMessage(snapshot)
             }
         }
 
