@@ -5,6 +5,7 @@ struct RawConfigEditorView: View {
     let server: ServerInstance
     let item: ServerFileItem
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @State private var content = ""
     @State private var isLoaded = false
     @State private var isDirty = false
@@ -34,7 +35,9 @@ struct RawConfigEditorView: View {
                         }
                     ),
                     onSaveRequested: save,
-                    syntaxKind: syntaxKind
+                    syntaxKind: syntaxKind,
+                    fontStyle: generalSettings.editorFontStyle,
+                    highlightStyle: generalSettings.editorHighlightStyle
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -164,12 +167,16 @@ private struct LineNumberedTextEditor: View {
     @Binding var text: String
     var onSaveRequested: (() -> Void)?
     var syntaxKind: SyntaxKind = .plain
+    var fontStyle: EditorFontStyle = .monospaced
+    var highlightStyle: HighlightStyle = .system
 
     var body: some View {
         LineNumberedTextEditorRepresentable(
             text: $text,
             onSaveRequested: onSaveRequested,
-            syntaxKind: syntaxKind
+            syntaxKind: syntaxKind,
+            fontStyle: fontStyle,
+            highlightStyle: highlightStyle
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -183,6 +190,8 @@ private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
     @Binding var text: String
     var onSaveRequested: (() -> Void)?
     var syntaxKind: SyntaxKind = .plain
+    var fontStyle: EditorFontStyle = .monospaced
+    var highlightStyle: HighlightStyle = .system
 
     func makeNSView(context: Context) -> LineNumberEditorContainer {
         let view = LineNumberEditorContainer()
@@ -194,6 +203,8 @@ private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
         }
         view.onSaveRequested = onSaveRequested
         view.syntaxKind = syntaxKind
+        view.fontStyle = fontStyle
+        view.highlightStyle = highlightStyle
         view.setText(text)
         return view
     }
@@ -201,6 +212,8 @@ private struct LineNumberedTextEditorRepresentable: NSViewRepresentable {
     func updateNSView(_ nsView: LineNumberEditorContainer, context: Context) {
         nsView.onSaveRequested = onSaveRequested
         nsView.syntaxKind = syntaxKind
+        nsView.fontStyle = fontStyle
+        nsView.highlightStyle = highlightStyle
         if nsView.text != text {
             context.coordinator.isUpdatingFromSwiftUI = true
             nsView.setText(text)
@@ -229,6 +242,12 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
         }
     }
     var syntaxKind: SyntaxKind = .plain {
+        didSet { applySyntaxHighlighting() }
+    }
+    var fontStyle: EditorFontStyle = .monospaced {
+        didSet { applySyntaxHighlighting() }
+    }
+    var highlightStyle: HighlightStyle = .system {
         didSet { applySyntaxHighlighting() }
     }
 
@@ -269,7 +288,7 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
         textView.allowsUndo = true
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = fontStyle.toFont(size: 13, weight: .regular)
         textView.textColor = NSColor.labelColor
         textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.isVerticallyResizable = true
@@ -326,7 +345,8 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
 
         let fullRange = NSRange(location: 0, length: storage.length)
         let selectedRanges = textView.selectedRanges
-        let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let font = fontStyle.toFont(size: 13, weight: .regular)
+        let palette = EditorHighlightPalette(style: highlightStyle)
 
         storage.beginEditing()
         storage.setAttributes([
@@ -334,17 +354,17 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
             .font: font,
         ], range: fullRange)
 
-        highlightStrings(in: storage.string, storage: storage)
-        highlightNumbers(in: storage.string, storage: storage)
-        highlightBooleans(in: storage.string, storage: storage)
-        highlightKeys(in: storage.string, storage: storage)
-        highlightComments(in: storage.string, storage: storage)
+        highlightStrings(in: storage.string, storage: storage, color: palette.string)
+        highlightNumbers(in: storage.string, storage: storage, color: palette.number)
+        highlightBooleans(in: storage.string, storage: storage, color: palette.boolean)
+        highlightKeys(in: storage.string, storage: storage, color: palette.key)
+        highlightComments(in: storage.string, storage: storage, color: palette.comment)
 
         storage.endEditing()
         textView.selectedRanges = selectedRanges
     }
 
-    private func highlightComments(in text: String, storage: NSTextStorage) {
+    private func highlightComments(in text: String, storage: NSTextStorage, color: NSColor) {
         let pattern: String
         switch syntaxKind {
         case .json:
@@ -354,25 +374,25 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
         case .plain:
             pattern = #"(?m)^\s*[#;].*$|(?m)^\s*//.*$"#
         }
-        applyRegex(pattern, color: NSColor.systemGray, text: text, storage: storage)
+        applyRegex(pattern, color: color, text: text, storage: storage)
     }
 
-    private func highlightStrings(in text: String, storage: NSTextStorage) {
+    private func highlightStrings(in text: String, storage: NSTextStorage, color: NSColor) {
         let pattern = #""([^"\\]|\\.)*"|'([^'\\]|\\.)*'"#
-        applyRegex(pattern, color: NSColor.systemRed, text: text, storage: storage)
+        applyRegex(pattern, color: color, text: text, storage: storage)
     }
 
-    private func highlightNumbers(in text: String, storage: NSTextStorage) {
+    private func highlightNumbers(in text: String, storage: NSTextStorage, color: NSColor) {
         let pattern = #"\b\d+(\.\d+)?\b"#
-        applyRegex(pattern, color: NSColor.systemOrange, text: text, storage: storage)
+        applyRegex(pattern, color: color, text: text, storage: storage)
     }
 
-    private func highlightBooleans(in text: String, storage: NSTextStorage) {
+    private func highlightBooleans(in text: String, storage: NSTextStorage, color: NSColor) {
         let pattern = #"\b(true|false|null|yes|no|on|off)\b"#
-        applyRegex(pattern, color: NSColor.systemPink, text: text, storage: storage, options: [.caseInsensitive])
+        applyRegex(pattern, color: color, text: text, storage: storage, options: [.caseInsensitive])
     }
 
-    private func highlightKeys(in text: String, storage: NSTextStorage) {
+    private func highlightKeys(in text: String, storage: NSTextStorage, color: NSColor) {
         let pattern: String
         let captureGroup: Int
 
@@ -393,7 +413,7 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
 
         applyRegex(
             pattern,
-            color: NSColor.systemTeal,
+            color: color,
             text: text,
             storage: storage,
             options: [],
@@ -420,6 +440,42 @@ private final class LineNumberEditorContainer: NSView, NSTextViewDelegate {
             }
             guard targetRange.location != NSNotFound else { return }
             storage.addAttribute(.foregroundColor, value: color, range: targetRange)
+        }
+    }
+}
+
+private struct EditorHighlightPalette {
+    let string: NSColor
+    let number: NSColor
+    let boolean: NSColor
+    let key: NSColor
+    let comment: NSColor
+
+    init(style: HighlightStyle) {
+        switch style {
+        case .system:
+            string = .systemRed
+            number = .systemOrange
+            boolean = .systemPink
+            key = .systemTeal
+            comment = .systemGray
+        case .vivid:
+            string = .systemYellow
+            number = .systemOrange
+            boolean = .systemPurple
+            key = .systemBlue
+            comment = .systemGray
+        }
+    }
+}
+
+private extension EditorFontStyle {
+    func toFont(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        switch self {
+        case .system:
+            return NSFont.systemFont(ofSize: size, weight: weight)
+        case .monospaced:
+            return NSFont.monospacedSystemFont(ofSize: size, weight: weight)
         }
     }
 }

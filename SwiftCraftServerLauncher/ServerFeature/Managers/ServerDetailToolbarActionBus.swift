@@ -12,6 +12,7 @@ enum ServerDetailToolbarAction: String {
     case configNewFile
     case configRename
     case configDelete
+    case schedulesNew
 }
 
 extension Notification.Name {
