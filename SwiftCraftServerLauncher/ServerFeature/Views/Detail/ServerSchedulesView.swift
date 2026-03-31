@@ -33,22 +33,30 @@ struct ServerSchedulesView: View {
         .onChange(of: server.id) { _, _ in
             store.reload(server: server)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { notification in
+            guard let action = ServerDetailToolbarActionBus.action(from: notification),
+                  action == .schedulesNew else { return }
+            startCreate()
+        }
         .sheet(item: $editingSchedule) { schedule in
             ServerScheduleEditor(
                 schedule: schedule,
-                isNew: isCreatingNew
-            ) { updated in
-                if isCreatingNew {
-                    store.addNew(updated)
-                } else {
-                    store.upsert(updated)
+                isNew: isCreatingNew,
+                serverName: server.name,
+                onSave: { updated in
+                    if isCreatingNew {
+                        store.addNew(updated)
+                    } else {
+                        store.upsert(updated)
+                    }
+                    editingSchedule = nil
+                    isCreatingNew = false
+                },
+                onCancel: {
+                    editingSchedule = nil
+                    isCreatingNew = false
                 }
-                editingSchedule = nil
-                isCreatingNew = false
-            } onCancel: {
-                editingSchedule = nil
-                isCreatingNew = false
-            }
+            )
         }
     }
 
@@ -57,17 +65,18 @@ struct ServerSchedulesView: View {
             Text("server.schedules.subtitle".localized())
                 .font(.headline)
             Spacer()
-            Button("server.schedules.add".localized()) {
-                let draft = ServerSchedule(
-                    name: "server.schedules.default_name".localized(),
-                    action: .start,
-                    time: .init(hour: 2, minute: 0)
-                )
-                isCreatingNew = true
-                editingSchedule = draft
-            }
-            .buttonStyle(.borderedProminent)
         }
+    }
+
+    private func startCreate() {
+        let draft = ServerSchedule(
+            name: "server.schedules.default_name".localized(),
+            trigger: .time,
+            action: .start,
+            time: .init(hour: 2, minute: 0)
+        )
+        isCreatingNew = true
+        editingSchedule = draft
     }
 
     private func scheduleRow(_ schedule: ServerSchedule) -> some View {
@@ -128,6 +137,16 @@ struct ServerSchedulesView: View {
         let timeText = String(format: "%02d:%02d", schedule.time.hour, schedule.time.minute)
         let actionText = schedule.action.i18nKey.localized()
         let daysText = scheduleDaysText(schedule.weekdays)
+        if schedule.trigger == .consoleKeyword {
+            let keyword = schedule.keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+            if keyword.isEmpty {
+                return "\(actionText) · \("server.schedules.trigger.console".localized())"
+            }
+            if schedule.keywordIsRegex {
+                return "\(actionText) · /\(keyword)/"
+            }
+            return "\(actionText) · \(keyword)"
+        }
         if schedule.action == .command {
             return "\(actionText) · \(timeText) · \(daysText)"
         }
@@ -275,12 +294,15 @@ struct ServerScheduleEditor: View {
     @State private var draft: ServerSchedule
     @State private var time: Date
     let isNew: Bool
+    let serverName: String
     let onSave: (ServerSchedule) -> Void
     let onCancel: () -> Void
+    @State private var showAISidebar = true
 
     init(
         schedule: ServerSchedule,
         isNew: Bool,
+        serverName: String,
         onSave: @escaping (ServerSchedule) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -288,43 +310,96 @@ struct ServerScheduleEditor: View {
         let base = Calendar.current.date(from: DateComponents(hour: schedule.time.hour, minute: schedule.time.minute))
         _time = State(initialValue: base ?? Date())
         self.isNew = isNew
+        self.serverName = serverName
         self.onSave = onSave
         self.onCancel = onCancel
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(isNew ? "server.schedules.create".localized() : "server.schedules.edit".localized())
-                .font(.headline)
-            VStack(alignment: .leading, spacing: 12) {
-                LabeledContent("server.schedules.name".localized()) {
-                    TextField("", text: $draft.name)
-                        .textFieldStyle(.roundedBorder)
+        CommonSheetView {
+            HStack {
+                Text(isNew ? "server.schedules.create".localized() : "server.schedules.edit".localized())
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    showAISidebar.toggle()
+                } label: {
+                    Label(
+                        "server.schedules.ai_helper.button".localized(),
+                        systemImage: "sparkles"
+                    )
                 }
-                LabeledContent("server.schedules.action".localized()) {
-                    Picker("", selection: $draft.action) {
-                        ForEach(ServerSchedule.Action.allCases, id: \.self) { action in
-                            Text(action.i18nKey.localized()).tag(action)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                .buttonStyle(.bordered)
+            }
+        } body: {
+            HStack(spacing: 12) {
+                if showAISidebar {
+                    AIScheduleAssistantPanel(
+                        serverName: serverName,
+                        draft: $draft,
+                        time: $time
+                    )
+                    .frame(width: 260)
                 }
-                if draft.action == .command {
-                    LabeledContent("server.schedules.command".localized()) {
-                        TextField("server.schedules.command.placeholder".localized(), text: $draft.command)
+                VStack(alignment: .leading, spacing: 12) {
+                    LabeledContent("server.schedules.name".localized()) {
+                        TextField("", text: $draft.name)
                             .textFieldStyle(.roundedBorder)
                     }
-                }
-                LabeledContent("server.schedules.time".localized()) {
-                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                    LabeledContent("server.schedules.action".localized()) {
+                        Picker("", selection: $draft.action) {
+                            ForEach(ServerSchedule.Action.allCases, id: \.self) { action in
+                                Text(action.i18nKey.localized()).tag(action)
+                            }
+                        }
                         .labelsHidden()
+                        .pickerStyle(.menu)
+                    }
+                    LabeledContent("server.schedules.trigger.type".localized()) {
+                        Picker("", selection: $draft.trigger) {
+                            ForEach(ServerSchedule.Trigger.allCases, id: \.self) { trigger in
+                                Text(trigger.i18nKey.localized()).tag(trigger)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                    }
+                    if draft.action == .command {
+                        LabeledContent("server.schedules.command".localized()) {
+                            TextField("server.schedules.command.placeholder".localized(), text: $draft.command)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    if draft.trigger == .time {
+                        LabeledContent("server.schedules.time".localized()) {
+                            DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                        }
+                        LabeledContent("server.schedules.days".localized()) {
+                            WeekdaySelector(selected: $draft.weekdays)
+                        }
+                    } else {
+                        LabeledContent("server.schedules.trigger.keyword".localized()) {
+                            TextField("server.schedules.trigger.keyword.placeholder".localized(), text: $draft.keyword)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Toggle(
+                            "server.schedules.trigger.regex".localized(),
+                            isOn: $draft.keywordIsRegex
+                        )
+                        Toggle(
+                            "server.schedules.trigger.ignore_case".localized(),
+                            isOn: $draft.keywordIgnoreCase
+                        )
+                        Text("server.schedules.trigger.regex.hint".localized())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Toggle("server.schedules.enabled".localized(), isOn: $draft.isEnabled)
                 }
-                LabeledContent("server.schedules.days".localized()) {
-                    WeekdaySelector(selected: $draft.weekdays)
-                }
-                Toggle("server.schedules.enabled".localized(), isOn: $draft.isEnabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        } footer: {
             HStack {
                 Spacer()
                 Button("common.cancel".localized()) { onCancel() }
@@ -332,8 +407,7 @@ struct ServerScheduleEditor: View {
                     .buttonStyle(.borderedProminent)
             }
         }
-        .padding(20)
-        .frame(width: 420)
+        .frame(width: 780)
     }
 
     private func commit() {
@@ -380,5 +454,235 @@ struct WeekdaySelector: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct AIScheduleAssistantPanel: View {
+    let serverName: String
+    @Binding var draft: ServerSchedule
+    @Binding var time: Date
+
+    @State private var userPrompt = ""
+    @StateObject private var chatState = ChatState()
+    @State private var isGenerating = false
+    @State private var parsedSuggestion: AIScheduleFormSuggestion?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("server.schedules.ai_helper.title".localized())
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("server.schedules.ai_helper.hint".localized())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextEditor(text: $userPrompt)
+                .font(.system(.body))
+                .frame(height: 120)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.gray.opacity(0.3))
+                )
+            Button {
+                generate()
+            } label: {
+                Label("server.schedules.ai_helper.generate".localized(), systemImage: "sparkles")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isGenerating)
+        }
+        .onChange(of: chatState.messages) { _, _ in
+            parseSuggestion()
+        }
+    }
+
+    private var latestResponse: String? {
+        chatState.messages.last { $0.role == .assistant }?.content
+    }
+
+    private func generate() {
+        let goal = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = buildPrompt(userGoal: goal)
+        chatState.clear()
+        isGenerating = true
+        Task { @MainActor in
+            await AIChatManager.shared.sendMessage(prompt, chatState: chatState)
+            isGenerating = false
+        }
+    }
+
+    private func parseSuggestion() {
+        guard let response = latestResponse else { return }
+        parsedSuggestion = parseSuggestion(from: response)
+        applySuggestion()
+    }
+
+    private func applySuggestion() {
+        guard let suggestion = parsedSuggestion else { return }
+        if let name = suggestion.name, !name.isEmpty {
+            draft.name = name
+        }
+        if let actionValue = suggestion.action,
+           let action = ServerSchedule.Action.fromString(actionValue) {
+            draft.action = action
+        }
+        if let triggerValue = suggestion.trigger,
+           let trigger = ServerSchedule.Trigger.fromString(triggerValue) {
+            draft.trigger = trigger
+        }
+        if let keyword = suggestion.keyword {
+            draft.keyword = keyword
+        }
+        if let command = suggestion.command {
+            draft.command = command
+        }
+        draft.keywordIsRegex = suggestion.useRegex
+        draft.keywordIgnoreCase = suggestion.ignoreCase
+        if let weekdays = suggestion.weekdays, !weekdays.isEmpty {
+            draft.weekdays = weekdays
+        }
+        if let timeValue = suggestion.time,
+           let timeComponents = parseTime(timeValue) {
+            draft.time = .init(hour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0)
+            if let date = Calendar.current.date(from: timeComponents) {
+                time = date
+            }
+        }
+    }
+
+    private func parseSuggestion(from text: String) -> AIScheduleFormSuggestion? {
+        guard let start = text.firstIndex(of: "{"),
+              let end = text.lastIndex(of: "}") else { return nil }
+        let jsonText = String(text[start...end])
+        guard let data = jsonText.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(AIScheduleFormSuggestion.self, from: data) else { return nil }
+        return decoded
+    }
+
+    private func parseTime(_ value: String) -> DateComponents? {
+        let parts = value.split(separator: ":").map { String($0) }
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]) else { return nil }
+        return DateComponents(hour: hour, minute: minute)
+    }
+
+    private func buildPrompt(userGoal: String) -> String {
+        let isChinese = LanguageManager.shared.selectedLanguage == "zh-Hans"
+        if isChinese {
+            return """
+            你正在为 SwiftCraftServerLauncher 创建定时任务。请严格输出 JSON，不要输出其他文字。
+            JSON 字段：
+            name, action, trigger, keyword, command, time, weekdays, useRegex, ignoreCase
+
+            规则：
+            - action: start|stop|restart|command
+            - trigger: time|consoleKeyword
+            - time: 24 小时制 HH:mm
+            - weekdays: 1-7 的数组（周日=1，周一=2...周六=7）
+            - keyword/command 只在需要时填写
+            - 命令模板支持：{{line}}, {{0}}, {{1}}..., {{re:pattern|1}}, {{/pattern/|1}}
+            - 如需原始整行，使用 {{raw}}
+            - 仅输出 JSON 对象，不要解释
+
+            示例：
+            {"name":"自动重启","action":"restart","trigger":"time","time":"03:00","weekdays":[2,4,6]}
+            {"name":"检测关键字","action":"command","trigger":"consoleKeyword","keyword":"error","command":"say {{line}}","useRegex":false,"ignoreCase":true}
+
+            服务器：\(serverName)
+            用户需求：\(userGoal.isEmpty ? "创建一个定时任务。" : userGoal)
+            """
+        }
+        return """
+        You are creating a schedule in SwiftCraftServerLauncher. Output STRICT JSON only.
+        JSON fields:
+        name, action, trigger, keyword, command, time, weekdays, useRegex, ignoreCase
+
+        Rules:
+        - action: start|stop|restart|command
+        - trigger: time|consoleKeyword
+        - time: HH:mm (24h)
+        - weekdays: array of 1-7 (Sun=1 ... Sat=7)
+        - keyword/command only when needed
+        - command template supports: {{line}}, {{0}}, {{1}}..., {{re:pattern|1}}, {{/pattern/|1}}
+        - use {{raw}} for the original full line
+        - return JSON only, no extra text
+
+        Examples:
+        {"name":"Auto restart","action":"restart","trigger":"time","time":"03:00","weekdays":[2,4,6]}
+        {"name":"Keyword trigger","action":"command","trigger":"consoleKeyword","keyword":"error","command":"say {{line}}","useRegex":false,"ignoreCase":true}
+
+        Server: \(serverName)
+        User request: \(userGoal.isEmpty ? "Create a schedule." : userGoal)
+        """
+    }
+}
+
+private struct AIScheduleFormSuggestion: Codable {
+    let name: String?
+    let action: String?
+    let trigger: String?
+    let keyword: String?
+    let command: String?
+    let time: String?
+    let weekdays: [Int]?
+    let useRegex: Bool
+    let ignoreCase: Bool
+
+    init(
+        name: String? = nil,
+        action: String? = nil,
+        trigger: String? = nil,
+        keyword: String? = nil,
+        command: String? = nil,
+        time: String? = nil,
+        weekdays: [Int]? = nil,
+        useRegex: Bool = false,
+        ignoreCase: Bool = true
+    ) {
+        self.name = name
+        self.action = action
+        self.trigger = trigger
+        self.keyword = keyword
+        self.command = command
+        self.time = time
+        self.weekdays = weekdays
+        self.useRegex = useRegex
+        self.ignoreCase = ignoreCase
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        action = try container.decodeIfPresent(String.self, forKey: .action)
+        trigger = try container.decodeIfPresent(String.self, forKey: .trigger)
+        keyword = try container.decodeIfPresent(String.self, forKey: .keyword)
+        command = try container.decodeIfPresent(String.self, forKey: .command)
+        time = try container.decodeIfPresent(String.self, forKey: .time)
+        weekdays = try container.decodeIfPresent([Int].self, forKey: .weekdays)
+        useRegex = try container.decodeIfPresent(Bool.self, forKey: .useRegex) ?? false
+        ignoreCase = try container.decodeIfPresent(Bool.self, forKey: .ignoreCase) ?? true
+    }
+}
+
+private extension ServerSchedule.Action {
+    static func fromString(_ value: String) -> ServerSchedule.Action? {
+        switch value.lowercased() {
+        case "start": return .start
+        case "stop": return .stop
+        case "restart": return .restart
+        case "command": return .command
+        default: return nil
+        }
+    }
+}
+
+private extension ServerSchedule.Trigger {
+    static func fromString(_ value: String) -> ServerSchedule.Trigger? {
+        let normalized = value.lowercased()
+        if normalized == "time" { return .time }
+        if normalized == "consolekeyword" || normalized == "consolekey" || normalized == "console" {
+            return .consoleKeyword
+        }
+        return nil
     }
 }
