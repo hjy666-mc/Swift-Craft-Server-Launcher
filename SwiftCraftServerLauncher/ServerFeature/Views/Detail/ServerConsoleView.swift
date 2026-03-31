@@ -217,38 +217,6 @@ struct ServerConsoleView: View {
         sendLocalRCONCommand(text)
     }
 
-    private func scheduleStopStatusCheck() {
-        Task {
-            for _ in 0..<16 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                if ServerProcessManager.shared.isServerRunning(serverId: server.id) == false,
-                   LocalServerDirectService.isDirectModeAvailable(server: server) == false {
-                    await MainActor.run {
-                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
-                        ServerConsoleManager.shared.detach(serverId: server.id)
-                    }
-                    break
-                }
-            }
-        }
-    }
-
-    private func clearConsole() {
-        console.clear(serverId: server.id)
-        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
-        if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
-            Task { @MainActor in
-                if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {
-                    lastRemotePolledText = filterNoisyRconLifecycleLogs(snapshot).trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    lastRemotePolledText = ""
-                }
-            }
-        } else {
-            lastRemotePolledText = ""
-        }
-    }
-
     private func sendInterrupt() {
         let isForce = true
         let hint = "[SCSL] 强制停止中..."
@@ -1219,6 +1187,40 @@ private extension ConsoleFontStyle {
             return NSFont.systemFont(ofSize: size, weight: weight)
         case .monospaced:
             return NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        }
+    }
+}
+
+extension ServerConsoleView {
+    private func scheduleStopStatusCheck() {
+        Task {
+            for _ in 0..<16 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if ServerProcessManager.shared.isServerRunning(serverId: server.id) == false,
+                   LocalServerDirectService.isDirectModeAvailable(server: server) == false {
+                    await MainActor.run {
+                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                        ServerConsoleManager.shared.detach(serverId: server.id)
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    private func clearConsole() {
+        console.clear(serverId: server.id)
+        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
+        if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
+            Task { @MainActor in
+                if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {
+                    lastRemotePolledText = filterNoisyRconLifecycleLogs(snapshot).trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    lastRemotePolledText = ""
+                }
+            }
+        } else {
+            lastRemotePolledText = ""
         }
     }
 }
