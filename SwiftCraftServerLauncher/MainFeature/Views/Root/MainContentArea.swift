@@ -14,6 +14,7 @@ struct MainContentArea: View {
     @State private var spotlightRetryCount = 0
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @EnvironmentObject var serverLaunchUseCase: ServerLaunchUseCase
     @Environment(\.openSettings)
     private var openSettings: OpenSettingsAction
     @EnvironmentObject private var settingsNavigationManager: SettingsNavigationManager
@@ -78,7 +79,12 @@ struct MainContentArea: View {
     @ViewBuilder private var middleColumnDetailView: some View {
         DetailView()
             .toolbar {
-                DetailToolbarView()
+                DetailToolbarView(
+                    filterState: filterState,
+                    detailState: detailState,
+                    serverRepository: serverRepository,
+                    serverLaunchUseCase: serverLaunchUseCase
+                )
             }
     }
 
@@ -94,6 +100,21 @@ struct MainContentArea: View {
         from oldValue: SidebarItem,
         to newValue: SidebarItem
     ) {
+        if generalSettings.openServerInNewWindow,
+           case .server(let serverId) = newValue {
+            ServerDetailWindowCoordinator.shared.open(
+                serverId: serverId,
+                preferredSection: detailState.serverPanelSection
+            )
+            if oldValue != newValue {
+                detailState.selectedItem = oldValue
+                if case .server(let oldServerId) = oldValue {
+                    detailState.serverId = oldServerId
+                }
+            }
+            return
+        }
+
         switch (oldValue, newValue) {
         case (.node, .node):
             break
@@ -149,7 +170,6 @@ struct MainContentArea: View {
         if detailState.serverPanelSection == "console" {
             detailState.serverPanelSection = "console"
         }
-        openServerWindowIfNeeded(serverId: serverId)
     }
 
     private func handleServerToServerTransition(
@@ -163,15 +183,6 @@ struct MainContentArea: View {
         if detailState.serverPanelSection == "console" {
             detailState.serverPanelSection = "console"
         }
-        openServerWindowIfNeeded(serverId: newId)
-    }
-
-    private func openServerWindowIfNeeded(serverId: String) {
-        guard generalSettings.openServerInNewWindow else { return }
-        ServerDetailWindowCoordinator.shared.open(
-            serverId: serverId,
-            preferredSection: detailState.serverPanelSection
-        )
     }
 
     private func resetToResourceDefaults() {

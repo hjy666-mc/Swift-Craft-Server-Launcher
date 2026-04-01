@@ -4,18 +4,16 @@ import Foundation
 final class ServerDetailWindowCoordinator: ObservableObject {
     static let shared = ServerDetailWindowCoordinator()
 
-    @Published private(set) var serverId: String?
-    @Published private(set) var preferredSection: String = "console"
+    @Published private(set) var preferredSections: [String: String] = [:]
 
     private init() {}
 
     func open(serverId: String, preferredSection: String? = nil) {
-        self.serverId = serverId
-        if let preferredSection {
-            self.preferredSection = preferredSection
-        } else {
-            self.preferredSection = "console"
-        }
-        WindowManager.shared.openWindow(id: .serverDetail)
+        preferredSections[serverId] = preferredSection ?? "console"
+        WindowManager.shared.openWindow(id: .serverDetail, value: serverId)
+    }
+
+    func consumePreferredSection(for serverId: String) -> String {
+        preferredSections[serverId] ?? "console"
     }
 }

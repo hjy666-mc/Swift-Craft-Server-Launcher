@@ -3,12 +3,24 @@ import SwiftUI
 public struct DetailToolbarView: ToolbarContent {
     @Environment(\.openURL)
     private var openURL
-    @EnvironmentObject var filterState: ResourceFilterState
-    @EnvironmentObject var detailState: ResourceDetailState
-    @EnvironmentObject var serverRepository: ServerRepository
-    @EnvironmentObject var serverLaunchUseCase: ServerLaunchUseCase
+    @ObservedObject var filterState: ResourceFilterState
+    @ObservedObject var detailState: ResourceDetailState
+    @ObservedObject var serverRepository: ServerRepository
+    @ObservedObject var serverLaunchUseCase: ServerLaunchUseCase
     @StateObject private var serverActionManager = ServerActionManager.shared
     @StateObject private var serverStatusManager = ServerStatusManager.shared
+
+    init(
+        filterState: ResourceFilterState,
+        detailState: ResourceDetailState,
+        serverRepository: ServerRepository,
+        serverLaunchUseCase: ServerLaunchUseCase
+    ) {
+        self.filterState = filterState
+        self.detailState = detailState
+        self.serverRepository = serverRepository
+        self.serverLaunchUseCase = serverLaunchUseCase
+    }
 
     private var currentServer: ServerInstance? {
         if case .server(let serverId) = detailState.selectedItem {

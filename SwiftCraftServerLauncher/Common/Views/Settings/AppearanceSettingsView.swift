@@ -7,6 +7,7 @@ public struct AppearanceSettingsView: View {
     private let defaultThemeMode: ThemeMode = .system
     private let defaultEnableConsoleColoredOutput = true
     private let defaultServerFileManagerShowShortcuts = true
+    private let defaultOpenServerInNewWindow = false
 
     public init() {}
 
@@ -160,6 +161,18 @@ public struct AppearanceSettingsView: View {
                         }
                     }
                     .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+
+                    LabeledContent("settings.server.open_in_new_window".localized()) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Toggle("", isOn: $generalSettings.openServerInNewWindow)
+                                .labelsHidden()
+
+                            resetIconButton(disabled: generalSettings.openServerInNewWindow == defaultOpenServerInNewWindow) {
+                                generalSettings.openServerInNewWindow = defaultOpenServerInNewWindow
+                            }
+                        }
+                    }
+                    .labeledContentStyle(.custom)
                 }
             }
         }

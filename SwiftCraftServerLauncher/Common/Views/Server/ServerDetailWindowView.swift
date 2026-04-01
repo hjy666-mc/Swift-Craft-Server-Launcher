@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ServerDetailWindowView: View {
     @StateObject private var coordinator = ServerDetailWindowCoordinator.shared
+    let serverId: String
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @StateObject private var filterState = ResourceFilterState()
     @StateObject private var detailState = ResourceDetailState()
     @EnvironmentObject private var serverRepository: ServerRepository
@@ -9,8 +11,12 @@ struct ServerDetailWindowView: View {
     @EnvironmentObject private var serverLaunchUseCase: ServerLaunchUseCase
     @EnvironmentObject private var generalSettings: GeneralSettingsManager
 
+    private var serverName: String {
+        serverRepository.getServer(by: serverId)?.name ?? "server.window.title".localized()
+    }
+
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.doubleColumn)) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             ContentView()
                 .navigationSplitViewColumnWidth(min: 235, ideal: 235, max: 280)
         } detail: {
@@ -23,30 +29,36 @@ struct ServerDetailWindowView: View {
         .environmentObject(serverLaunchUseCase)
         .environmentObject(generalSettings)
         .toolbar {
-            DetailToolbarView()
+            DetailToolbarView(
+                filterState: filterState,
+                detailState: detailState,
+                serverRepository: serverRepository,
+                serverLaunchUseCase: serverLaunchUseCase
+            )
         }
         .windowIdentifierConfig(for: .serverDetail)
+        .background(
+            WindowAccessor(synchronous: false) { window in
+                window.title = serverName
+            }
+        )
         .onAppear {
             syncSelection()
         }
-        .onChange(of: coordinator.serverId) { _, _ in
-            syncSelection()
-        }
-        .onChange(of: coordinator.preferredSection) { _, _ in
+        .onChange(of: coordinator.preferredSections) { _, _ in
             syncSelection()
         }
     }
 
     private func syncSelection() {
-        guard let serverId = coordinator.serverId else { return }
         detailState.selectedItem = .server(serverId)
         detailState.serverId = serverId
-        detailState.serverPanelSection = coordinator.preferredSection
+        detailState.serverPanelSection = coordinator.consumePreferredSection(for: serverId)
     }
 }
 
 #Preview {
-    ServerDetailWindowView()
+    ServerDetailWindowView(serverId: "preview")
         .environmentObject(ServerRepository())
         .environmentObject(ServerNodeRepository())
         .environmentObject(ServerLaunchUseCase())
