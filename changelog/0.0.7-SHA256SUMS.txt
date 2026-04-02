@@ -1,0 +1,2 @@
+7a9fe337e13a0260dac5a9852b7360a17ebc83820b91c5520a9f7294cb99751c  release-assets/SwiftCraftServerLauncher-arm64.dmg
+f0d98307da66bd2ddae4c65ae6f7b5641d3a1d7ca0a72270078d9166f691afe4  release-assets/SwiftCraftServerLauncher-x86_64.dmg
