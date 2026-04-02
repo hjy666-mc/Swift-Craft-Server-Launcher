@@ -6,20 +6,67 @@ struct DetailView: View {
     @EnvironmentObject var detailState: ResourceDetailState
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @State private var requestOpenLaunchCommandEditor = false
 
-    @ViewBuilder var body: some View {
-        switch detailState.selectedItem {
-        case .game:
-            Text("game.module.removed".localized())
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        case .server(let serverId):
-            serverDetailView(serverId: serverId).frame(maxWidth: .infinity, alignment: .leading)
-        case .node:
-            EmptyView()
-        case .resource(let type):
-            resourceDetailView(type: type)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private var currentServer: ServerInstance? {
+        if case .server(let serverId) = detailState.selectedItem {
+            return serverRepository.getServer(by: serverId)
+        }
+        return nil
+    }
+
+    var body: some View {
+        Group {
+            switch detailState.selectedItem {
+            case .game:
+                Text("game.module.removed".localized())
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .server(let serverId):
+                serverDetailView(serverId: serverId).frame(maxWidth: .infinity, alignment: .leading)
+            case .node:
+                EmptyView()
+            case .resource(let type):
+                resourceDetailView(type: type)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .sheet(isPresented: $detailState.showServerRuntimeSettingsSheet) {
+            if let server = currentServer {
+                CommonSheetView {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("server.launch.title".localized())
+                                .font(.headline)
+                            Text("server.runtime.page.subtitle".localized())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            requestOpenLaunchCommandEditor = true
+                        } label: {
+                            Label("\("server.launch.title".localized())…", systemImage: "ellipsis.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } body: {
+                    ServerRuntimeSettingsView(
+                        server: server,
+                        showPageHeader: false,
+                        externalAdvancedEditorRequest: $requestOpenLaunchCommandEditor
+                    )
+                        .frame(width: 760, height: 520)
+                } footer: {
+                    HStack {
+                        Spacer()
+                        Button("common.close".localized()) {
+                            detailState.showServerRuntimeSettingsSheet = false
+                        }
+                    }
+                }
+            }
         }
     }
 

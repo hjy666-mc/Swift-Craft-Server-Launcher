@@ -50,6 +50,7 @@ public final class ResourceDetailState: ObservableObject {
             }
         }
     }
+    @Published public var showServerRuntimeSettingsSheet = false
     @Published public var loadedProjectDetail: ModrinthProjectDetail?
     private var serverPanelSectionById: [String: String] = [:]
 

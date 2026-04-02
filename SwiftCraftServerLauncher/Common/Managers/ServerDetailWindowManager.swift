@@ -11,6 +11,7 @@ final class ServerDetailWindowManager: NSObject {
     private weak var generalSettingsManager: GeneralSettingsManager?
 
     private var windowControllers: [UUID: NSWindowController] = [:]
+    private var serverWindowKeys: [String: UUID] = [:]
 
     override private init() {
         super.init()
@@ -29,6 +30,19 @@ final class ServerDetailWindowManager: NSObject {
     }
 
     func open(serverId: String) {
+        let normalizedServerId = serverId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedServerId.isEmpty else { return }
+
+        if let existingKey = serverWindowKeys[normalizedServerId],
+           let existingController = windowControllers[existingKey],
+           let existingWindow = existingController.window {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        } else {
+            serverWindowKeys.removeValue(forKey: normalizedServerId)
+        }
+
         guard let serverRepository,
               let serverNodeRepository,
               let serverLaunchUseCase,
@@ -37,7 +51,7 @@ final class ServerDetailWindowManager: NSObject {
         }
 
         let windowKey = UUID()
-        let contentView = ServerDetailWindowView(serverId: serverId)
+        let contentView = ServerDetailWindowView(serverId: normalizedServerId)
             .environmentObject(serverRepository)
             .environmentObject(serverNodeRepository)
             .environmentObject(serverLaunchUseCase)
@@ -56,8 +70,10 @@ final class ServerDetailWindowManager: NSObject {
 
         let controller = ServerDetailNSWindowController(window: window) { [weak self] in
             self?.windowControllers.removeValue(forKey: windowKey)
+            self?.serverWindowKeys.removeValue(forKey: normalizedServerId)
         }
         windowControllers[windowKey] = controller
+        serverWindowKeys[normalizedServerId] = windowKey
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

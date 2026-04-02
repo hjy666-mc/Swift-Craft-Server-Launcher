@@ -75,6 +75,9 @@
         }
       }
     },
+    "%@…" : {
+
+    },
     "%@%@" : {
       "localizations" : {
         "en" : {
@@ -108,6 +111,9 @@
 
     },
     "⌘K" : {
+
+    },
+    "0" : {
 
     },
     "about.acknowledgements" : {
@@ -607,6 +613,9 @@
           }
         }
       }
+    },
+    "Aikar" : {
+
     },
     "backup.reason.auto" : {
       "extractionState" : "manual",
@@ -1413,6 +1422,12 @@
       }
     },
     "Create a compatible server first." : {
+
+    },
+    "Custom" : {
+
+    },
+    "Default" : {
 
     },
     "dependency.download_all_and_continue" : {
@@ -7172,6 +7187,9 @@
         }
       }
     },
+    "G1GC" : {
+
+    },
     "Game" : {
 
     },
@@ -11851,6 +11869,40 @@
         }
       }
     },
+    "server.form.eula.confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do you agree to the Minecraft EULA before creating this server?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建该服务器前，你是否同意 Minecraft EULA？"
+          }
+        }
+      }
+    },
+    "server.form.eula.confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minecraft EULA"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minecraft EULA"
+          }
+        }
+      }
+    },
     "server.form.eula.description" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11864,6 +11916,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "创建服务器前必须同意。"
+          }
+        }
+      }
+    },
+    "server.form.eula.dont_ask_again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don’t ask again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不再询问"
           }
         }
       }
@@ -13802,6 +13871,244 @@
         }
       }
     },
+    "server.runtime.autosave_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes are auto-saved."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改将自动保存。"
+          }
+        }
+      }
+    },
+    "server.runtime.java_path" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Java Path"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Java 路径"
+          }
+        }
+      }
+    },
+    "server.runtime.jvm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JVM Arguments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JVM 参数"
+          }
+        }
+      }
+    },
+    "server.runtime.jvm.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appended when using the default launcher (empty custom command)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在使用默认启动方式（未填写自定义命令）时生效。"
+          }
+        }
+      }
+    },
+    "server.runtime.memory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Memory Allocation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内存分配"
+          }
+        }
+      }
+    },
+    "server.runtime.memory.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Megabytes. Use 0 or leave empty for default."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单位 MB。填 0 或留空表示使用默认。"
+          }
+        }
+      }
+    },
+    "server.runtime.memory.xms" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimum Memory (Xms, MB)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小内存 (Xms, MB)"
+          }
+        }
+      }
+    },
+    "server.runtime.memory.xmx" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maximum Memory (Xmx, MB)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最大内存 (Xmx, MB)"
+          }
+        }
+      }
+    },
+    "server.runtime.page.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Java, memory, and launch command. Changes save automatically."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Java、内存与启动命令。更改将自动保存。"
+          }
+        }
+      }
+    },
+    "server.runtime.section.launch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Launch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动"
+          }
+        }
+      }
+    },
+    "server.runtime.section.memory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Memory"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内存"
+          }
+        }
+      }
+    },
+    "server.runtime.section.runtime" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runtime"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行环境"
+          }
+        }
+      }
+    },
+    "server.runtime.server_jar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server Jar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务端 Jar"
+          }
+        }
+      }
+    },
+    "server.runtime.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Runtime Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动设置"
+          }
+        }
+      }
+    },
     "server.schedules.action" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14631,6 +14938,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "周三"
+          }
+        }
+      }
+    },
+    "server.window.picker.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a server"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择服务器"
           }
         }
       }
@@ -17329,6 +17653,23 @@
         }
       }
     },
+    "settings.general.eula.auto_accept" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically accept EULA"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动同意 EULA"
+          }
+        }
+      }
+    },
     "settings.general.launch_at_login" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18557,6 +18898,9 @@
           }
         }
       }
+    },
+    "ZGC" : {
+
     }
   },
   "version" : "1.1"

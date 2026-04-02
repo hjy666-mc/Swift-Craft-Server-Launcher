@@ -51,6 +51,7 @@ class ServerCreationViewModel: ObservableObject {
     }
 
     func handleConfirm() {
+        configuration.actions.onConfirm()
         Task { await performConfirmAction() }
     }
 
@@ -72,7 +73,6 @@ class ServerCreationViewModel: ObservableObject {
 
     private func computeIsFormValid() -> Bool {
         if !serverNameValidator.isFormValid { return false }
-        if !hasAcceptedEula { return false }
         switch selectedServerType {
         case .custom:
             return customJarURL != nil
@@ -150,7 +150,9 @@ class ServerCreationViewModel: ObservableObject {
                     let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
                     javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
                 }
-                try serverSetupService.acceptEula(in: serverDir)
+                if hasAcceptedEula {
+                    try serverSetupService.acceptEula(in: serverDir)
+                }
 
                 if selectedServerType == .forge {
                     let tempServer = ServerInstance(
@@ -238,7 +240,6 @@ class ServerCreationViewModel: ObservableObject {
             )
 
             serverRepository.addServerSilently(server)
-            configuration.actions.onCancel()
         } catch {
             if selectedNode.isLocal {
                 let serverDir = AppPaths.serverDirectory(serverName: name)

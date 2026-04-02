@@ -10,7 +10,7 @@ final class ServerDetailWindowCoordinator: ObservableObject {
 
     func open(serverId: String, preferredSection: String? = nil) {
         preferredSections[serverId] = preferredSection ?? "console"
-        WindowManager.shared.openWindow(id: .serverDetail, value: serverId)
+        ServerDetailWindowManager.shared.open(serverId: serverId)
     }
 
     func consumePreferredSection(for serverId: String) -> String {

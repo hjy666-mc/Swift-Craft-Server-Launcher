@@ -56,6 +56,12 @@ struct SwiftCraftServerLauncherApp: App {
                 .windowOpener()
                 .titlebarSeparatorOnHover()
                 .onAppear {
+                    ServerDetailWindowManager.shared.configure(
+                        serverRepository: serverRepository,
+                        serverNodeRepository: serverNodeRepository,
+                        serverLaunchUseCase: serverLaunchUseCase,
+                        generalSettingsManager: generalSettingsManager
+                    )
                     appIdleManager.startMonitoring()
                     BackupService.shared.startAutoBackupScheduler()
                 }

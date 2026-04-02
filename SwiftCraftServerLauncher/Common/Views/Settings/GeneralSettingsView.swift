@@ -48,6 +48,7 @@ public struct GeneralSettingsView: View {
   let defaultConfirmDeleteWorld = true
   let defaultConfirmUninstallPluginMod = true
   let defaultConfirmExitWhileRunning = true
+  let defaultAutoAcceptServerEULA = false
   let defaultBackupAutoEnabled = false
   let defaultBackupIntervalMinutes = 60
   let defaultBackupKeepCount = 10
@@ -352,6 +353,20 @@ public struct GeneralSettingsView: View {
                 disabled: generalSettings.confirmExitWhileRunning == defaultConfirmExitWhileRunning
               ) {
                 generalSettings.confirmExitWhileRunning = defaultConfirmExitWhileRunning
+              }
+            }
+          }
+          .labeledContentStyle(.custom)
+
+          LabeledContent("settings.general.eula.auto_accept".localized()) {
+            HStack(alignment: .top, spacing: 8) {
+              Toggle("", isOn: $generalSettings.autoAcceptServerEULA)
+                .labelsHidden()
+
+              resetIconButton(
+                disabled: generalSettings.autoAcceptServerEULA == defaultAutoAcceptServerEULA
+              ) {
+                generalSettings.autoAcceptServerEULA = defaultAutoAcceptServerEULA
               }
             }
           }

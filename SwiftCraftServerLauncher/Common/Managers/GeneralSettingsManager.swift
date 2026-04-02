@@ -297,6 +297,11 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         didSet { objectWillChange.send() }
     }
 
+    @AppStorage("autoAcceptServerEULA")
+    var autoAcceptServerEULA: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
     @AppStorage("openServerInNewWindow")
     var openServerInNewWindow: Bool = false {
         didSet { objectWillChange.send() }

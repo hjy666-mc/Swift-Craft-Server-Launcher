@@ -12,18 +12,5 @@ extension SwiftCraftServerLauncherApp {
                 .windowCleanup(for: .downloadCenter)
         }
         .defaultSize(width: 520, height: 420)
-
-        WindowGroup(id: WindowID.serverDetail.rawValue, for: String.self) { serverId in
-            ServerDetailWindowView(serverId: serverId.wrappedValue)
-                .environmentObject(serverRepository)
-                .environmentObject(serverNodeRepository)
-                .environmentObject(serverLaunchUseCase)
-                .environmentObject(generalSettingsManager)
-        } defaultValue: {
-            ""
-        }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
-        .defaultSize(width: 1100, height: 720)
     }
 }
