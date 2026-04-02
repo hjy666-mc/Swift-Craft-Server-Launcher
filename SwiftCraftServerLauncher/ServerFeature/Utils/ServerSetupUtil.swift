@@ -28,7 +28,7 @@ class ServerSetupUtil: ObservableObject {
 
     func acceptEula(in serverDir: URL) throws {
         let eulaURL = serverDir.appendingPathComponent("eula.txt")
-        let content = "eula=true\n"
+        let content = "eula=true\n# accepted by SwiftCraftServerLauncher\n"
         try content.data(using: .utf8)?.write(to: eulaURL, options: .atomic)
     }
 }

@@ -1,10 +1,3 @@
-//
-//  DependencySheetViewModel.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/28.
-//
-
 import Foundation
 import SwiftUI
 

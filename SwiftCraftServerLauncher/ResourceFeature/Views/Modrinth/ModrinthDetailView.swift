@@ -25,6 +25,7 @@ struct ModrinthDetailView: View {
     @State private var currentPage: Int = 1
     @State private var lastSearchParams: String = ""
     @State private var error: GlobalError?
+    @EnvironmentObject private var generalSettings: GeneralSettingsManager
 
     init(
         query: String,
@@ -265,7 +266,7 @@ struct ModrinthDetailView: View {
             } else if viewModel.isLoading {
                 ForEach(0..<8, id: \.self) { index in
                     ModrinthDetailSkeletonCardView(seed: index)
-                        .padding(.vertical, ModrinthConstants.UIConstants.verticalPadding)
+                        .padding(.vertical, ResourceCardMetrics(style: generalSettings.resourceCardStyle).verticalPadding)
                         .listRowInsets(
                             EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
                         )
@@ -287,7 +288,7 @@ struct ModrinthDetailView: View {
                         selectedItem: $selectedItem,
                         scannedDetailIds: $scannedDetailIds
                     )
-                    .padding(.vertical, ModrinthConstants.UIConstants.verticalPadding)
+                    .padding(.vertical, ResourceCardMetrics(style: generalSettings.resourceCardStyle).verticalPadding)
                     .listRowInsets(
                         EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
                     )
@@ -372,6 +373,7 @@ struct ModrinthDetailView: View {
 
 private struct ModrinthDetailSkeletonCardView: View {
     let seed: Int
+    @EnvironmentObject private var generalSettings: GeneralSettingsManager
 
     private var tagCount: Int { 2 + (seed % 2) }
     private var titleWidth: CGFloat {
@@ -382,17 +384,18 @@ private struct ModrinthDetailSkeletonCardView: View {
     }
 
     var body: some View {
-        HStack(spacing: ModrinthConstants.UIConstants.contentSpacing) {
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        HStack(spacing: metrics.contentSpacing) {
             SkeletonView(
-                width: ModrinthConstants.UIConstants.iconSize,
-                height: ModrinthConstants.UIConstants.iconSize,
-                cornerRadius: ModrinthConstants.UIConstants.cornerRadius
+                width: metrics.iconSize,
+                height: metrics.iconSize,
+                cornerRadius: metrics.cornerRadius
             )
 
-            VStack(alignment: .leading, spacing: ModrinthConstants.UIConstants.spacing) {
+            VStack(alignment: .leading, spacing: metrics.spacing) {
                 SkeletonView(width: titleWidth, height: 16, cornerRadius: 4)
                 SkeletonView(width: subtitleWidth, height: 13, cornerRadius: 4)
-                HStack(spacing: ModrinthConstants.UIConstants.spacing) {
+                HStack(spacing: metrics.spacing) {
                     ForEach(0..<tagCount, id: \.self) { index in
                         SkeletonView(
                             width: SkeletonWidth.make(
@@ -401,7 +404,7 @@ private struct ModrinthDetailSkeletonCardView: View {
                                 seed: seed * 31 + 10 + index
                             ),
                             height: 14,
-                            cornerRadius: 6
+                            cornerRadius: metrics.tagCornerRadius
                         )
                     }
                 }
@@ -409,7 +412,7 @@ private struct ModrinthDetailSkeletonCardView: View {
 
             Spacer(minLength: 8)
 
-            VStack(alignment: .trailing, spacing: ModrinthConstants.UIConstants.spacing) {
+            VStack(alignment: .trailing, spacing: metrics.spacing) {
                 SkeletonView(
                     width: SkeletonWidth.make(base: 56, variance: 12, seed: seed * 31 + 20),
                     height: 12,

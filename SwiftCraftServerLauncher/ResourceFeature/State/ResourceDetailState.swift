@@ -1,21 +1,48 @@
-//
-//  ResourceDetailState.swift
-//  SwiftCraftServerLauncher
-//
-//  收拢当前选中的侧边栏项、游戏/资源类型、项目详情等状态，通过 @EnvironmentObject 向下提供，减少 @Binding 透传。
-//
-
 import SwiftUI
 
 /// 资源/游戏详情与导航相关状态（可观测）
 public final class ResourceDetailState: ObservableObject {
 
-    @Published public var selectedItem: SidebarItem
+    @Published public var selectedItem: SidebarItem {
+        didSet {
+            if case .server(let id) = selectedItem {
+                if serverId != id {
+                    serverId = id
+                }
+                if let storedSection = serverPanelSectionById[id] {
+                    if serverPanelSection != storedSection {
+                        serverPanelSection = storedSection
+                    }
+                } else if serverPanelSection != "console" {
+                    serverPanelSection = "console"
+                }
+            }
+        }
+    }
     @Published public var gameType: Bool  // false = local, true = server
     @Published public var gameId: String?
-    @Published public var serverId: String?
+    @Published public var serverId: String? {
+        didSet {
+            if let id = serverId, id != oldValue {
+                if let storedSection = serverPanelSectionById[id] {
+                    if serverPanelSection != storedSection {
+                        serverPanelSection = storedSection
+                    }
+                } else if serverPanelSection != "console" {
+                    serverPanelSection = "console"
+                }
+            }
+        }
+    }
     @Published public var gameResourcesType: String
-    @Published public var serverPanelSection: String = "console"
+    @Published public var serverPanelSection: String = "console" {
+        didSet {
+            guard serverPanelSection != oldValue else { return }
+            if case .server(let id) = selectedItem {
+                serverPanelSectionById[id] = serverPanelSection
+            }
+        }
+    }
     @Published public var selectedProjectId: String? {
         didSet {
             if selectedProjectId != oldValue {
@@ -23,7 +50,9 @@ public final class ResourceDetailState: ObservableObject {
             }
         }
     }
+    @Published public var showServerRuntimeSettingsSheet = false
     @Published public var loadedProjectDetail: ModrinthProjectDetail?
+    private var serverPanelSectionById: [String: String] = [:]
 
     public init(
         selectedItem: SidebarItem = .resource(.mod),

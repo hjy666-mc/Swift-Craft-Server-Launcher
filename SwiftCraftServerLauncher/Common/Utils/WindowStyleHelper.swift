@@ -1,10 +1,3 @@
-//
-//  WindowStyleHelper.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/27.
-//
-
 import AppKit
 import SwiftUI
 
@@ -42,6 +35,29 @@ extension View {
     /// 应用窗口样式配置
     func windowStyleConfig(for windowID: WindowID) -> some View {
         modifier(WindowStyleConfig(windowID: windowID))
+    }
+}
+
+/// 仅设置窗口 identifier 的修饰符
+struct WindowIdentifierConfig: ViewModifier {
+    let windowID: WindowID
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                WindowAccessor(synchronous: false) { window in
+                    if window.identifier?.rawValue != windowID.rawValue {
+                        window.identifier = NSUserInterfaceItemIdentifier(windowID.rawValue)
+                    }
+                }
+            )
+    }
+}
+
+extension View {
+    /// 仅设置窗口 identifier，不调整样式
+    func windowIdentifierConfig(for windowID: WindowID) -> some View {
+        modifier(WindowIdentifierConfig(windowID: windowID))
     }
 }
 

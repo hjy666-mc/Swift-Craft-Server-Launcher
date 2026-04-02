@@ -1,10 +1,3 @@
-//
-//  ResourceButtonAlertType.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/28.
-//
-
 import SwiftUI
 
 /// 资源按钮的 Alert 类型枚举

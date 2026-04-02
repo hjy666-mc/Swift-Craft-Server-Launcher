@@ -1,9 +1,3 @@
-//
-//  GameFormProtocols.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 // MARK: - Game Form State Protocol

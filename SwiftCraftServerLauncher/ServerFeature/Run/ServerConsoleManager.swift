@@ -21,6 +21,7 @@ final class ServerConsoleManager: ObservableObject {
     @Published private(set) var latestEvent: ConsoleEvent?
     private var inputPipes: [String: Pipe] = [:]
     private var renderedCache: [String: AttributedString] = [:]
+    private var commandDrafts: [String: String] = [:]
     private var nextSequence: Int = 0
 
     private init() {}
@@ -71,6 +72,14 @@ final class ServerConsoleManager: ObservableObject {
         if let data = (trimmed + "\n").data(using: .utf8) {
             pipe.fileHandleForWriting.write(data)
         }
+    }
+
+    func commandDraft(for serverId: String) -> String {
+        commandDrafts[serverId] ?? ""
+    }
+
+    func setCommandDraft(_ text: String, for serverId: String) {
+        commandDrafts[serverId] = text
     }
 
     func logText(for serverId: String) -> String {

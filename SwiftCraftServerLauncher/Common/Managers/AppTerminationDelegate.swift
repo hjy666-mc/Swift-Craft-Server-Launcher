@@ -1,8 +1,22 @@
 import AppKit
+import CoreSpotlight
 import Foundation
 
 @MainActor
 final class AppTerminationDelegate: NSObject, NSApplicationDelegate {
+    func application(
+        _ application: NSApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([NSUserActivityRestoring]) -> Void
+    ) -> Bool {
+        if userActivity.activityType == CSSearchableItemActionType,
+           let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+            SpotlightActionCenter.shared.send(identifier: identifier)
+            return true
+        }
+        return false
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let settings = GeneralSettingsManager.shared
         guard settings.confirmExitWhileRunning else { return .terminateNow }

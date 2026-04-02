@@ -1,10 +1,3 @@
-//
-//  AISettingsManager.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by AI Assistant
-//
-
 import Foundation
 import SwiftUI
 

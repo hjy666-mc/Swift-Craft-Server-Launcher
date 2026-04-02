@@ -1,10 +1,3 @@
-//
-//  GameAdvancedSettingsView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/2.
-//
-
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers

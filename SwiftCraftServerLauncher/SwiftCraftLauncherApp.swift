@@ -1,30 +1,5 @@
-//
-//  SwiftCraftLauncherApp.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/5/30.
-//
-//  SwiftCraftServerLauncher
-//
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-//  ADDITIONAL TERMS:
-//  This program includes additional terms for source attribution and name usage.
-//  See doc/ADDITIONAL_TERMS.md in the project root for details.
-
 import Combine
+import CoreSpotlight
 import SwiftUI
 import UserNotifications
 
@@ -37,7 +12,6 @@ struct SwiftCraftServerLauncherApp: App {
     private var scenePhase
 
     // MARK: - StateObjects
-    @StateObject var playerListViewModel = PlayerListViewModel()
     @StateObject var gameRepository = GameRepository()
     @StateObject var serverRepository = ServerRepository()
     @StateObject var serverNodeRepository = ServerNodeRepository()
@@ -47,8 +21,9 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject private var appUpdateService = AppUpdateService()
     @StateObject var generalSettingsManager = GeneralSettingsManager.shared
     @StateObject var themeManager = ThemeManager.shared
-    @StateObject private var skinSelectionStore = SkinSelectionStore()
     @StateObject private var appIdleManager = AppIdleManager.shared
+    @StateObject private var commandPalette = CommandPaletteController()
+    @StateObject private var settingsNavigationManager = SettingsNavigationManager.shared
 
     // MARK: - Notification Delegate
     private let notificationCenterDelegate = NotificationCenterDelegate()
@@ -67,7 +42,6 @@ struct SwiftCraftServerLauncherApp: App {
         WindowGroup {
             MainView()
                 .environment(\.appLogger, Logger.shared)
-                .environmentObject(playerListViewModel)
                 .environmentObject(gameRepository)
                 .environmentObject(serverRepository)
                 .environmentObject(serverNodeRepository)
@@ -75,17 +49,29 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(serverLaunchUseCase)
                 .environmentObject(appUpdateService)
                 .environmentObject(generalSettingsManager)
-                .environmentObject(skinSelectionStore)
+                .environmentObject(commandPalette)
+                .environmentObject(settingsNavigationManager)
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
                 .windowOpener()
                 .titlebarSeparatorOnHover()
                 .onAppear {
+                    ServerDetailWindowManager.shared.configure(
+                        serverRepository: serverRepository,
+                        serverNodeRepository: serverNodeRepository,
+                        serverLaunchUseCase: serverLaunchUseCase,
+                        generalSettingsManager: generalSettingsManager
+                    )
                     appIdleManager.startMonitoring()
                     BackupService.shared.startAutoBackupScheduler()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     appIdleManager.handleScenePhase(newPhase)
+                }
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    if let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+                        SpotlightActionCenter.shared.send(identifier: identifier)
+                    }
                 }
         }
         .windowStyle(.titleBar)
@@ -102,6 +88,11 @@ struct SwiftCraftServerLauncherApp: App {
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             }
             CommandGroup(after: .help) {
+                Button("menu.command.palette".localized()) {
+                    commandPalette.present()
+                }
+                .keyboardShortcut("k", modifiers: [.command])
+
                 Button("menu.visit.website".localized()) {
                     if let url = URL(string: "https://github.com/hjy666-mc/Swift-Craft-Server-Launcher") {
                         NSWorkspace.shared.open(url)
@@ -119,6 +110,7 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(serverNodeRepository)
                 .environmentObject(appUpdateService)
                 .environmentObject(generalSettingsManager)
+                .environmentObject(settingsNavigationManager)
                 .preferredColorScheme(themeManager.currentColorScheme)
                 .errorAlert()
         }

@@ -1,10 +1,3 @@
-//
-//  WindowManager.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/27.
-//
-
 import SwiftUI
 import AppKit
 
@@ -14,12 +7,18 @@ class WindowManager {
     static let shared = WindowManager()
 
     private var openWindowAction: ((String) -> Void)?
+    private var openWindowWithValueAction: ((String, String) -> Void)?
 
     private init() {}
 
     /// 设置窗口打开动作（由 WindowOpener 调用）
     func setOpenWindowAction(_ action: @escaping (String) -> Void) {
         self.openWindowAction = action
+    }
+
+    /// 设置带字符串参数的窗口打开动作（由 WindowOpener 调用）
+    func setOpenWindowWithValueAction(_ action: @escaping (String, String) -> Void) {
+        self.openWindowWithValueAction = action
     }
 
     /// 查找指定 ID 的窗口
@@ -50,6 +49,19 @@ class WindowManager {
         }
     }
 
+    /// 打开指定 ID 的窗口并传入字符串参数（用于 WindowGroup(for:)）
+    func openWindow(id: WindowID, value: String) {
+        if let openWindow = openWindowWithValueAction {
+            openWindow(id.rawValue, value)
+        } else {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("OpenWindowWithValue"),
+                object: nil,
+                userInfo: ["windowID": id.rawValue, "windowValue": value]
+            )
+        }
+    }
+
     /// 关闭指定 ID 的窗口
     func closeWindow(id: WindowID) {
         if let window = findWindow(id: id) {
@@ -70,11 +82,22 @@ struct WindowOpener: ViewModifier {
                 WindowManager.shared.setOpenWindowAction { windowID in
                     openWindow(id: windowID)
                 }
+                WindowManager.shared.setOpenWindowWithValueAction { windowID, value in
+                    openWindow(id: windowID, value: value)
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenWindow"))) { notification in
                 // 监听通知并打开窗口（备用方案）
                 if let windowIDString = notification.userInfo?["windowID"] as? String {
                     openWindow(id: windowIDString)
+                }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: NSNotification.Name("OpenWindowWithValue"))
+            ) { notification in
+                if let windowIDString = notification.userInfo?["windowID"] as? String,
+                   let windowValue = notification.userInfo?["windowValue"] as? String {
+                    openWindow(id: windowIDString, value: windowValue)
                 }
             }
     }

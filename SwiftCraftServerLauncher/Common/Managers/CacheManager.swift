@@ -1,9 +1,3 @@
-//
-//  CacheManager.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/7/31.
-//
 import SwiftUI
 
 class CacheManager: ObservableObject {

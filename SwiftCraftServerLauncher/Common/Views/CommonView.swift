@@ -1,9 +1,3 @@
-//
-//  CommonView.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/6/2.
-//
 import SwiftUI
 
 func newErrorView(_ error: GlobalError) -> some View {
@@ -69,6 +63,8 @@ struct DirectorySettingRow: View {
             HStack {
                 Button(action: onChoose) {
                     PathBreadcrumbView(path: path)
+                        .frame(maxWidth: 360, alignment: .leading)
+                        .layoutPriority(1)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
@@ -89,6 +85,7 @@ struct DirectorySettingRow: View {
                 .font(.footnote)
                 .foregroundColor(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 // 路径分段显示控件（Finder风格图标）
@@ -137,6 +134,8 @@ struct PathBreadcrumbView: View {
                     .cornerRadius(3)
                 Text(components[idx])
                     .font(.body)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
 
@@ -164,6 +163,7 @@ struct PathBreadcrumbView: View {
                 Text("…")
                     .font(.body)
                     .foregroundColor(.primary)
+                    .lineLimit(1)
             }
             // 结尾
             ForEach(startTail..<count, id: \.self) { idx in

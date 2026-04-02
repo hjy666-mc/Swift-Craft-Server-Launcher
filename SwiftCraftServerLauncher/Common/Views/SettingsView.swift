@@ -3,39 +3,26 @@ import Foundation
 
 /// 设置标签页枚举
 enum SettingsTab: Int {
-    case generalBasic = 0
-    case generalUpdate = 1
-    case generalSafety = 2
-    case generalBackup = 3
-    case appearance = 4
+    case general = 0
+    case generalBackup = 1
+    case appearance = 2
+    case ai = 3
 }
 
 /// 通用设置视图
 /// 应用设置
 public struct SettingsView: View {
-    @State private var selectedTab: SettingsTab = .generalBasic
+    @EnvironmentObject private var settingsNavigation: SettingsNavigationManager
 
     public init() {}
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
-            GeneralSettingsView(sections: [.basic])
+        TabView(selection: $settingsNavigation.selectedTab) {
+            GeneralSettingsView(sections: [.basic, .update, .safety])
                 .tabItem {
                     Label("settings.general.basic.tab".localized(), systemImage: "gearshape")
                 }
-                .tag(SettingsTab.generalBasic)
-
-            GeneralSettingsView(sections: [.update])
-                .tabItem {
-                    Label("settings.general.update.tab".localized(), systemImage: "arrow.triangle.2.circlepath")
-                }
-                .tag(SettingsTab.generalUpdate)
-
-            GeneralSettingsView(sections: [.safety])
-                .tabItem {
-                    Label("settings.general.confirmation.tab".localized(), systemImage: "checkmark.shield")
-                }
-                .tag(SettingsTab.generalSafety)
+                .tag(SettingsTab.general)
 
             GeneralSettingsView(sections: [.backup])
                 .tabItem {
@@ -48,6 +35,12 @@ public struct SettingsView: View {
                     Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
                 }
                 .tag(SettingsTab.appearance)
+
+            AISettingsView()
+                .tabItem {
+                    Label("settings.ai.tab".localized(), systemImage: "sparkles")
+                }
+                .tag(SettingsTab.ai)
         }
         .padding()
     }
@@ -63,21 +56,14 @@ struct CustomLabeledContentStyle: LabeledContentStyle {
     // 保留系统布局
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: alignment) {
-            // 使用系统的标签布局
-            HStack(spacing: 0) {
-                configuration.label
-                Text(":")
-            }
-            .layoutPriority(1)  // 保持标签优先级
-            .multilineTextAlignment(.trailing)
-            .frame(minWidth: 320, alignment: .trailing)  // 容器右对齐
-            // 右侧内容
+            configuration.label
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             configuration.content
                 .foregroundColor(.secondary)
-            .multilineTextAlignment(.leading)  // 文字左对齐
-                .frame(maxWidth: .infinity, alignment: .leading)  // 容器左对齐
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 

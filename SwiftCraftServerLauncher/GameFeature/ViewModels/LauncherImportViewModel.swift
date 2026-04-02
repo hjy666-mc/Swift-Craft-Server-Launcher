@@ -1,9 +1,3 @@
-//
-//  LauncherImportViewModel.swift
-//  SwiftCraftServerLauncher
-//
-//
-
 import SwiftUI
 
 /// 启动器导入 ViewModel

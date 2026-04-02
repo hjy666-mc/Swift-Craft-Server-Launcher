@@ -1,10 +1,3 @@
-//
-//  ModUpdateChecker.swift
-//  SwiftCraftServerLauncher
-//
-//  Created by su on 2025/1/1.
-//
-
 import Foundation
 
 /// Mod 更新检测器
