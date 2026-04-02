@@ -40,9 +40,6 @@ struct ServerConsoleView: View {
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
-            DispatchQueue.main.async {
-                commandFieldFocused = true
-            }
             installKeyMonitor()
             initialConsoleLines = console.logLines(for: server.id)
             isRenderingConsole = false
@@ -65,9 +62,6 @@ struct ServerConsoleView: View {
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
-            DispatchQueue.main.async {
-                commandFieldFocused = true
-            }
             initialConsoleLines = console.logLines(for: server.id)
             consoleEvent = nil
             isRenderingConsole = false

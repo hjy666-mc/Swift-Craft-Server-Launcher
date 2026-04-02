@@ -19,7 +19,10 @@ public struct SidebarView: View {
     @State private var hoveredNodePopoverId: String?
     @State private var pendingNodePopoverClose: DispatchWorkItem?
     @State private var pendingDeleteServer: ServerInstance?
+    @State private var pendingDeleteServers: [ServerInstance] = []
     @State private var pendingDeleteCorruptedServerName: String?
+    @State private var selectedSidebarItems: Set<SidebarItem> = []
+    @State private var previousSidebarSelection: Set<SidebarItem> = []
 
     public init() {}
 
@@ -42,7 +45,7 @@ public struct SidebarView: View {
             .padding(.top, 10)
             .padding(.bottom, 6)
 
-            List(selection: detailState.selectedItemOptionalBinding) {
+            List(selection: $selectedSidebarItems) {
                 Section(header: Text("sidebar.nodes.title".localized())) {
                     ForEach(filteredNodes) { node in
                         HStack(spacing: 6) {
@@ -107,6 +110,7 @@ public struct SidebarView: View {
                                         }
                                 }
                         }
+                        .tag(SidebarItem.node(node.id))
                         .contextMenu {
                             if !node.isLocal {
                                 Button(role: .destructive) {
@@ -130,36 +134,40 @@ public struct SidebarView: View {
                                 Label(type.localizedName, systemImage: type.systemImage)
                             }
                         }
+                        .tag(SidebarItem.resource(type))
                     }
                 }
 
                 Section(header: Text("\("sidebar.servers.title".localized()) (\(filteredServers.count))")) {
                     ForEach(filteredServers) { server in
-                        NavigationLink(value: SidebarItem.server(server.id)) {
-                            HStack(spacing: 6) {
-                                if let iconURL = server.iconFileURL,
-                                   let iconImage = NSImage(contentsOf: iconURL) {
-                                    Image(nsImage: iconImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 16, height: 16)
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                                } else {
-                                    Image(systemName: server.resolvedIconName)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 16, height: 16)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(server.name)
-                                    .lineLimit(1)
-                                Spacer()
-                                if serverStatusManager.isServerRunning(serverId: server.id) {
-                                    Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 6, height: 6)
-                                }
+                        HStack(spacing: 6) {
+                            if let iconURL = server.iconFileURL,
+                               let iconImage = NSImage(contentsOf: iconURL) {
+                                Image(nsImage: iconImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 16, height: 16)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            } else {
+                                Image(systemName: server.resolvedIconName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 16, height: 16)
+                                    .foregroundStyle(.secondary)
                             }
+                            Text(server.name)
+                                .lineLimit(1)
+                            Spacer()
+                            if serverStatusManager.isServerRunning(serverId: server.id) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                        .tag(SidebarItem.server(server.id))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            detailState.selectedItem = .server(server.id)
                         }
                         .contextMenu {
                             Button {
@@ -169,15 +177,26 @@ public struct SidebarView: View {
                             }
 
                             Button(role: .destructive) {
+                                let selectedServers = selectedSidebarItems.compactMap { item -> ServerInstance? in
+                                    guard case .server(let id) = item else { return nil }
+                                    return serverRepository.getServer(by: id)
+                                }
+                                let targets = selectedServers.isEmpty ? [server] : selectedServers
                                 if generalSettings.confirmDeleteServer {
-                                    pendingDeleteServer = server
+                                    if targets.count > 1 {
+                                        pendingDeleteServers = targets
+                                    } else {
+                                        pendingDeleteServer = targets.first
+                                    }
                                 } else {
-                                    serverActionManager.deleteServer(
-                                        server: server,
-                                        serverRepository: serverRepository,
-                                        serverNodeRepository: serverNodeRepository,
-                                        selectedItem: detailState.selectedItemBinding
-                                    )
+                                    targets.forEach { target in
+                                        serverActionManager.deleteServer(
+                                            server: target,
+                                            serverRepository: serverRepository,
+                                            serverNodeRepository: serverNodeRepository,
+                                            selectedItem: detailState.selectedItemBinding
+                                        )
+                                    }
                                 }
                             } label: {
                                 Label("sidebar.context_menu.delete_game".localized(), systemImage: "trash")
@@ -229,11 +248,24 @@ public struct SidebarView: View {
             if serverNodeRepository.getNode(by: activeServerNodeId) == nil {
                 activeServerNodeId = ServerNode.local.id
             }
+            syncSidebarSelection(with: detailState.selectedItem)
+        }
+        .onChange(of: selectedSidebarItems) { _, newValue in
+            let added = newValue.subtracting(previousSidebarSelection)
+            if let newlySelected = added.first {
+                if detailState.selectedItem != newlySelected {
+                    detailState.selectedItem = newlySelected
+                }
+            } else if newValue.count == 1, let only = newValue.first, detailState.selectedItem != only {
+                detailState.selectedItem = only
+            }
+            previousSidebarSelection = newValue
         }
         .onChange(of: detailState.selectedItem) { _, newValue in
             if case .node(let nodeId) = newValue {
                 activeServerNodeId = nodeId
             }
+            syncSidebarSelection(with: newValue)
         }
         .confirmationDialog(
             "sidebar.confirm.delete_server.title".localized(),
@@ -262,6 +294,35 @@ public struct SidebarView: View {
             Text(String(format: "sidebar.confirm.delete_server.message".localized(), pendingDeleteServer?.name ?? ""))
         }
         .confirmationDialog(
+            "sidebar.confirm.delete_server.title".localized(),
+            isPresented: Binding(
+                get: { !pendingDeleteServers.isEmpty },
+                set: { showing in
+                    if !showing { pendingDeleteServers = [] }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized(), role: .destructive) {
+                let targets = pendingDeleteServers
+                targets.forEach { target in
+                    serverActionManager.deleteServer(
+                        server: target,
+                        serverRepository: serverRepository,
+                        serverNodeRepository: serverNodeRepository,
+                        selectedItem: detailState.selectedItemBinding
+                    )
+                }
+                pendingDeleteServers = []
+            }
+            Button("common.cancel".localized(), role: .cancel) {
+                pendingDeleteServers = []
+            }
+        } message: {
+            let names = pendingDeleteServers.map(\.name).joined(separator: ", ")
+            Text(String(format: "sidebar.confirm.delete_server.message".localized(), names))
+        }
+        .confirmationDialog(
             "sidebar.confirm.delete_corrupted_server.title".localized(),
             isPresented: Binding(
                 get: { pendingDeleteCorruptedServerName != nil },
@@ -282,6 +343,20 @@ public struct SidebarView: View {
         } message: {
             Text(String(format: "sidebar.confirm.delete_corrupted_server.message".localized(), pendingDeleteCorruptedServerName ?? ""))
         }
+    }
+
+    private func syncSidebarSelection(with newValue: SidebarItem) {
+        switch newValue {
+        case .server:
+            if !selectedSidebarItems.contains(newValue) {
+                selectedSidebarItems.insert(newValue)
+            }
+        default:
+            if selectedSidebarItems != [newValue] {
+                selectedSidebarItems = [newValue]
+            }
+        }
+        previousSidebarSelection = selectedSidebarItems
     }
 
     private var downloadBar: some View {
