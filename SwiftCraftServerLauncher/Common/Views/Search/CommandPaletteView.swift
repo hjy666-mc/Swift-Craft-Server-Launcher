@@ -347,7 +347,7 @@ struct CommandPaletteView: View {
         if primary {
             if node.id == "settings" {
                 commandPalette.dismiss()
-                settingsNavigation.selectedTab = .generalBasic
+                settingsNavigation.selectedTab = .general
                 openSettings()
                 return
             }

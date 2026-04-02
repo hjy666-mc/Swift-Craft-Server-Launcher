@@ -6,7 +6,6 @@ public struct ContentToolbarView: ToolbarContent {
     @EnvironmentObject var gameRepository: GameRepository
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
-    @EnvironmentObject var playerListViewModel: PlayerListViewModel
     @EnvironmentObject var detailState: ResourceDetailState
     @AppStorage("activeServerNodeId")
     private var activeServerNodeId: String = ServerNode.local.id
@@ -30,7 +29,6 @@ public struct ContentToolbarView: ToolbarContent {
                 )
                     .environmentObject(gameRepository)
                     .environmentObject(serverRepository)
-                    .environmentObject(playerListViewModel)
                     .presentationBackgroundInteraction(.automatic)
             }
 

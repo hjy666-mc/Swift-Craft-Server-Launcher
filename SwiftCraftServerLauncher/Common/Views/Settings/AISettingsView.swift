@@ -1,116 +1,153 @@
 import SwiftUI
 
 public struct AISettingsView: View {
-    @StateObject private var aiSettings = AISettingsManager.shared
+    @StateObject private var settings = AISettingsManager.shared
     @State private var showApiKey = false
+    @State private var showApiKeyInfo = false
+    @State private var showApiURLInfo = false
+    @State private var showModelInfo = false
+
+    public init() {}
+
     public var body: some View {
         Form {
             LabeledContent("settings.ai.api_type.label".localized()) {
-                Picker("", selection: $aiSettings.selectedProvider) {
+                Picker("", selection: Binding(
+                    get: { settings.selectedProvider },
+                    set: { settings.selectedProvider = $0 }
+                )) {
                     ForEach(AIProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
                     }
                 }
                 .labelsHidden()
-                .if(
-                    ProcessInfo.processInfo.operatingSystemVersion.majorVersion
-                        < 26
-                ) { view in
-                    view.fixedSize()
-                }
+                .pickerStyle(.segmented)
+                .frame(width: 220)
             }
             .labeledContentStyle(.custom)
 
             LabeledContent("settings.ai.api_key.label".localized()) {
-                HStack {
-                    Group {
-                        if showApiKey {
-                            TextField("".localized(), text: $aiSettings.apiKey)
-                                .textFieldStyle(.roundedBorder).labelsHidden()
-                        } else {
-                            SecureField("".localized(), text: $aiSettings.apiKey)
-                                .textFieldStyle(.roundedBorder).labelsHidden()
+                HStack(spacing: 4) {
+                    Button {
+                        showApiKey.toggle()
+                    } label: {
+                        Image(systemName: showApiKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(
+                        showApiKey
+                            ? "settings.ai.api_key.hide".localized()
+                            : "settings.ai.api_key.show".localized()
+                    )
+
+                    if showApiKey {
+                        TextField(
+                            "",
+                            text: Binding(
+                                get: { settings.apiKey },
+                                set: { settings.apiKey = $0 }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    } else {
+                        SecureField(
+                            "",
+                            text: Binding(
+                                get: { settings.apiKey },
+                                set: { settings.apiKey = $0 }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    }
+
+                    infoButton(isPresented: $showApiKeyInfo) {
+                        Text("settings.ai.api_key.description".localized())
+                    }
+                }
+            }
+            .labeledContentStyle(.custom(alignment: .firstTextBaseline))
+
+            LabeledContent(apiURLLabel) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 4) {
+                        TextField(
+                            "",
+                            text: Binding(
+                                get: { currentAPIURL },
+                                set: { updateAPIURL($0) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+
+                        infoButton(isPresented: $showApiURLInfo) {
+                            Text("settings.ai.api_url.description".localized())
                         }
                     }
-                    .frame(width: 300)
-                    .focusable(false)
-                    Button(action: {
-                        showApiKey.toggle()
-                    }, label: {
-                        Image(systemName: showApiKey ? "eye.slash" : "eye")
-                    })
-                    .buttonStyle(.plain)
-                    .applyReplaceTransition()
-                    InfoIconWithPopover(text: "settings.ai.api_key.description".localized())
+
+                    Text("settings.ai.api_url.recommend".localized())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .labeledContentStyle(.custom)
 
-            // Ollama 地址设置（仅在选择 Ollama 时显示）
-            if aiSettings.selectedProvider == .ollama {
-                LabeledContent("settings.ai.ollama.url.label".localized()) {
-                    TextField("http://localhost:11434", text: $aiSettings.ollamaBaseURL)
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(maxWidth: 300)
-                        .fixedSize()
-                        .focusable(false)
-                }
-                .labeledContentStyle(.custom)
-            }
-
-            // OpenAI 格式的自定义接口地址设置（可用于 DeepSeek 等兼容服务）
-            if aiSettings.selectedProvider.apiFormat == .openAI {
-                LabeledContent("settings.ai.api_url.label".localized()) {
-                    HStack {
-                        TextField(aiSettings.selectedProvider.baseURL, text: $aiSettings.openAIBaseURL)
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                            .frame(width: 180)
-                            .fixedSize()
-                            .focusable(false)
-                        InfoIconWithPopover(text: "settings.ai.api_url.description".localized())
-                    }
-                }
-                .labeledContentStyle(.custom)
-            }
-
-            // 模型设置（必填）
             LabeledContent("settings.ai.model.label".localized()) {
-                HStack {
-                    TextField("settings.ai.model.placeholder".localized(), text: $aiSettings.modelOverride)
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(width: 180)
-                        .fixedSize()
-                        .focusable(false)
-                    InfoIconWithPopover(text: "settings.ai.model.description".localized())
-                }
-            }
-            .labeledContentStyle(.custom)
-
-            // AI 头像设置
-            LabeledContent("settings.ai.avatar.label".localized()) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // 头像预览
-                    MinecraftSkinUtils(
-                        type: .url,
-                        src: aiSettings.aiAvatarURL,
-                        size: 42
+                HStack(spacing: 4) {
+                    TextField(
+                        "settings.ai.model.placeholder".localized(),
+                        text: $settings.modelOverride
                     )
-                    // URL 输入框
-                    HStack {
-                        TextField("settings.ai.avatar.placeholder".localized(), text: $aiSettings.aiAvatarURL)
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                            .frame(maxWidth: 300)
-                            .fixedSize()
-                            .focusable(false)
-                        InfoIconWithPopover(text: "settings.ai.avatar.description".localized())
+                    .textFieldStyle(.roundedBorder)
+
+                    infoButton(isPresented: $showModelInfo) {
+                        Text("settings.ai.model.description".localized())
                     }
                 }
             }
-            .labeledContentStyle(.custom(alignment: .lastTextBaseline))
+            .labeledContentStyle(.custom)
+        }
+        .formStyle(.grouped)
+    }
+
+    private var apiURLLabel: String {
+        settings.selectedProvider == .ollama
+            ? "settings.ai.ollama.url.label".localized()
+            : "settings.ai.api_url.label".localized()
+    }
+
+    private var currentAPIURL: String {
+        if settings.selectedProvider == .ollama {
+            return settings.ollamaBaseURL
+        }
+        return settings.openAIBaseURL
+    }
+
+    private func updateAPIURL(_ value: String) {
+        if settings.selectedProvider == .ollama {
+            settings.ollamaBaseURL = value
+        } else {
+            settings.openAIBaseURL = value
+        }
+    }
+
+    @ViewBuilder
+    private func infoButton(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> some View
+    ) -> some View {
+        Button {
+            isPresented.wrappedValue = true
+        } label: {
+            Image(systemName: "questionmark.circle")
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: isPresented) {
+            content()
+                .font(.caption)
+                .padding(10)
+                .frame(width: 260, alignment: .leading)
         }
     }
 }

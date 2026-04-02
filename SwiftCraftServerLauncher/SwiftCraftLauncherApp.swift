@@ -12,7 +12,6 @@ struct SwiftCraftServerLauncherApp: App {
     private var scenePhase
 
     // MARK: - StateObjects
-    @StateObject var playerListViewModel = PlayerListViewModel()
     @StateObject var gameRepository = GameRepository()
     @StateObject var serverRepository = ServerRepository()
     @StateObject var serverNodeRepository = ServerNodeRepository()
@@ -22,7 +21,6 @@ struct SwiftCraftServerLauncherApp: App {
     @StateObject private var appUpdateService = AppUpdateService()
     @StateObject var generalSettingsManager = GeneralSettingsManager.shared
     @StateObject var themeManager = ThemeManager.shared
-    @StateObject private var skinSelectionStore = SkinSelectionStore()
     @StateObject private var appIdleManager = AppIdleManager.shared
     @StateObject private var commandPalette = CommandPaletteController()
     @StateObject private var settingsNavigationManager = SettingsNavigationManager.shared
@@ -44,7 +42,6 @@ struct SwiftCraftServerLauncherApp: App {
         WindowGroup {
             MainView()
                 .environment(\.appLogger, Logger.shared)
-                .environmentObject(playerListViewModel)
                 .environmentObject(gameRepository)
                 .environmentObject(serverRepository)
                 .environmentObject(serverNodeRepository)
@@ -52,7 +49,6 @@ struct SwiftCraftServerLauncherApp: App {
                 .environmentObject(serverLaunchUseCase)
                 .environmentObject(appUpdateService)
                 .environmentObject(generalSettingsManager)
-                .environmentObject(skinSelectionStore)
                 .environmentObject(commandPalette)
                 .environmentObject(settingsNavigationManager)
                 .preferredColorScheme(themeManager.currentColorScheme)
@@ -60,6 +56,12 @@ struct SwiftCraftServerLauncherApp: App {
                 .windowOpener()
                 .titlebarSeparatorOnHover()
                 .onAppear {
+                    ServerDetailWindowManager.shared.configure(
+                        serverRepository: serverRepository,
+                        serverNodeRepository: serverNodeRepository,
+                        serverLaunchUseCase: serverLaunchUseCase,
+                        generalSettingsManager: generalSettingsManager
+                    )
                     appIdleManager.startMonitoring()
                     BackupService.shared.startAutoBackupScheduler()
                 }

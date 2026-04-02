@@ -54,6 +54,71 @@ public enum ThemeMode: String, CaseIterable {
     }
 }
 
+public enum AccentColorOption: String, CaseIterable, Identifiable {
+    case system
+    case blue
+    case purple
+    case pink
+    case red
+    case orange
+    case yellow
+    case green
+    case gray
+
+    public var id: String { rawValue }
+
+    public var color: Color? {
+        switch self {
+        case .system:
+            return nil
+        case .blue:
+            return Color(NSColor.systemBlue)
+        case .purple:
+            return Color(NSColor.systemPurple)
+        case .pink:
+            return Color(NSColor.systemPink)
+        case .red:
+            return Color(NSColor.systemRed)
+        case .orange:
+            return Color(NSColor.systemOrange)
+        case .yellow:
+            return Color(NSColor.systemYellow)
+        case .green:
+            return Color(NSColor.systemGreen)
+        case .gray:
+            return Color(NSColor.systemGray)
+        }
+    }
+}
+
+public enum ConsoleFontStyle: String, CaseIterable, Identifiable {
+    case system
+    case monospaced
+
+    public var id: String { rawValue }
+}
+
+public enum EditorFontStyle: String, CaseIterable, Identifiable {
+    case system
+    case monospaced
+
+    public var id: String { rawValue }
+}
+
+public enum HighlightStyle: String, CaseIterable, Identifiable {
+    case system
+    case vivid
+
+    public var id: String { rawValue }
+}
+
+public enum ResourceCardStyle: String, CaseIterable, Identifiable {
+    case compact
+    case card
+
+    public var id: String { rawValue }
+}
+
 class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
     static let shared = GeneralSettingsManager()
 
@@ -109,6 +174,92 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
         }
     }
 
+    @AppStorage("accentColorSelection")
+    var accentColorSelection: AccentColorOption = .system {
+        didSet { objectWillChange.send() }
+    }
+
+    var accentColor: Color? {
+        accentColorSelection.color
+    }
+
+    @AppStorage("consoleFontStyle")
+    var consoleFontStyle: ConsoleFontStyle = .monospaced {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("consoleLineSpacing")
+    var consoleLineSpacing: Double = 2 {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("consoleHighlightStyle")
+    var consoleHighlightStyle: HighlightStyle = .system {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("resourceCardStyle")
+    var resourceCardStyle: ResourceCardStyle = .card {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("editorFontStyle")
+    var editorFontStyle: EditorFontStyle = .monospaced {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("editorHighlightStyle")
+    var editorHighlightStyle: HighlightStyle = .system {
+        didSet { objectWillChange.send() }
+    }
+
+    // MARK: - 服务器管理外观
+
+    @AppStorage("serverTabConsoleEnabled")
+    var serverTabConsoleEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabConfigEnabled")
+    var serverTabConfigEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabPlayersEnabled")
+    var serverTabPlayersEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabWorldsEnabled")
+    var serverTabWorldsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabModsEnabled")
+    var serverTabModsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabPluginsEnabled")
+    var serverTabPluginsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabSchedulesEnabled")
+    var serverTabSchedulesEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverTabLogsEnabled")
+    var serverTabLogsEnabled: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("serverFileManagerShowShortcuts")
+    var serverFileManagerShowShortcuts: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
     // MARK: - 启动 / 更新
     @AppStorage("launchAtLoginEnabled")
     var launchAtLoginEnabled: Bool = false {
@@ -143,6 +294,16 @@ class GeneralSettingsManager: ObservableObject, WorkingPathProviding {
 
     @AppStorage("confirmExitWhileRunning")
     var confirmExitWhileRunning: Bool = true {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("autoAcceptServerEULA")
+    var autoAcceptServerEULA: Bool = false {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage("openServerInNewWindow")
+    var openServerInNewWindow: Bool = false {
         didSet { objectWillChange.send() }
     }
 

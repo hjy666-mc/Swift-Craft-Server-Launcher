@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 enum LocalServerDirectService {
     static func start(server: ServerInstance, launchCommand: String) throws {
@@ -105,6 +106,25 @@ enum LocalServerDirectService {
         if FileManager.default.fileExists(atPath: fifo, isDirectory: &isDir), !isDir.boolValue {
             return true
         }
+        return false
+    }
+
+    static func isDirectModeRunning(serverName: String) -> Bool {
+        let serverDir = AppPaths.serverDirectory(serverName: serverName)
+        let pidURL = serverDir.appendingPathComponent(".scsl.pid")
+        guard let pidText = try? String(contentsOf: pidURL) else {
+            return false
+        }
+        let trimmed = pidText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let pidValue = Int32(trimmed), pidValue > 0 else {
+            return false
+        }
+        if kill(pidValue, 0) == 0 {
+            return true
+        }
+        let fifoURL = serverDir.appendingPathComponent(".scsl.stdin")
+        try? FileManager.default.removeItem(at: pidURL)
+        try? FileManager.default.removeItem(at: fifoURL)
         return false
     }
 

@@ -8,10 +8,13 @@ struct MainContentArea: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @StateObject private var filterState = ResourceFilterState()
     @StateObject private var detailState = ResourceDetailState()
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
+    @StateObject private var serverStatusManager = ServerStatusManager.shared
     @State private var pendingSpotlightIdentifier: String?
     @State private var spotlightRetryCount = 0
     @EnvironmentObject var serverRepository: ServerRepository
     @EnvironmentObject var serverNodeRepository: ServerNodeRepository
+    @EnvironmentObject var serverLaunchUseCase: ServerLaunchUseCase
     @Environment(\.openSettings)
     private var openSettings: OpenSettingsAction
     @EnvironmentObject private var settingsNavigationManager: SettingsNavigationManager
@@ -50,10 +53,16 @@ struct MainContentArea: View {
         }
         .onAppear {
             SpotlightIndexService.shared.ensureIndexedIfNeeded(nodes: commandPaletteNodes)
+            ServerScheduleService.shared.attach(nodeRepository: serverNodeRepository)
+            ServerScheduleService.shared.refreshServers(serverRepository.servers)
+            serverStatusManager.reconcileLoadedServers(serverRepository.servers)
             processPendingSpotlight()
+            startServerStatusPollingIfNeeded()
         }
         .onChange(of: serverRepository.servers) { _, _ in
             SpotlightIndexService.shared.scheduleIndex(nodes: commandPaletteNodes)
+            ServerScheduleService.shared.refreshServers(serverRepository.servers)
+            serverStatusManager.reconcileLoadedServers(serverRepository.servers)
             processPendingSpotlight()
         }
         .onReceive(SpotlightActionCenter.shared.publisher) { identifier in
@@ -70,7 +79,12 @@ struct MainContentArea: View {
     @ViewBuilder private var middleColumnDetailView: some View {
         DetailView()
             .toolbar {
-                DetailToolbarView()
+                DetailToolbarView(
+                    filterState: filterState,
+                    detailState: detailState,
+                    serverRepository: serverRepository,
+                    serverLaunchUseCase: serverLaunchUseCase
+                )
             }
     }
 
@@ -86,31 +100,65 @@ struct MainContentArea: View {
         from oldValue: SidebarItem,
         to newValue: SidebarItem
     ) {
+        if generalSettings.openServerInNewWindow,
+           case .server(let serverId) = newValue {
+            ServerDetailWindowCoordinator.shared.open(
+                serverId: serverId,
+                preferredSection: detailState.serverPanelSection
+            )
+            if oldValue != newValue {
+                detailState.selectedItem = oldValue
+                if case .server(let oldServerId) = oldValue {
+                    detailState.serverId = oldServerId
+                }
+            }
+            return
+        }
+
         switch (oldValue, newValue) {
         case (.node, .node):
             break
         case (.node, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.node, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case (_, .node):
             detailState.serverId = nil
             detailState.selectedProjectId = nil
             filterState.clearSearchText()
+            serverStatusManager.stopPolling()
         case (.resource, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.game, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case (.game, .server(let id)):
             handleResourceToServerTransition(serverId: id)
+            serverStatusManager.startPolling(serverId: id)
         case (.server, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         case let (.server(oldId), .server(newId)):
             handleServerToServerTransition(from: oldId, to: newId)
+            if oldId != newId {
+                serverStatusManager.startPolling(serverId: newId)
+            }
         case (.resource, .resource):
             resetToResourceDefaults()
+            serverStatusManager.stopPolling()
         default:
             break
+        }
+    }
+
+    private func startServerStatusPollingIfNeeded() {
+        if case .server(let id) = detailState.selectedItem {
+            serverStatusManager.startPolling(serverId: id)
+        } else {
+            serverStatusManager.stopPolling()
         }
     }
 
@@ -119,7 +167,9 @@ struct MainContentArea: View {
         detailState.gameId = nil
         detailState.selectedProjectId = nil
         detailState.serverId = serverId
-        detailState.serverPanelSection = "console"
+        if detailState.serverPanelSection == "console" {
+            detailState.serverPanelSection = "console"
+        }
     }
 
     private func handleServerToServerTransition(
@@ -130,7 +180,9 @@ struct MainContentArea: View {
             filterState.clearSearchText()
         }
         detailState.serverId = newId
-        detailState.serverPanelSection = "console"
+        if detailState.serverPanelSection == "console" {
+            detailState.serverPanelSection = "console"
+        }
     }
 
     private func resetToResourceDefaults() {
@@ -185,21 +237,7 @@ struct MainContentArea: View {
                 title: "settings.general.basic.tab".localized(),
                 subtitle: "command.palette.section.settings".localized(),
                 systemImage: "gearshape",
-                settingsTab: .generalBasic
-            ),
-            CommandPaletteNode(
-                id: "settings.update",
-                title: "settings.general.update.tab".localized(),
-                subtitle: "command.palette.section.settings".localized(),
-                systemImage: "arrow.triangle.2.circlepath",
-                settingsTab: .generalUpdate
-            ),
-            CommandPaletteNode(
-                id: "settings.safety",
-                title: "settings.general.confirmation.tab".localized(),
-                subtitle: "command.palette.section.settings".localized(),
-                systemImage: "checkmark.shield",
-                settingsTab: .generalSafety
+                settingsTab: .general
             ),
             CommandPaletteNode(
                 id: "settings.backup",
@@ -282,77 +320,123 @@ struct MainContentArea: View {
         let serverChildren = serverRepository.servers.map { server in
             let supportsMods = server.serverType == .fabric || server.serverType == .forge
             let supportsPlugins = server.serverType == .paper
-            var detailChildren: [CommandPaletteNode] = [
-                CommandPaletteNode(
-                    id: "server:\(server.id):console",
-                    title: "server.console.title".localized(),
-                    subtitle: server.name,
-                    systemImage: "terminal"
-                ) {
-                    detailState.selectedItem = .server(server.id)
-                    handleResourceToServerTransition(serverId: server.id)
-                    detailState.serverPanelSection = "console"
-                },
-                CommandPaletteNode(
-                    id: "server:\(server.id):config",
-                    title: "server.launch.server_config".localized(),
-                    subtitle: server.name,
-                    systemImage: "slider.horizontal.3"
-                ) {
-                    detailState.selectedItem = .server(server.id)
-                    handleResourceToServerTransition(serverId: server.id)
-                    detailState.serverPanelSection = "serverConfig"
-                },
-                CommandPaletteNode(
-                    id: "server:\(server.id):players",
-                    title: "server.launch.players".localized(),
-                    subtitle: server.name,
-                    systemImage: "person.3"
-                ) {
-                    detailState.selectedItem = .server(server.id)
-                    handleResourceToServerTransition(serverId: server.id)
-                    detailState.serverPanelSection = "players"
-                },
-                CommandPaletteNode(
-                    id: "server:\(server.id):worlds",
-                    title: "server.launch.worlds".localized(),
-                    subtitle: server.name,
-                    systemImage: "globe.americas"
-                ) {
-                    detailState.selectedItem = .server(server.id)
-                    handleResourceToServerTransition(serverId: server.id)
-                    detailState.serverPanelSection = "worlds"
-                },
-            ]
-            if supportsMods {
+            var detailChildren: [CommandPaletteNode] = []
+            if generalSettings.serverTabConsoleEnabled {
                 detailChildren.append(
                     CommandPaletteNode(
-                        id: "server:\(server.id):mods",
-                        title: "server.launch.mods".localized(),
+                        id: "server:\(server.id):console",
+                        title: "server.console.title".localized(),
                         subtitle: server.name,
-                        systemImage: "puzzlepiece.extension"
+                        systemImage: "terminal"
                     ) {
                         detailState.selectedItem = .server(server.id)
                         handleResourceToServerTransition(serverId: server.id)
-                        detailState.serverPanelSection = "mods"
+                        detailState.serverPanelSection = "console"
                     }
                 )
+            }
+            if generalSettings.serverTabConfigEnabled {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):config",
+                        title: "server.launch.server_config".localized(),
+                        subtitle: server.name,
+                        systemImage: "slider.horizontal.3"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "serverConfig"
+                    }
+                )
+            }
+            if generalSettings.serverTabPlayersEnabled {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):players",
+                        title: "server.launch.players".localized(),
+                        subtitle: server.name,
+                        systemImage: "person.3"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "players"
+                    }
+                )
+            }
+            if generalSettings.serverTabWorldsEnabled {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):worlds",
+                        title: "server.launch.worlds".localized(),
+                        subtitle: server.name,
+                        systemImage: "globe.americas"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "worlds"
+                    }
+                )
+            }
+            if supportsMods {
+                if generalSettings.serverTabModsEnabled {
+                    detailChildren.append(
+                        CommandPaletteNode(
+                            id: "server:\(server.id):mods",
+                            title: "server.launch.mods".localized(),
+                            subtitle: server.name,
+                            systemImage: "puzzlepiece.extension"
+                        ) {
+                            detailState.selectedItem = .server(server.id)
+                            handleResourceToServerTransition(serverId: server.id)
+                            detailState.serverPanelSection = "mods"
+                        }
+                    )
+                }
             }
             if supportsPlugins {
+                if generalSettings.serverTabPluginsEnabled {
+                    detailChildren.append(
+                        CommandPaletteNode(
+                            id: "server:\(server.id):plugins",
+                            title: "server.launch.plugins".localized(),
+                            subtitle: server.name,
+                            systemImage: "powerplug"
+                        ) {
+                            detailState.selectedItem = .server(server.id)
+                            handleResourceToServerTransition(serverId: server.id)
+                            detailState.serverPanelSection = "plugins"
+                        }
+                    )
+                }
+            }
+            if generalSettings.serverTabSchedulesEnabled {
                 detailChildren.append(
                     CommandPaletteNode(
-                        id: "server:\(server.id):plugins",
-                        title: "server.launch.plugins".localized(),
+                        id: "server:\(server.id):schedules",
+                        title: "server.schedules.title".localized(),
                         subtitle: server.name,
-                        systemImage: "powerplug"
+                        systemImage: "clock.arrow.circlepath"
                     ) {
                         detailState.selectedItem = .server(server.id)
                         handleResourceToServerTransition(serverId: server.id)
-                        detailState.serverPanelSection = "plugins"
+                        detailState.serverPanelSection = "schedules"
                     }
                 )
             }
-
+            if generalSettings.serverTabLogsEnabled {
+                detailChildren.append(
+                    CommandPaletteNode(
+                        id: "server:\(server.id):logs",
+                        title: "server.logs.title".localized(),
+                        subtitle: server.name,
+                        systemImage: "doc.text.magnifyingglass"
+                    ) {
+                        detailState.selectedItem = .server(server.id)
+                        handleResourceToServerTransition(serverId: server.id)
+                        detailState.serverPanelSection = "logs"
+                    }
+                )
+            }
             return CommandPaletteNode(
                 id: "server:\(server.id)",
                 title: server.name,
@@ -386,7 +470,7 @@ struct MainContentArea: View {
 
         if node.id == "settings" {
             openSettings()
-            settingsNavigationManager.selectedTab = .generalBasic
+            settingsNavigationManager.selectedTab = .general
             return true
         }
 

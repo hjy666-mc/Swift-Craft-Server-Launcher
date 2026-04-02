@@ -4,6 +4,7 @@ import AppKit
 
 struct ServerCreationView: View {
     @StateObject private var viewModel: ServerCreationViewModel
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @EnvironmentObject var serverRepository: ServerRepository
     @Environment(\.dismiss)
     private var dismiss
@@ -82,12 +83,27 @@ struct ServerCreationView: View {
             .onChange(of: viewModel.customJarURL) { _, _ in
                 viewModel.updateParentState()
             }
-            .onChange(of: viewModel.hasAcceptedEula) { _, _ in
-                viewModel.updateParentState()
-            }
             .onChange(of: triggerConfirm.wrappedValue) { _, newValue in
                 if newValue {
-                    viewModel.handleConfirm()
+                    if generalSettings.autoAcceptServerEULA {
+                        viewModel.hasAcceptedEula = true
+                        viewModel.handleConfirm()
+                    } else {
+                        let (decision, dontAskAgain) = presentEULAAlert()
+                        switch decision {
+                        case .accept:
+                            viewModel.hasAcceptedEula = true
+                            if dontAskAgain {
+                                generalSettings.autoAcceptServerEULA = true
+                            }
+                            viewModel.handleConfirm()
+                        case .decline:
+                            viewModel.hasAcceptedEula = false
+                            viewModel.handleConfirm()
+                        case .cancel:
+                            break
+                        }
+                    }
                     triggerConfirm.wrappedValue = false
                 }
             }
@@ -109,6 +125,46 @@ struct ServerCreationView: View {
                     viewModel.customJarURL = nil
                 }
             }
+    }
+
+    private enum EULAAlertDecision {
+        case accept
+        case decline
+        case cancel
+    }
+
+    private final class EULAAlertHelpDelegate: NSObject, NSAlertDelegate {
+        func alertShowHelp(_ alert: NSAlert) -> Bool {
+            guard let url = URL(string: "https://aka.ms/MinecraftEULA") else { return false }
+            NSWorkspace.shared.open(url)
+            return true
+        }
+    }
+
+    private func presentEULAAlert() -> (decision: EULAAlertDecision, dontAskAgain: Bool) {
+        let alert = NSAlert()
+        alert.messageText = "server.form.eula.confirm.title".localized()
+        alert.informativeText = "server.form.eula.confirm.message".localized()
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "common.yes".localized())
+        alert.addButton(withTitle: "common.no".localized())
+        alert.addButton(withTitle: "common.cancel".localized())
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "server.form.eula.dont_ask_again".localized()
+        let delegate = EULAAlertHelpDelegate()
+        alert.delegate = delegate
+        alert.showsHelp = true
+
+        let response = alert.runModal()
+        let dontAskAgain = alert.suppressionButton?.state == .on
+        switch response {
+        case .alertFirstButtonReturn:
+            return (.accept, dontAskAgain)
+        case .alertSecondButtonReturn:
+            return (.decline, false)
+        default:
+            return (.cancel, false)
+        }
     }
 
     private var formContentView: some View {
@@ -145,13 +201,6 @@ struct ServerCreationView: View {
                     isDisabled: viewModel.serverSetupService.downloadState.isDownloading,
                     serverSetupService: viewModel.serverSetupService
                 )
-            }
-
-            FormSection {
-                Toggle("server.form.eula.agree".localized(), isOn: $viewModel.hasAcceptedEula)
-                Text("server.form.eula.description".localized())
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
     }

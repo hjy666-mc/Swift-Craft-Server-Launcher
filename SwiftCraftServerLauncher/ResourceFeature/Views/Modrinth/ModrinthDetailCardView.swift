@@ -20,6 +20,7 @@ struct ModrinthDetailCardView: View {
     @State private var showDeleteAlert = false
     @State private var isResourceDisabled: Bool = false  // 资源是否被禁用（用于置灰效果）
     @EnvironmentObject private var gameRepository: GameRepository
+    @EnvironmentObject private var generalSettings: GeneralSettingsManager
 
     // MARK: - Enums
     enum AddButtonState {
@@ -31,9 +32,10 @@ struct ModrinthDetailCardView: View {
 
     // MARK: - Body
     var body: some View {
-        HStack(spacing: ModrinthConstants.UIConstants.contentSpacing) {
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        HStack(spacing: metrics.contentSpacing) {
             iconView
-            VStack(alignment: .leading, spacing: ModrinthConstants.UIConstants.spacing) {
+            VStack(alignment: .leading, spacing: metrics.spacing) {
                 titleView
                 descriptionView
                 tagsView
@@ -54,7 +56,8 @@ struct ModrinthDetailCardView: View {
 
     // MARK: - View Components
     private var iconView: some View {
-        Group {
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        return Group {
             // 使用 id 前缀判断本地资源，更可靠
             if project.projectId.hasPrefix("local_") || project.projectId.hasPrefix("file_") {
                 // 本地资源显示 questionmark.circle 图标
@@ -69,10 +72,10 @@ struct ModrinthDetailCardView: View {
                     placeholderIcon
                 }
                 .frame(
-                    width: ModrinthConstants.UIConstants.iconSize,
-                    height: ModrinthConstants.UIConstants.iconSize
+                    width: metrics.iconSize,
+                    height: metrics.iconSize
                 )
-                .cornerRadius(ModrinthConstants.UIConstants.cornerRadius)
+                .cornerRadius(metrics.cornerRadius)
                 .clipped()
             } else {
                 placeholderIcon
@@ -81,24 +84,26 @@ struct ModrinthDetailCardView: View {
     }
 
     private var placeholderIcon: some View {
-        Color.gray.opacity(0.2)
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        return Color.gray.opacity(0.2)
             .frame(
-                width: ModrinthConstants.UIConstants.iconSize,
-                height: ModrinthConstants.UIConstants.iconSize
+                width: metrics.iconSize,
+                height: metrics.iconSize
             )
-            .cornerRadius(ModrinthConstants.UIConstants.cornerRadius)
+            .cornerRadius(metrics.cornerRadius)
     }
 
     private var localResourceIcon: some View {
-        Image(systemName: "questionmark.circle")
-            .font(.system(size: ModrinthConstants.UIConstants.iconSize * 0.6))
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        return Image(systemName: "questionmark.circle")
+            .font(.system(size: metrics.iconSize * 0.6))
             .foregroundColor(.secondary)
             .frame(
-                width: ModrinthConstants.UIConstants.iconSize,
-                height: ModrinthConstants.UIConstants.iconSize
+                width: metrics.iconSize,
+                height: metrics.iconSize
             )
             .background(Color.gray.opacity(0.2))
-            .cornerRadius(ModrinthConstants.UIConstants.cornerRadius)
+            .cornerRadius(metrics.cornerRadius)
     }
 
     private var titleView: some View {
@@ -125,25 +130,24 @@ struct ModrinthDetailCardView: View {
     private var descriptionView: some View {
         Text(project.description)
             .font(.subheadline)
-            .lineLimit(ModrinthConstants.UIConstants.descriptionLineLimit)
+            .lineLimit(ResourceCardMetrics(style: generalSettings.resourceCardStyle).descriptionLineLimit)
             .foregroundColor(.secondary)
     }
 
     private var tagsView: some View {
-        HStack(spacing: ModrinthConstants.UIConstants.spacing) {
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        return HStack(spacing: metrics.spacing) {
             ForEach(
                 Array(
-                    project.displayCategories.prefix(
-                        ModrinthConstants.UIConstants.maxTags
-                    )
+                    project.displayCategories.prefix(metrics.maxTags)
                 ),
                 id: \.self
             ) { tag in
-                TagView(text: tag)
+                TagView(text: tag, metrics: metrics)
             }
-            if project.displayCategories.count > ModrinthConstants.UIConstants.maxTags {
+            if project.displayCategories.count > metrics.maxTags {
                 Text(
-                    "+\(project.displayCategories.count - ModrinthConstants.UIConstants.maxTags)"
+                    "+\(project.displayCategories.count - metrics.maxTags)"
                 )
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -152,7 +156,8 @@ struct ModrinthDetailCardView: View {
     }
 
     private var infoView: some View {
-        VStack(alignment: .trailing, spacing: ModrinthConstants.UIConstants.spacing) {
+        let metrics = ResourceCardMetrics(style: generalSettings.resourceCardStyle)
+        return VStack(alignment: .trailing, spacing: metrics.spacing) {
             downloadInfoView
             followerInfoView
             AddOrDeleteResourceButton(
@@ -203,14 +208,15 @@ struct ModrinthDetailCardView: View {
 // MARK: - Supporting Views
 private struct TagView: View {
     let text: String
+    let metrics: ResourceCardMetrics
 
     var body: some View {
         Text(text)
             .font(.caption2)
-            .padding(.horizontal, ModrinthConstants.UIConstants.tagHorizontalPadding)
-            .padding(.vertical, ModrinthConstants.UIConstants.tagVerticalPadding)
+            .padding(.horizontal, metrics.tagHorizontalPadding)
+            .padding(.vertical, metrics.tagVerticalPadding)
             .background(Color.gray.opacity(0.15))
-            .cornerRadius(ModrinthConstants.UIConstants.tagCornerRadius)
+            .cornerRadius(metrics.tagCornerRadius)
     }
 }
 

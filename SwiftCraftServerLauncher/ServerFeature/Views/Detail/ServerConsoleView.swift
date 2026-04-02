@@ -28,31 +28,18 @@ struct ServerConsoleView: View {
     @State private var scrollToLeadingToken: Int = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("server.console.title".localized())
-                    .font(.headline)
-                Spacer()
-                Button {
-                    clearConsole()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.plain)
-                .help("common.clear".localized())
-            }
+        ServerDetailPage(
+            title: "server.console.title".localized()
+        ) {
             terminalSurface
         }
-        .padding(12)
         .onAppear {
             rconPort = String(server.rconPort)
             rconPassword = server.rconPassword
+            commandText = console.commandDraft(for: server.id)
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
-            DispatchQueue.main.async {
-                commandFieldFocused = true
-            }
             installKeyMonitor()
             initialConsoleLines = console.logLines(for: server.id)
             isRenderingConsole = false
@@ -71,12 +58,10 @@ struct ServerConsoleView: View {
             rconPassword = server.rconPassword
             commandHistory = []
             historyIndex = nil
+            commandText = console.commandDraft(for: server.id)
             loadCommandHistory()
             startRemoteLogPollingIfNeeded()
             startLocalLogPollingIfNeeded()
-            DispatchQueue.main.async {
-                commandFieldFocused = true
-            }
             initialConsoleLines = console.logLines(for: server.id)
             consoleEvent = nil
             isRenderingConsole = false
@@ -91,6 +76,15 @@ struct ServerConsoleView: View {
         .onReceive(console.$latestEvent) { event in
             guard let event, event.serverId == server.id else { return }
             consoleEvent = event
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverDetailToolbarAction)) { note in
+            guard let action = ServerDetailToolbarActionBus.action(from: note) else { return }
+            if action == .consoleClear {
+                clearConsole()
+            }
+        }
+        .onChange(of: commandText) { _, newValue in
+            console.setCommandDraft(newValue, for: server.id)
         }
     }
 
@@ -107,6 +101,9 @@ struct ServerConsoleView: View {
             initialLines: initialConsoleLines,
             event: consoleEvent,
             enableColor: generalSettings.enableConsoleColoredOutput,
+            fontStyle: generalSettings.consoleFontStyle,
+            lineSpacing: generalSettings.consoleLineSpacing,
+            highlightStyle: generalSettings.consoleHighlightStyle,
             loadOlderToken: loadOlderToken,
             scrollToLeadingToken: scrollToLeadingToken
         )
@@ -183,8 +180,12 @@ struct ServerConsoleView: View {
         let text = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         commandText = ""
+        console.setCommandDraft("", for: server.id)
         appendHistory(text)
         historyIndex = nil
+        if text.lowercased() == "stop", isRemoteServer == false {
+            scheduleStopStatusCheck()
+        }
         if isRemoteServer {
             sendRemoteDirectCommand(text)
             return
@@ -194,30 +195,20 @@ struct ServerConsoleView: View {
             return
         }
         if LocalServerDirectService.isDirectModeAvailable(server: server) {
-            do {
-                try LocalServerDirectService.sendCommand(server: server, command: text)
-            } catch {
-                GlobalErrorHandler.shared.handle(error)
+            Task {
+                do {
+                    _ = try await Task.detached(priority: .userInitiated) {
+                        try LocalServerDirectService.sendCommand(server: server, command: text)
+                    }.value
+                } catch {
+                    await MainActor.run {
+                        GlobalErrorHandler.shared.handle(error)
+                    }
+                }
             }
             return
         }
         sendLocalRCONCommand(text)
-    }
-
-    private func clearConsole() {
-        console.clear(serverId: server.id)
-        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
-        if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
-            Task { @MainActor in
-                if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {
-                    lastRemotePolledText = filterNoisyRconLifecycleLogs(snapshot).trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    lastRemotePolledText = ""
-                }
-            }
-        } else {
-            lastRemotePolledText = ""
-        }
     }
 
     private func sendInterrupt() {
@@ -836,6 +827,9 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
     let initialLines: [String]
     let event: ServerConsoleManager.ConsoleEvent?
     let enableColor: Bool
+    let fontStyle: ConsoleFontStyle
+    let lineSpacing: Double
+    let highlightStyle: HighlightStyle
     let loadOlderToken: Int
     let scrollToLeadingToken: Int
 
@@ -847,9 +841,9 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = false
-        scrollView.hasHorizontalScroller = true
+        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
-        scrollView.horizontalScrollElasticity = .automatic
+        scrollView.horizontalScrollElasticity = .none
 
         guard let textView = scrollView.documentView as? NSTextView else {
             return scrollView
@@ -858,10 +852,11 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         textView.isSelectable = true
         textView.isRichText = true
         textView.drawsBackground = false
-        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.textContainerInset = NSSize(width: 8, height: 6)
+        textView.font = fontStyle.toFont(size: 12, weight: .medium)
+        textView.textContainerInset = NSSize(width: 10, height: 8)
         textView.textColor = .textColor
         textView.insertionPointColor = .textColor
+        textView.defaultParagraphStyle = paragraphStyle()
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.frame = NSRect(x: 0, y: 0, width: 640, height: 220)
@@ -874,23 +869,36 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         )
         textView.isVerticallyResizable = true
         textView.maxSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.setFrameSize(NSSize(width: scrollView.contentSize.width, height: textView.frame.size.height))
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.enableColor = enableColor
+        context.coordinator.fontStyle = fontStyle
+        context.coordinator.lineSpacing = lineSpacing
+        context.coordinator.highlightStyle = highlightStyle
         context.coordinator.setInitial(lines: initialLines)
         return scrollView
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         context.coordinator.enableColor = enableColor
+        context.coordinator.updateStyle(
+            fontStyle: fontStyle,
+            lineSpacing: lineSpacing,
+            highlightStyle: highlightStyle
+        )
         if let textView = context.coordinator.textView {
-            textView.maxSize = NSSize(width: nsView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            let width = nsView.contentSize.width
+            textView.textContainer?.widthTracksTextView = true
             textView.textContainer?.containerSize = NSSize(
-                width: nsView.contentSize.width,
+                width: width,
                 height: CGFloat.greatestFiniteMagnitude
             )
+            textView.minSize = NSSize(width: width, height: 0)
+            textView.maxSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+            textView.setFrameSize(NSSize(width: width, height: textView.frame.size.height))
         }
         context.coordinator.updateInitialIfNeeded(lines: initialLines)
         context.coordinator.apply(event: event)
@@ -898,10 +906,20 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         context.coordinator.scrollToLeadingIfNeeded(token: scrollToLeadingToken)
     }
 
+    private func paragraphStyle() -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byCharWrapping
+        style.lineSpacing = max(0, lineSpacing)
+        return style
+    }
+
     final class Coordinator {
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
         var enableColor: Bool = true
+        var fontStyle: ConsoleFontStyle = .monospaced
+        var lineSpacing: Double = 2
+        var highlightStyle: HighlightStyle = .system
         private var lines: [String] = []
         private var olderLines: [String] = []
         private var lastSequence: Int = 0
@@ -926,6 +944,29 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         func updateInitialIfNeeded(lines: [String]) {
             guard lastSequence == 0 else { return }
             setInitial(lines: lines)
+        }
+
+        func updateStyle(
+            fontStyle: ConsoleFontStyle,
+            lineSpacing: Double,
+            highlightStyle: HighlightStyle
+        ) {
+            let needsRedraw = self.fontStyle != fontStyle
+                || self.lineSpacing != lineSpacing
+                || self.highlightStyle != highlightStyle
+            self.fontStyle = fontStyle
+            self.lineSpacing = lineSpacing
+            self.highlightStyle = highlightStyle
+            if let textView {
+                textView.font = fontStyle.toFont(size: 12, weight: .regular)
+                let style = NSMutableParagraphStyle()
+                style.lineBreakMode = .byCharWrapping
+                style.lineSpacing = max(0, lineSpacing)
+                textView.defaultParagraphStyle = style
+            }
+            if needsRedraw {
+                redrawAll(keepAtBottom: false)
+            }
         }
 
         func apply(event: ServerConsoleManager.ConsoleEvent?) {
@@ -1039,31 +1080,47 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
         }
 
         private func styledText(_ text: String) -> NSAttributedString {
-            let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            let font = fontStyle.toFont(size: 12, weight: .regular)
             guard enableColor else {
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.lineBreakMode = .byCharWrapping
+                paragraphStyle.lineSpacing = max(0, lineSpacing)
                 return NSAttributedString(string: text, attributes: [
                     .font: font,
                     .foregroundColor: NSColor.textColor,
+                    .paragraphStyle: paragraphStyle,
                 ])
             }
             let result = NSMutableAttributedString()
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineBreakMode = .byCharWrapping
+            paragraphStyle.lineSpacing = max(0, lineSpacing)
             let splitLines = text.components(separatedBy: .newlines)
             for (index, line) in splitLines.enumerated() {
-                result.append(styledLine(line, font: font))
+                result.append(styledLine(line, font: font, paragraphStyle: paragraphStyle))
                 if index < splitLines.count - 1 {
-                    result.append(NSAttributedString(string: "\n", attributes: [.font: font]))
+                    result.append(NSAttributedString(string: "\n", attributes: [
+                        .font: font,
+                        .paragraphStyle: paragraphStyle,
+                    ]))
                 }
             }
             return result
         }
 
-        private func styledLine(_ line: String, font: NSFont) -> NSAttributedString {
+        private func styledLine(
+            _ line: String,
+            font: NSFont,
+            paragraphStyle: NSParagraphStyle
+        ) -> NSAttributedString {
             let attributed = NSMutableAttributedString(string: line, attributes: [
                 .font: font,
                 .foregroundColor: NSColor.textColor,
+                .paragraphStyle: paragraphStyle,
             ])
             let ns = line as NSString
             let fullRange = NSRange(location: 0, length: ns.length)
+            let palette = ConsoleHighlightPalette(style: highlightStyle)
 
             func paint(_ pattern: String, color: NSColor, options: NSRegularExpression.Options = []) {
                 guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
@@ -1072,10 +1129,10 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
                 }
             }
 
-            paint(#"\b\d{2}[:.]\d{2}[:.]\d{2}\b"#, color: .systemBlue)
-            paint(#"\bINFO\b"#, color: .systemGreen, options: [.caseInsensitive])
-            paint(#"\bWARN\b"#, color: .systemYellow, options: [.caseInsensitive])
-            paint(#"\bERROR\b"#, color: .systemRed, options: [.caseInsensitive])
+            paint(#"\b\d{2}[:.]\d{2}[:.]\d{2}\b"#, color: palette.timestamp)
+            paint(#"\bINFO\b"#, color: palette.info, options: [.caseInsensitive])
+            paint(#"\bWARN\b"#, color: palette.warn, options: [.caseInsensitive])
+            paint(#"\bERROR\b"#, color: palette.error, options: [.caseInsensitive])
 
             if let componentRegex = try? NSRegularExpression(pattern: #"\[([^\]/\]]+)\]"#) {
                 for match in componentRegex.matches(in: line, range: fullRange) where match.range.length > 2 {
@@ -1084,10 +1141,80 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
                         continue
                     }
                     let innerRange = NSRange(location: match.range.location + 1, length: match.range.length - 2)
-                    attributed.addAttribute(.foregroundColor, value: NSColor.systemPurple, range: innerRange)
+                    attributed.addAttribute(.foregroundColor, value: palette.component, range: innerRange)
                 }
             }
             return attributed
+        }
+    }
+}
+
+private struct ConsoleHighlightPalette {
+    let timestamp: NSColor
+    let info: NSColor
+    let warn: NSColor
+    let error: NSColor
+    let component: NSColor
+
+    init(style: HighlightStyle) {
+        switch style {
+        case .system:
+            timestamp = .systemBlue
+            info = .systemGreen
+            warn = .systemYellow
+            error = .systemRed
+            component = .systemPurple
+        case .vivid:
+            timestamp = .systemCyan
+            info = .systemGreen
+            warn = .systemOrange
+            error = .systemRed
+            component = .systemPink
+        }
+    }
+}
+
+private extension ConsoleFontStyle {
+    func toFont(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        switch self {
+        case .system:
+            return NSFont.systemFont(ofSize: size, weight: weight)
+        case .monospaced:
+            return NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        }
+    }
+}
+
+extension ServerConsoleView {
+    private func scheduleStopStatusCheck() {
+        Task {
+            for _ in 0..<16 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if ServerProcessManager.shared.isServerRunning(serverId: server.id) == false,
+                   LocalServerDirectService.isDirectModeAvailable(server: server) == false {
+                    await MainActor.run {
+                        ServerStatusManager.shared.setServerRunning(serverId: server.id, isRunning: false)
+                        ServerConsoleManager.shared.detach(serverId: server.id)
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    private func clearConsole() {
+        console.clear(serverId: server.id)
+        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
+        if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
+            Task { @MainActor in
+                if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {
+                    lastRemotePolledText = filterNoisyRconLifecycleLogs(snapshot).trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    lastRemotePolledText = ""
+                }
+            }
+        } else {
+            lastRemotePolledText = ""
         }
     }
 }

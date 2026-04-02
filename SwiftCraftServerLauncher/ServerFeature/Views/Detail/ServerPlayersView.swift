@@ -16,16 +16,10 @@ struct ServerPlayersView: View {
     private let autoRefreshTimer = Timer.publish(every: 6, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        CommonSheetView(
-            header: {
-                HStack {
-                    Text("server.players.title".localized())
-                        .font(.headline)
-                    Spacer()
-                }
-            },
-            body: {
-                VStack(alignment: .leading, spacing: 8) {
+        ServerDetailPage(
+            title: "server.players.title".localized()
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
                     if serverStatusManager.isServerRunning(serverId: server.id) {
                         Text("server.players.running_hint".localized())
                             .foregroundColor(.secondary)
@@ -98,16 +92,8 @@ struct ServerPlayersView: View {
                         .padding(.vertical, 2)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            },
-            footer: {
-                HStack(spacing: 8) {
-                    Spacer()
-                }
             }
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
         .onAppear { loadAll() }
         .onReceive(autoRefreshTimer) { _ in
             loadAll()

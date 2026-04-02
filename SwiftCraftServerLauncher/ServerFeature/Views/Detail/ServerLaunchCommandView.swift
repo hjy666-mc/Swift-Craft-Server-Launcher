@@ -7,108 +7,62 @@ private enum ServerDetailSection: String, CaseIterable, Identifiable {
     case worlds
     case mods
     case plugins
+    case schedules
+    case logs
 
     var id: String { rawValue }
 }
 
 struct ServerLaunchCommandView: View {
     let server: ServerInstance
-    @EnvironmentObject var serverRepository: ServerRepository
-    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @EnvironmentObject var detailState: ResourceDetailState
-    @State private var customLaunchCommand: String = ""
-    @State private var isDirty = false
-    @State private var isVerifyingJar = false
-    @State private var selectedSection: ServerDetailSection = .console
-    @State private var launchCommandAutoSaveTask: Task<Void, Never>?
+    @StateObject private var generalSettings = GeneralSettingsManager.shared
     @Namespace private var sectionIndicatorNamespace
-    private var isChinese: Bool {
-        Locale.preferredLanguages.first?.hasPrefix("zh") == true
-    }
     private var supportsMods: Bool {
         server.serverType == .fabric || server.serverType == .forge
     }
     private var supportsPlugins: Bool {
         server.serverType == .paper
     }
+    private var tabSettingsToken: String {
+        [
+            generalSettings.serverTabConsoleEnabled,
+            generalSettings.serverTabConfigEnabled,
+            generalSettings.serverTabPlayersEnabled,
+            generalSettings.serverTabWorldsEnabled,
+            generalSettings.serverTabModsEnabled,
+            generalSettings.serverTabPluginsEnabled,
+            generalSettings.serverTabSchedulesEnabled,
+            generalSettings.serverTabLogsEnabled,
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined()
+    }
+    private var currentSection: ServerDetailSection {
+        let requested = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+        switch requested {
+        case .mods where !supportsMods:
+            return .console
+        case .plugins where !supportsPlugins:
+            return .console
+        default:
+            return requested
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "terminal")
-                Text("server.launch.title".localized())
-                    .font(.title2)
-                Spacer()
-            }
-
-            TextField("server.launch.placeholder".localized(), text: $customLaunchCommand, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(2...6)
-                .onChange(of: customLaunchCommand) { _, newValue in
-                    isDirty = newValue != server.launchCommand
-                    scheduleLaunchCommandAutoSave()
-                }
-
-            HStack {
-                Text("server.launch.nogui_hint".localized())
-                    .foregroundColor(.secondary)
-            }
-
-            HStack {
-                Button {
-                    verifyAndRepairJar()
-                } label: {
-                    Label(
-                        isVerifyingJar
-                            ? "server.launch.verify_jar.running".localized()
-                            : "server.launch.verify_jar".localized(),
-                        systemImage: "checkmark.shield"
-                    )
-                }
-                .rotationEffect(.degrees(isVerifyingJar ? 360 : 0))
-                .animation(.easeInOut(duration: 0.15), value: isVerifyingJar)
-                .disabled(isVerifyingJar)
-                Spacer()
-            }
-
-            Divider()
-
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    sectionRow(
-                        section: .console,
-                        title: "server.console.title".localized(),
-                        icon: "terminal"
-                    )
-                    sectionRow(
-                        section: .serverConfig,
-                        title: "server.launch.server_config".localized(),
-                        icon: "slider.horizontal.3"
-                    )
-                    sectionRow(
-                        section: .players,
-                        title: "server.launch.players".localized(),
-                        icon: "person.3"
-                    )
-                    sectionRow(
-                        section: .worlds,
-                        title: "server.launch.worlds".localized(),
-                        icon: "globe.americas"
-                    )
-                    sectionRow(
-                        section: .mods,
-                        title: "server.launch.mods".localized(),
-                        icon: "puzzlepiece.extension",
-                        isEnabled: supportsMods,
-                        disabledHint: "server.launch.hint.mods_only".localized()
-                    )
-                    sectionRow(
-                        section: .plugins,
-                        title: "server.launch.plugins".localized(),
-                        icon: "powerplug",
-                        isEnabled: supportsPlugins,
-                        disabledHint: "server.launch.hint.plugins_only".localized()
-                    )
+                    ForEach(sectionItems) { item in
+                        sectionRow(
+                            section: item.section,
+                            title: item.title,
+                            icon: item.icon,
+                            isEnabled: item.isEnabled,
+                            disabledHint: item.disabledHint
+                        )
+                    }
                 }
                 .frame(width: 180, alignment: .topLeading)
             }
@@ -118,18 +72,116 @@ struct ServerLaunchCommandView: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
-            customLaunchCommand = server.launchCommand
-            isDirty = false
-            selectedSection = ServerDetailSection(rawValue: detailState.serverPanelSection) ?? .console
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: server.id) { _, _ in
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: detailState.serverPanelSection) { _, _ in
+            normalizeSelectedSectionIfNeeded()
+        }
+        .onChange(of: tabSettingsToken) { _, _ in
             normalizeSelectedSectionIfNeeded()
         }
         .onChange(of: server.serverType) { _, _ in
             normalizeSelectedSectionIfNeeded()
         }
-        .onDisappear {
-            launchCommandAutoSaveTask?.cancel()
-            saveLaunchCommandIfNeeded()
+    }
+
+    private struct SectionItem: Identifiable {
+        let section: ServerDetailSection
+        let title: String
+        let icon: String
+        let isEnabled: Bool
+        let disabledHint: String?
+
+        var id: String { section.rawValue }
+    }
+
+    private var sectionItems: [SectionItem] {
+        var items: [SectionItem] = []
+        if generalSettings.serverTabConsoleEnabled {
+            items.append(.init(
+                section: .console,
+                title: "server.console.title".localized(),
+                icon: "terminal",
+                isEnabled: true,
+                disabledHint: nil
+            ))
         }
+        if generalSettings.serverTabConfigEnabled {
+            items.append(.init(
+                section: .serverConfig,
+                title: "server.launch.server_config".localized(),
+                icon: "folder",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabPlayersEnabled {
+            items.append(.init(
+                section: .players,
+                title: "server.launch.players".localized(),
+                icon: "person.3",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabWorldsEnabled {
+            items.append(.init(
+                section: .worlds,
+                title: "server.launch.worlds".localized(),
+                icon: "globe.americas",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabModsEnabled {
+            items.append(.init(
+                section: .mods,
+                title: "server.launch.mods".localized(),
+                icon: "puzzlepiece.extension",
+                isEnabled: supportsMods,
+                disabledHint: "server.launch.hint.mods_only".localized()
+            ))
+        }
+        if generalSettings.serverTabPluginsEnabled {
+            items.append(.init(
+                section: .plugins,
+                title: "server.launch.plugins".localized(),
+                icon: "powerplug",
+                isEnabled: supportsPlugins,
+                disabledHint: "server.launch.hint.plugins_only".localized()
+            ))
+        }
+        if generalSettings.serverTabSchedulesEnabled {
+            items.append(.init(
+                section: .schedules,
+                title: "server.schedules.title".localized(),
+                icon: "clock.arrow.circlepath",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        if generalSettings.serverTabLogsEnabled {
+            items.append(.init(
+                section: .logs,
+                title: "server.logs.title".localized(),
+                icon: "doc.text.magnifyingglass",
+                isEnabled: true,
+                disabledHint: nil,
+            ))
+        }
+        if items.isEmpty {
+            items.append(.init(
+                section: .console,
+                title: "server.console.title".localized(),
+                icon: "terminal",
+                isEnabled: true,
+                disabledHint: nil
+            ))
+        }
+        return items
     }
 
     private func sectionRow(
@@ -142,12 +194,11 @@ struct ServerLaunchCommandView: View {
         let rowButton = Button {
             guard isEnabled else { return }
             withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
-                selectedSection = section
                 detailState.serverPanelSection = section.rawValue
             }
         } label: {
             HStack(spacing: 8) {
-                if selectedSection == section {
+                if currentSection == section {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(Color.accentColor)
                         .frame(width: 3, height: 16)
@@ -170,7 +221,7 @@ struct ServerLaunchCommandView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
-            .foregroundStyle(isEnabled ? (selectedSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
+            .foregroundStyle(isEnabled ? (currentSection == section ? Color.primary : Color.secondary) : Color.secondary.opacity(0.6))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -182,95 +233,18 @@ struct ServerLaunchCommandView: View {
     }
 
     private func normalizeSelectedSectionIfNeeded() {
-        if selectedSection == .mods, !supportsMods {
-            selectedSection = .console
-            detailState.serverPanelSection = ServerDetailSection.console.rawValue
+        let allowed = sectionItems.filter { $0.isEnabled }.map(\.section)
+        let fallback = allowed.first ?? .console
+        if !allowed.contains(currentSection) {
+            detailState.serverPanelSection = fallback.rawValue
             return
         }
-        if selectedSection == .plugins, !supportsPlugins {
-            selectedSection = .console
-            detailState.serverPanelSection = ServerDetailSection.console.rawValue
-        }
-    }
-
-    private func scheduleLaunchCommandAutoSave() {
-        launchCommandAutoSaveTask?.cancel()
-        guard isDirty else { return }
-        launchCommandAutoSaveTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                saveLaunchCommandIfNeeded()
-            }
-        }
-    }
-
-    private func saveLaunchCommandIfNeeded() {
-        guard isDirty else { return }
-        var updated = server
-        updated.launchCommand = customLaunchCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = serverRepository.updateServerSilently(updated)
-        isDirty = false
-    }
-
-    private func verifyAndRepairJar() {
-        guard server.serverType != .custom else {
-            GlobalErrorHandler.shared.handle(
-                GlobalError.validation(
-                    chineseMessage: "自定义 Jar 无法自动校验与重下",
-                    i18nKey: "server.launch.verify_jar.custom_unsupported",
-                    level: .notification
-                )
-            )
+        if currentSection == .mods, !supportsMods {
+            detailState.serverPanelSection = fallback.rawValue
             return
         }
-        isVerifyingJar = true
-        Task {
-            defer { isVerifyingJar = false }
-            do {
-                let target = try await ServerDownloadService.resolveDownloadTargetForServer(server)
-                if server.nodeId == ServerNode.local.id {
-                    let ok = await ServerDownloadService.verifyLocalJarIntegrity(server: server)
-                    if !ok {
-                        let dir = AppPaths.serverDirectory(serverName: server.name)
-                        _ = try await DownloadManager.downloadFile(
-                            urlString: target.url.absoluteString,
-                            destinationURL: dir.appendingPathComponent(target.fileName),
-                            expectedSha1: target.sha1,
-                            headers: target.headers
-                        )
-                    }
-                } else {
-                    guard let node = serverNodeRepository.getNode(by: server.nodeId) else {
-                        throw GlobalError.validation(
-                            chineseMessage: "未找到远程节点配置",
-                            i18nKey: "server.console.remote_node_missing",
-                            level: .notification
-                        )
-                    }
-                    let ok = (try? await SSHNodeService.verifyRemoteJarIntegrity(
-                        node: node,
-                        serverName: server.name,
-                        jarFileName: server.serverJar
-                    )) ?? false
-                    if !ok {
-                        try await SSHNodeService.redownloadRemoteServerJar(
-                            node: node,
-                            serverName: server.name,
-                            target: target
-                        )
-                    }
-                }
-                GlobalErrorHandler.shared.handle(
-                    GlobalError.validation(
-                        chineseMessage: "Jar 校验完成（异常时已自动重下替换）",
-                        i18nKey: "server.launch.verify_jar.success",
-                        level: .notification
-                    )
-                )
-            } catch {
-                GlobalErrorHandler.shared.handle(error)
-            }
+        if currentSection == .plugins, !supportsPlugins {
+            detailState.serverPanelSection = fallback.rawValue
         }
     }
 }
