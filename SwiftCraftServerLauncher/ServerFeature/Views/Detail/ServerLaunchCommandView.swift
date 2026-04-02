@@ -15,18 +15,9 @@ private enum ServerDetailSection: String, CaseIterable, Identifiable {
 
 struct ServerLaunchCommandView: View {
     let server: ServerInstance
-    @EnvironmentObject var serverRepository: ServerRepository
-    @EnvironmentObject var serverNodeRepository: ServerNodeRepository
     @EnvironmentObject var detailState: ResourceDetailState
     @StateObject private var generalSettings = GeneralSettingsManager.shared
-    @State private var customLaunchCommand: String = ""
-    @State private var isDirty = false
-    @State private var isVerifyingJar = false
-    @State private var launchCommandAutoSaveTask: Task<Void, Never>?
     @Namespace private var sectionIndicatorNamespace
-    private var isChinese: Bool {
-        Locale.preferredLanguages.first?.hasPrefix("zh") == true
-    }
     private var supportsMods: Bool {
         server.serverType == .fabric || server.serverType == .forge
     }
@@ -61,45 +52,6 @@ struct ServerLaunchCommandView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "terminal")
-                Text("server.launch.title".localized())
-                    .font(.title2)
-                Spacer()
-            }
-
-            TextField("server.launch.placeholder".localized(), text: $customLaunchCommand, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(2...6)
-                .onChange(of: customLaunchCommand) { _, newValue in
-                    isDirty = newValue != server.launchCommand
-                    scheduleLaunchCommandAutoSave()
-                }
-
-            HStack {
-                Text("server.launch.nogui_hint".localized())
-                    .foregroundColor(.secondary)
-            }
-
-            HStack {
-                Button {
-                    verifyAndRepairJar()
-                } label: {
-                    Label(
-                        isVerifyingJar
-                            ? "server.launch.verify_jar.running".localized()
-                            : "server.launch.verify_jar".localized(),
-                        systemImage: "checkmark.shield"
-                    )
-                }
-                .rotationEffect(.degrees(isVerifyingJar ? 360 : 0))
-                .animation(.easeInOut(duration: 0.15), value: isVerifyingJar)
-                .disabled(isVerifyingJar)
-                Spacer()
-            }
-
-            Divider()
-
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(sectionItems) { item in
@@ -120,13 +72,9 @@ struct ServerLaunchCommandView: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
-            customLaunchCommand = server.launchCommand
-            isDirty = false
             normalizeSelectedSectionIfNeeded()
         }
         .onChange(of: server.id) { _, _ in
-            customLaunchCommand = server.launchCommand
-            isDirty = false
             normalizeSelectedSectionIfNeeded()
         }
         .onChange(of: detailState.serverPanelSection) { _, _ in
@@ -137,10 +85,6 @@ struct ServerLaunchCommandView: View {
         }
         .onChange(of: server.serverType) { _, _ in
             normalizeSelectedSectionIfNeeded()
-        }
-        .onDisappear {
-            launchCommandAutoSaveTask?.cancel()
-            saveLaunchCommandIfNeeded()
         }
     }
 
@@ -169,7 +113,7 @@ struct ServerLaunchCommandView: View {
             items.append(.init(
                 section: .serverConfig,
                 title: "server.launch.server_config".localized(),
-                icon: "slider.horizontal.3",
+                icon: "folder",
                 isEnabled: true,
                 disabledHint: nil
             ))
@@ -301,87 +245,6 @@ struct ServerLaunchCommandView: View {
         }
         if currentSection == .plugins, !supportsPlugins {
             detailState.serverPanelSection = fallback.rawValue
-        }
-    }
-
-    private func scheduleLaunchCommandAutoSave() {
-        launchCommandAutoSaveTask?.cancel()
-        guard isDirty else { return }
-        launchCommandAutoSaveTask = Task {
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                saveLaunchCommandIfNeeded()
-            }
-        }
-    }
-
-    private func saveLaunchCommandIfNeeded() {
-        guard isDirty else { return }
-        var updated = server
-        updated.launchCommand = customLaunchCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-        _ = serverRepository.updateServerSilently(updated)
-        isDirty = false
-    }
-
-    private func verifyAndRepairJar() {
-        guard server.serverType != .custom else {
-            GlobalErrorHandler.shared.handle(
-                GlobalError.validation(
-                    chineseMessage: "自定义 Jar 无法自动校验与重下",
-                    i18nKey: "server.launch.verify_jar.custom_unsupported",
-                    level: .notification
-                )
-            )
-            return
-        }
-        isVerifyingJar = true
-        Task {
-            defer { isVerifyingJar = false }
-            do {
-                let target = try await ServerDownloadService.resolveDownloadTargetForServer(server)
-                if server.nodeId == ServerNode.local.id {
-                    let ok = await ServerDownloadService.verifyLocalJarIntegrity(server: server)
-                    if !ok {
-                        let dir = AppPaths.serverDirectory(serverName: server.name)
-                        _ = try await DownloadManager.downloadFile(
-                            urlString: target.url.absoluteString,
-                            destinationURL: dir.appendingPathComponent(target.fileName),
-                            expectedSha1: target.sha1,
-                            headers: target.headers
-                        )
-                    }
-                } else {
-                    guard let node = serverNodeRepository.getNode(by: server.nodeId) else {
-                        throw GlobalError.validation(
-                            chineseMessage: "未找到远程节点配置",
-                            i18nKey: "server.console.remote_node_missing",
-                            level: .notification
-                        )
-                    }
-                    let ok = (try? await SSHNodeService.verifyRemoteJarIntegrity(
-                        node: node,
-                        serverName: server.name,
-                        jarFileName: server.serverJar
-                    )) ?? false
-                    if !ok {
-                        try await SSHNodeService.redownloadRemoteServerJar(
-                            node: node,
-                            serverName: server.name,
-                            target: target
-                        )
-                    }
-                }
-                GlobalErrorHandler.shared.handle(
-                    GlobalError.validation(
-                        chineseMessage: "Jar 校验完成（异常时已自动重下替换）",
-                        i18nKey: "server.launch.verify_jar.success",
-                        level: .notification
-                    )
-                )
-            } catch {
-                GlobalErrorHandler.shared.handle(error)
-            }
         }
     }
 }

@@ -40,39 +40,75 @@ public struct DetailToolbarView: ToolbarContent {
         ServerDetailToolbarActionBus.post(action)
     }
 
+    private func launchSummaryLines(for server: ServerInstance) -> [String] {
+        let javaPath = server.javaPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "java"
+            : server.javaPath
+        let jvmArgs = server.jvmArguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedJvm = jvmArgs.isEmpty ? "-" : jvmArgs
+        let xmsText = server.xms > 0 ? "\(server.xms)M" : "-"
+        let xmxText = server.xmx > 0 ? "\(server.xmx)M" : "-"
+        return [
+            "\( "server.runtime.java_path".localized() ): \(javaPath)",
+            "\( "server.runtime.jvm".localized() ): \(resolvedJvm)",
+            "\( "server.runtime.memory.xms".localized() ): \(xmsText)",
+            "\( "server.runtime.memory.xmx".localized() ): \(xmxText)",
+        ]
+    }
+
     public var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             switch detailState.selectedItem {
             case .server:
                 if let server = currentServer {
-                    Button {
-                        Task {
+                    HStack(spacing: 4) {
+                        Button {
+                            Task {
+                                let isRunning = serverStatusManager.isServerRunning(serverId: server.id)
+                                if isRunning {
+                                    await serverLaunchUseCase.stopServer(server: server)
+                                } else {
+                                    serverStatusManager.setServerLaunching(serverId: server.id, isLaunching: true)
+                                    defer { serverStatusManager.setServerLaunching(serverId: server.id, isLaunching: false) }
+                                    await serverLaunchUseCase.launchServer(server: server)
+                                }
+                            }
+                        } label: {
                             let isRunning = serverStatusManager.isServerRunning(serverId: server.id)
-                            if isRunning {
-                                await serverLaunchUseCase.stopServer(server: server)
+                            let isLaunching = serverStatusManager.isServerLaunching(serverId: server.id)
+                            if isLaunching && !isRunning {
+                                ProgressView().controlSize(.small)
                             } else {
-                                serverStatusManager.setServerLaunching(serverId: server.id, isLaunching: true)
-                                defer { serverStatusManager.setServerLaunching(serverId: server.id, isLaunching: false) }
-                                await serverLaunchUseCase.launchServer(server: server)
+                                Image(systemName: isRunning ? "stop.fill" : "play.fill")
+                                    .imageScale(.medium)
                             }
                         }
-                    } label: {
-                        let isRunning = serverStatusManager.isServerRunning(serverId: server.id)
-                        let isLaunching = serverStatusManager.isServerLaunching(serverId: server.id)
-                        if isLaunching && !isRunning {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Label(
-                                isRunning ? "stop.fill".localized() : "play.fill".localized(),
-                                systemImage: isRunning ? "stop.fill" : "play.fill"
-                            )
+                        .scaleEffect(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.98 : 1.0)
+                        .opacity(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.88 : 1.0)
+                        .animation(.easeInOut(duration: 0.15), value: serverStatusManager.isServerLaunching(serverId: server.id))
+                        .disabled(serverStatusManager.isServerLaunching(serverId: server.id))
+                        .applyReplaceTransition()
+
+                        Menu {
+                            Section("server.launch.title".localized()) {
+                                ForEach(launchSummaryLines(for: server), id: \.self) { line in
+                                    Text(line).disabled(true)
+                                }
+                            }
+                            Divider()
+                            Button("common.edit".localized()) {
+                                detailState.showServerRuntimeSettingsSheet = true
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .imageScale(.small)
+                                .frame(width: 12)
+                                .padding(.vertical, 2)
                         }
+                        .menuIndicator(.hidden)
+                        .help("server.launch.title".localized())
                     }
-                    .scaleEffect(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.98 : 1.0)
-                    .opacity(serverStatusManager.isServerLaunching(serverId: server.id) ? 0.88 : 1.0)
-                    .animation(.easeInOut(duration: 0.15), value: serverStatusManager.isServerLaunching(serverId: server.id))
-                    .disabled(serverStatusManager.isServerLaunching(serverId: server.id))
-                    .applyReplaceTransition()
+                    .buttonStyle(.bordered)
 
                     Spacer()
 
