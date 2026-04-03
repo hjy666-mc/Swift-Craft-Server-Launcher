@@ -167,7 +167,7 @@ public struct SidebarView: View {
                         .tag(SidebarItem.server(server.id))
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            detailState.selectedItem = .server(server.id)
+                            handleServerTap(serverId: server.id)
                         }
                         .contextMenu {
                             Button {
@@ -343,6 +343,34 @@ public struct SidebarView: View {
         } message: {
             Text(String(format: "sidebar.confirm.delete_corrupted_server.message".localized(), pendingDeleteCorruptedServerName ?? ""))
         }
+    }
+
+    private func handleServerTap(serverId: String) {
+        let item = SidebarItem.server(serverId)
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.command) {
+            if selectedSidebarItems.contains(item) {
+                selectedSidebarItems.remove(item)
+            } else {
+                selectedSidebarItems.insert(item)
+                detailState.selectedItem = item
+            }
+            previousSidebarSelection = selectedSidebarItems
+            return
+        }
+        if modifiers.contains(.shift) {
+            if selectedSidebarItems.isEmpty {
+                selectedSidebarItems = [item]
+            } else {
+                selectedSidebarItems.insert(item)
+            }
+            detailState.selectedItem = item
+            previousSidebarSelection = selectedSidebarItems
+            return
+        }
+        selectedSidebarItems = [item]
+        previousSidebarSelection = selectedSidebarItems
+        detailState.selectedItem = item
     }
 
     private func syncSidebarSelection(with newValue: SidebarItem) {
