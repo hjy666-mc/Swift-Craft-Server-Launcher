@@ -9058,13 +9058,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remote node features are temporarily unstable and may not work as expected."
+            "value" : "Remote node features are temporarily unavailable."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "远程节点功能暂不稳定，当前版本可能无法正常使用。"
+            "value" : "远程节点功能暂不可用。"
           }
         }
       }
