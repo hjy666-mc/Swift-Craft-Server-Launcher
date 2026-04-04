@@ -5,7 +5,8 @@ enum LocalServerDirectService {
     static func start(server: ServerInstance, launchCommand: String) throws {
         let serverDir = AppPaths.serverDirectory(serverName: server.name)
         let escapedServerDir = escapeSingleQuotes(serverDir.path)
-        let escapedLaunchCommand = escapeSingleQuotes(launchCommand)
+        let escapedLaunchCommand = launchCommand.replacingOccurrences(of: "\"", with: "\\\"")
+        Logger.shared.info("Local launch command: \(launchCommand)")
         let command = """
         cd '\(escapedServerDir)' && \
         if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then \
@@ -13,7 +14,7 @@ enum LocalServerDirectService {
         else \
           rm -f .scsl.pid .scsl.stdin; \
           mkfifo .scsl.stdin && \
-          nohup /bin/sh -lc 'tail -f .scsl.stdin | \(escapedLaunchCommand)' >> scsl-server.log 2>&1 & \
+          nohup /bin/sh -lc "tail -f .scsl.stdin | \(escapedLaunchCommand)" >> scsl-server.log 2>&1 & \
           echo $! > .scsl.pid; \
           sleep 1; \
           if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; fi; \
