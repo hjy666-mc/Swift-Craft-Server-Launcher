@@ -15,6 +15,7 @@ struct ServerCreationView: View {
     @State private var showJarPicker = false
     @State private var isJarDropTargeted = false
     @State private var isIconDropTargeted = false
+    @State private var showFastMirrorPicker = false
 
     init(
         isDownloading: Binding<Bool>,
@@ -51,6 +52,12 @@ struct ServerCreationView: View {
             .onChange(of: viewModel.selectedServerType) { oldValue, newValue in
                 if oldValue != newValue {
                     viewModel.handleServerTypeChange(newValue)
+                    viewModel.updateParentState()
+                }
+            }
+            .onChange(of: viewModel.selectedMirrorSource) { oldValue, newValue in
+                if oldValue != newValue {
+                    viewModel.handleMirrorSourceChange(newValue)
                     viewModel.updateParentState()
                 }
             }
@@ -173,15 +180,20 @@ struct ServerCreationView: View {
                 HStack(alignment: .top, spacing: 16) {
                     serverIconPicker
                     VStack(spacing: 10) {
-                        serverTypePicker
-                        if viewModel.selectedServerType != .custom {
-                            versionPicker
-                        }
-                        if viewModel.selectedServerType == .fabric || viewModel.selectedServerType == .forge {
-                            loaderVersionPicker
-                        }
-                        if viewModel.selectedServerType == .custom {
-                            customJarPicker
+                        mirrorSourcePicker
+                        if viewModel.selectedMirrorSource == .official {
+                            serverTypePicker
+                            if viewModel.selectedServerType != .custom {
+                                versionPicker
+                            }
+                            if viewModel.selectedServerType == .fabric || viewModel.selectedServerType == .forge {
+                                loaderVersionPicker
+                            }
+                            if viewModel.selectedServerType == .custom {
+                                customJarPicker
+                            }
+                        } else {
+                            mirrorCorePicker
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -217,6 +229,273 @@ struct ServerCreationView: View {
             }
             .labelsHidden()
             .pickerStyle(MenuPickerStyle())
+        }
+    }
+
+    private var mirrorSourcePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("server.form.mirror.source".localized())
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            mirrorSourceTabs
+        }
+    }
+
+    private var mirrorSourceTabs: some View {
+        let allSources = ServerMirrorSource.allCases.filter { $0.isAvailable }
+        if allSources.count > 4 {
+            return AnyView(
+                Picker("", selection: $viewModel.selectedMirrorSource) {
+                    ForEach(allSources) { source in
+                        Text(source.displayName).tag(source)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+            )
+        }
+
+        return AnyView(
+            Picker("", selection: $viewModel.selectedMirrorSource) {
+                ForEach(allSources) { source in
+                    Text(source.displayName).tag(source)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+        )
+    }
+
+    private var mirrorCorePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(viewModel.selectedMirrorSource.displayName)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+            ZStack {
+                TextField("", text: .constant(""))
+                    .textFieldStyle(.roundedBorder)
+                    .allowsHitTesting(false)
+                    .focusable(false)
+                HStack {
+                    Text(mirrorSummaryText)
+                        .foregroundColor(
+                            mirrorSummaryTextIsPlaceholder
+                                ? .secondary
+                                : .primary
+                        )
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .onTapGesture {
+                showFastMirrorPicker.toggle()
+            }
+            .popover(isPresented: $showFastMirrorPicker, arrowEdge: .trailing) {
+                mirrorSelectionColumns
+            }
+        }
+    }
+
+    private var mirrorSelectionColumns: some View {
+        switch viewModel.selectedMirrorSource {
+        case .fastMirror:
+            return AnyView(fastMirrorSelectionColumns)
+        case .polars:
+            return AnyView(polarsSelectionColumns)
+        case .official:
+            return AnyView(EmptyView())
+        }
+    }
+
+    private var fastMirrorSelectionColumns: some View {
+        HStack(alignment: .top, spacing: 12) {
+            mirrorColumn(
+                title: "server.form.mirror.core".localized(),
+                items: viewModel.fastMirrorCores.map(\.name),
+                selection: Binding<String?>(
+                    get: { viewModel.selectedFastMirrorCoreName.isEmpty ? nil : viewModel.selectedFastMirrorCoreName },
+                    set: { newValue in
+                        if let newValue {
+                            viewModel.handleFastMirrorCoreChange(newValue)
+                        }
+                    }
+                )
+            )
+
+            mirrorColumn(
+                title: "server.form.mirror.version".localized(),
+                items: viewModel.availableVersions,
+                selection: Binding<String?>(
+                    get: { viewModel.selectedGameVersion.isEmpty ? nil : viewModel.selectedGameVersion },
+                    set: { newValue in
+                        viewModel.selectedGameVersion = newValue ?? ""
+                    }
+                )
+            )
+
+            mirrorColumn(
+                title: "server.form.mirror.core_version".localized(),
+                items: viewModel.availableLoaderVersions,
+                selection: Binding<String?>(
+                    get: { viewModel.selectedLoaderVersion.isEmpty ? nil : viewModel.selectedLoaderVersion },
+                    set: { newValue in
+                        viewModel.selectedLoaderVersion = newValue ?? ""
+                    }
+                )
+            )
+        }
+        .padding(12)
+        .frame(minWidth: 540)
+    }
+
+    private var polarsSelectionColumns: some View {
+        HStack(alignment: .top, spacing: 12) {
+            mirrorColumn(
+                title: "server.form.mirror.core".localized(),
+                items: viewModel.polarsCoreTypes.map { $0.name },
+                selection: Binding<String?>(
+                    get: {
+                        guard let id = viewModel.selectedPolarsCoreTypeId else { return nil }
+                        return viewModel.polarsCoreTypes.first(where: { $0.id == id })?.name
+                    },
+                    set: { newValue in
+                        guard let newValue,
+                              let type = viewModel.polarsCoreTypes.first(where: { $0.name == newValue }) else {
+                            return
+                        }
+                        viewModel.handlePolarsCoreTypeChange(type.id)
+                    }
+                )
+            )
+            mirrorColumn(
+                title: "server.form.mirror.core_version".localized(),
+                items: viewModel.polarsCoreItems.map(\.name),
+                selection: Binding<String?>(
+                    get: { viewModel.selectedPolarsCoreItemName.isEmpty ? nil : viewModel.selectedPolarsCoreItemName },
+                    set: { newValue in
+                        guard let newValue,
+                              let item = viewModel.polarsCoreItems.first(where: { $0.name == newValue }) else {
+                            return
+                        }
+                        viewModel.handlePolarsCoreItemChange(item)
+                    }
+                )
+            )
+        }
+        .padding(12)
+        .frame(minWidth: 420)
+    }
+
+    private var mirrorSummaryText: String {
+        switch viewModel.selectedMirrorSource {
+        case .fastMirror:
+            let core = viewModel.selectedFastMirrorCoreName
+            let gameVersion = viewModel.selectedGameVersion
+            let coreVersion = viewModel.selectedLoaderVersion
+            if core.isEmpty {
+                return "server.form.mirror.fastmirror.placeholder".localized()
+            }
+            var parts = [core]
+            if !gameVersion.isEmpty {
+                parts.append(gameVersion)
+            }
+            if !coreVersion.isEmpty {
+                parts.append(coreVersion)
+            }
+            return parts.joined(separator: " · ")
+        case .polars:
+            let typeName = viewModel.polarsCoreTypes.first(where: { $0.id == viewModel.selectedPolarsCoreTypeId })?.name ?? ""
+            let itemName = viewModel.selectedPolarsCoreItemName
+            if typeName.isEmpty {
+                return "server.form.mirror.fastmirror.placeholder".localized()
+            }
+            if itemName.isEmpty {
+                return typeName
+            }
+            return "\(typeName) · \(itemName)"
+        case .official:
+            return ""
+        }
+    }
+
+    private var mirrorSummaryTextIsPlaceholder: Bool {
+        switch viewModel.selectedMirrorSource {
+        case .fastMirror:
+            return viewModel.selectedFastMirrorCoreName.isEmpty
+        case .polars:
+            return viewModel.selectedPolarsCoreTypeId == nil
+        case .official:
+            return false
+        }
+    }
+
+    private func mirrorColumn(
+        title: String,
+        items: [String],
+        selection: Binding<String?>
+    ) -> some View {
+        MirrorColumnView(title: title, items: items, selection: selection)
+    }
+
+    private struct MirrorColumnView: View {
+        let title: String
+        let items: [String]
+        let selection: Binding<String?>
+
+        @State private var searchText = ""
+
+        private var filteredItems: [String] {
+            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return items
+            }
+            return items.filter { matchesFuzzy(item: $0, query: trimmed) }
+        }
+
+        private func matchesFuzzy(item: String, query: String) -> Bool {
+            if item.localizedCaseInsensitiveContains(query) {
+                return true
+            }
+            let itemChars = Array(item.lowercased())
+            let queryChars = Array(query.lowercased())
+            var index = 0
+            for char in queryChars {
+                var found = false
+                while index < itemChars.count {
+                    if itemChars[index] == char {
+                        found = true
+                        index += 1
+                        break
+                    }
+                    index += 1
+                }
+                if !found {
+                    return false
+                }
+            }
+            return true
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                List(selection: selection) {
+                    ForEach(filteredItems, id: \.self) { item in
+                        Text(item)
+                            .tag(item)
+                    }
+                }
+                .listStyle(.inset)
+                .frame(minWidth: 150, minHeight: 180, maxHeight: 220)
+
+                TextField("common.search".localized(), text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
