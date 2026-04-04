@@ -358,7 +358,7 @@ struct ServerCreationView: View {
                 selection: Binding<String?>(
                     get: {
                         guard let id = viewModel.selectedPolarsCoreTypeId else { return nil }
-                        return viewModel.polarsCoreTypes.first(where: { $0.id == id })?.name
+                        return viewModel.polarsCoreTypes.first { $0.id == id }?.name
                     },
                     set: { newValue in
                         guard let newValue,
@@ -406,7 +406,7 @@ struct ServerCreationView: View {
             }
             return parts.joined(separator: " · ")
         case .polars:
-            let typeName = viewModel.polarsCoreTypes.first(where: { $0.id == viewModel.selectedPolarsCoreTypeId })?.name ?? ""
+            let typeName = viewModel.polarsCoreTypes.first { $0.id == viewModel.selectedPolarsCoreTypeId }?.name ?? ""
             let itemName = viewModel.selectedPolarsCoreItemName
             if typeName.isEmpty {
                 return "server.form.mirror.fastmirror.placeholder".localized()

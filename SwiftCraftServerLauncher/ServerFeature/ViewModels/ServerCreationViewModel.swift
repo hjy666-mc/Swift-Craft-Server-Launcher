@@ -168,8 +168,10 @@ class ServerCreationViewModel: ObservableObject {
                             gameVersion: selectedGameVersion,
                             loaderVersion: selectedLoaderVersion,
                             serverDir: serverDir,
-                            mirrorSource: selectedMirrorSource,
-                            mirrorCoreName: selectedFastMirrorCoreName
+                            mirror: ServerDownloadService.MirrorDownloadOptions(
+                                source: selectedMirrorSource,
+                                coreName: selectedFastMirrorCoreName
+                            )
                         )
                         let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
                         javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
@@ -214,10 +216,12 @@ class ServerCreationViewModel: ObservableObject {
                     serverType: selectedServerType,
                     gameVersion: selectedGameVersion,
                     loaderVersion: selectedLoaderVersion,
-                    mirrorSource: selectedMirrorSource,
-                    mirrorCoreName: selectedFastMirrorCoreName,
-                    mirrorFileName: selectedMirrorFileName,
-                    mirrorDownloadURL: selectedMirrorDownloadURL
+                    mirror: ServerDownloadService.MirrorDownloadOptions(
+                        source: selectedMirrorSource,
+                        coreName: selectedFastMirrorCoreName,
+                        fileName: selectedMirrorFileName,
+                        downloadURL: selectedMirrorDownloadURL
+                    )
                 )
                 let alreadyPrepared = await SSHNodeService.waitForRemoteServerJar(
                     node: selectedNode,

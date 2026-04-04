@@ -4,7 +4,7 @@ enum FastMirrorService {
     struct CoreSummary: Decodable, Hashable {
         let name: String
         let tag: String?
-        let recommend: Bool?
+        let recommend: Bool
         let homepage: String?
         let mcVersions: [String]?
 
@@ -14,6 +14,15 @@ enum FastMirrorService {
             case recommend
             case homepage
             case mcVersions = "mc_versions"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            tag = try container.decodeIfPresent(String.self, forKey: .tag)
+            recommend = try container.decodeIfPresent(Bool.self, forKey: .recommend) ?? false
+            homepage = try container.decodeIfPresent(String.self, forKey: .homepage)
+            mcVersions = try container.decodeIfPresent([String].self, forKey: .mcVersions)
         }
     }
 
@@ -74,8 +83,23 @@ enum FastMirrorService {
     struct Response<T: Decodable>: Decodable {
         let data: T?
         let code: String?
-        let success: Bool?
+        let success: Bool
         let message: String?
+
+        enum CodingKeys: String, CodingKey {
+            case data
+            case code
+            case success
+            case message
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            data = try container.decodeIfPresent(T.self, forKey: .data)
+            code = try container.decodeIfPresent(String.self, forKey: .code)
+            message = try container.decodeIfPresent(String.self, forKey: .message)
+            success = try container.decodeIfPresent(Bool.self, forKey: .success) ?? true
+        }
     }
 
     private static let baseURL = URL(string: "https://download.fastmirror.net/api/v3") ?? URL(fileURLWithPath: "/")
@@ -95,7 +119,7 @@ enum FastMirrorService {
             pathComponents: [coreName, gameVersion],
             queryItems: [
                 URLQueryItem(name: "offset", value: "0"),
-                URLQueryItem(name: "limit", value: "25")
+                URLQueryItem(name: "limit", value: "25"),
             ]
         )
         let versions = list.builds.map { $0.coreVersion }

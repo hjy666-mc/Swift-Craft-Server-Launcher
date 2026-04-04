@@ -9,24 +9,37 @@ enum ServerDownloadService {
         let headers: [String: String]?
     }
 
+    struct MirrorDownloadOptions {
+        let source: ServerMirrorSource
+        let coreName: String?
+        let fileName: String?
+        let downloadURL: String?
+
+        init(
+            source: ServerMirrorSource,
+            coreName: String? = nil,
+            fileName: String? = nil,
+            downloadURL: String? = nil
+        ) {
+            self.source = source
+            self.coreName = coreName
+            self.fileName = fileName
+            self.downloadURL = downloadURL
+        }
+    }
+
     static func downloadServerJar(
         serverType: ServerType,
         gameVersion: String,
         loaderVersion: String,
         serverDir: URL,
-        mirrorSource: ServerMirrorSource,
-        mirrorCoreName: String? = nil,
-        mirrorFileName: String? = nil,
-        mirrorDownloadURL: String? = nil
+        mirror: MirrorDownloadOptions
     ) async throws -> String {
         let target = try await resolveDownloadTarget(
             serverType: serverType,
             gameVersion: gameVersion,
             loaderVersion: loaderVersion,
-            mirrorSource: mirrorSource,
-            mirrorCoreName: mirrorCoreName,
-            mirrorFileName: mirrorFileName,
-            mirrorDownloadURL: mirrorDownloadURL
+            mirror: mirror
         )
         let destinationURL = serverDir.appendingPathComponent(target.fileName)
         _ = try await DownloadManager.downloadFile(
@@ -42,19 +55,13 @@ enum ServerDownloadService {
         serverType: ServerType,
         gameVersion: String,
         loaderVersion: String,
-        mirrorSource: ServerMirrorSource,
-        mirrorCoreName: String? = nil,
-        mirrorFileName: String? = nil,
-        mirrorDownloadURL: String? = nil
+        mirror: MirrorDownloadOptions
     ) async throws -> DownloadTarget {
         try await resolveDownloadTarget(
             serverType: serverType,
             gameVersion: gameVersion,
             loaderVersion: loaderVersion,
-            mirrorSource: mirrorSource,
-            mirrorCoreName: mirrorCoreName,
-            mirrorFileName: mirrorFileName,
-            mirrorDownloadURL: mirrorDownloadURL
+            mirror: mirror
         )
     }
 
@@ -66,10 +73,7 @@ enum ServerDownloadService {
             serverType: server.serverType,
             gameVersion: server.gameVersion,
             loaderVersion: server.loaderVersion,
-            mirrorSource: mirrorSource,
-            mirrorCoreName: nil,
-            mirrorFileName: nil,
-            mirrorDownloadURL: nil
+            mirror: MirrorDownloadOptions(source: mirrorSource)
         )
     }
 
@@ -118,23 +122,20 @@ enum ServerDownloadService {
         serverType: ServerType,
         gameVersion: String,
         loaderVersion: String,
-        mirrorSource: ServerMirrorSource,
-        mirrorCoreName: String?,
-        mirrorFileName: String?,
-        mirrorDownloadURL: String?
+        mirror: MirrorDownloadOptions
     ) async throws -> DownloadTarget {
-        if mirrorSource == .fastMirror {
+        if mirror.source == .fastMirror {
             return try await resolveFastMirror(
                 serverType: serverType,
                 gameVersion: gameVersion,
                 coreVersion: loaderVersion,
-                coreNameOverride: mirrorCoreName
+                coreNameOverride: mirror.coreName
             )
         }
-        if mirrorSource == .polars {
+        if mirror.source == .polars {
             return try resolveMirrorDirect(
-                fileName: mirrorFileName,
-                downloadURL: mirrorDownloadURL
+                fileName: mirror.fileName,
+                downloadURL: mirror.downloadURL
             )
         }
         switch serverType {
@@ -248,7 +249,10 @@ enum ServerDownloadService {
     }
 
     private static func unzipArchive(at url: URL, to destination: URL) throws {
-        guard let archive = Archive(url: url, accessMode: .read) else {
+        let archive: Archive
+        do {
+            archive = try Archive(url: url, accessMode: .read)
+        } catch {
             throw GlobalError.validation(
                 chineseMessage: "解压失败: 无法读取压缩包",
                 i18nKey: "error.validation.invalid_download_url",
@@ -277,12 +281,10 @@ enum ServerDownloadService {
             return nil
         }
         var jars: [URL] = []
-        for case let fileURL as URL in enumerator {
-            if fileURL.pathExtension.lowercased() == "jar" {
-                jars.append(fileURL)
-            }
+        for case let fileURL as URL in enumerator where fileURL.pathExtension.lowercased() == "jar" {
+            jars.append(fileURL)
         }
-        return jars.sorted { $0.lastPathComponent < $1.lastPathComponent }.first
+        return jars.min { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     private static func resolveVanilla(gameVersion: String) async throws -> DownloadTarget {
