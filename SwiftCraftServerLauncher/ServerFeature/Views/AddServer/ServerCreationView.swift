@@ -5,6 +5,7 @@ import AppKit
 struct ServerCreationView: View {
     @StateObject private var viewModel: ServerCreationViewModel
     @StateObject private var generalSettings = GeneralSettingsManager.shared
+    @StateObject private var mirrorSettings = MirrorSourceSettingsManager.shared
     @EnvironmentObject var serverRepository: ServerRepository
     @Environment(\.dismiss)
     private var dismiss
@@ -239,15 +240,21 @@ struct ServerCreationView: View {
                 .foregroundColor(.primary)
             mirrorSourceTabs
         }
+        .onAppear {
+            syncSelectedMirrorOption()
+        }
+        .onChange(of: mirrorSettings.sources) { _, _ in
+            syncSelectedMirrorOption()
+        }
     }
 
     private var mirrorSourceTabs: some View {
-        let allSources = ServerMirrorSource.allCases.filter { $0.isAvailable }
-        if allSources.count > 4 {
+        let options = mirrorSourceOptions
+        if options.count > 4 {
             return AnyView(
-                Picker("", selection: $viewModel.selectedMirrorSource) {
-                    ForEach(allSources) { source in
-                        Text(source.displayName).tag(source)
+                Picker("", selection: mirrorSourceSelectionBinding) {
+                    ForEach(options) { option in
+                        Text(option.displayName).tag(option.id)
                     }
                 }
                 .labelsHidden()
@@ -256,9 +263,9 @@ struct ServerCreationView: View {
         }
 
         return AnyView(
-            Picker("", selection: $viewModel.selectedMirrorSource) {
-                ForEach(allSources) { source in
-                    Text(source.displayName).tag(source)
+            Picker("", selection: mirrorSourceSelectionBinding) {
+                ForEach(options) { option in
+                    Text(option.displayName).tag(option.id)
                 }
             }
             .labelsHidden()
@@ -268,7 +275,7 @@ struct ServerCreationView: View {
 
     private var mirrorCorePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(viewModel.selectedMirrorSource.displayName)
+            Text(viewModel.selectedMirrorDisplayName)
                 .font(.subheadline)
                 .foregroundColor(.primary)
             ZStack {
@@ -301,6 +308,8 @@ struct ServerCreationView: View {
     private var mirrorSelectionColumns: some View {
         switch viewModel.selectedMirrorSource {
         case .fastMirror:
+            return AnyView(fastMirrorSelectionColumns)
+        case .custom:
             return AnyView(fastMirrorSelectionColumns)
         case .polars:
             return AnyView(polarsSelectionColumns)
@@ -341,7 +350,7 @@ struct ServerCreationView: View {
                 selection: Binding<String?>(
                     get: { viewModel.selectedLoaderVersion.isEmpty ? nil : viewModel.selectedLoaderVersion },
                     set: { newValue in
-                        viewModel.selectedLoaderVersion = newValue ?? ""
+                        viewModel.handleMirrorCoreVersionChange(newValue ?? "")
                     }
                 )
             )
@@ -405,6 +414,21 @@ struct ServerCreationView: View {
                 parts.append(coreVersion)
             }
             return parts.joined(separator: " · ")
+        case .custom:
+            let core = viewModel.selectedFastMirrorCoreName
+            let gameVersion = viewModel.selectedGameVersion
+            let coreVersion = viewModel.selectedLoaderVersion
+            if core.isEmpty {
+                return "server.form.mirror.fastmirror.placeholder".localized()
+            }
+            var parts = [core]
+            if !gameVersion.isEmpty {
+                parts.append(gameVersion)
+            }
+            if !coreVersion.isEmpty {
+                parts.append(coreVersion)
+            }
+            return parts.joined(separator: " · ")
         case .polars:
             let typeName = viewModel.polarsCoreTypes.first { $0.id == viewModel.selectedPolarsCoreTypeId }?.name ?? ""
             let itemName = viewModel.selectedPolarsCoreItemName
@@ -424,10 +448,86 @@ struct ServerCreationView: View {
         switch viewModel.selectedMirrorSource {
         case .fastMirror:
             return viewModel.selectedFastMirrorCoreName.isEmpty
+        case .custom:
+            return viewModel.selectedFastMirrorCoreName.isEmpty
         case .polars:
             return viewModel.selectedPolarsCoreTypeId == nil
         case .official:
             return false
+        }
+    }
+
+    private struct MirrorSourceOption: Identifiable, Hashable {
+        let id: String
+        let displayName: String
+        let source: ServerMirrorSource
+        let baseURL: String?
+        let customJSON: String?
+    }
+
+    private var mirrorSourceOptions: [MirrorSourceOption] {
+        var options: [MirrorSourceOption] = [
+            MirrorSourceOption(
+                id: ServerMirrorSource.official.id,
+                displayName: ServerMirrorSource.official.displayName,
+                source: .official,
+                baseURL: nil,
+                customJSON: nil
+            )
+        ]
+        let mirrorItems = mirrorSettings.enabledSources.map { source in
+            MirrorSourceOption(
+                id: "mirror-\(source.id.uuidString)",
+                displayName: source.name,
+                source: mirrorSourceKind(from: source.kind),
+                baseURL: source.baseURL,
+                customJSON: source.customJSON
+            )
+        }
+        options.append(contentsOf: mirrorItems)
+        return options
+    }
+
+    private func mirrorSourceKind(from kind: MirrorSourceKind) -> ServerMirrorSource {
+        switch kind {
+        case .fastMirror:
+            return .fastMirror
+        case .polars:
+            return .polars
+        case .custom:
+            return .custom
+        }
+    }
+
+    private var mirrorSourceSelectionBinding: Binding<String> {
+        Binding(
+            get: { viewModel.selectedMirrorSourceId },
+            set: { newValue in
+                guard let option = mirrorSourceOptions.first(where: { $0.id == newValue }) else { return }
+                applyMirrorOption(option)
+            }
+        )
+    }
+
+    private func applyMirrorOption(_ option: MirrorSourceOption) {
+        viewModel.applyMirrorSelection(
+            sourceId: option.id,
+            source: option.source,
+            displayName: option.displayName,
+            baseURL: option.baseURL,
+            customJSON: option.customJSON
+        )
+    }
+
+    private func syncSelectedMirrorOption() {
+        guard let option = mirrorSourceOptions.first(where: { $0.id == viewModel.selectedMirrorSourceId }) else {
+            if let first = mirrorSourceOptions.first {
+                applyMirrorOption(first)
+            }
+            return
+        }
+        if option.displayName != viewModel.selectedMirrorDisplayName {
+            applyMirrorOption(option)
         }
     }
 
@@ -436,67 +536,7 @@ struct ServerCreationView: View {
         items: [String],
         selection: Binding<String?>
     ) -> some View {
-        MirrorColumnView(title: title, items: items, selection: selection)
-    }
-
-    private struct MirrorColumnView: View {
-        let title: String
-        let items: [String]
-        let selection: Binding<String?>
-
-        @State private var searchText = ""
-
-        private var filteredItems: [String] {
-            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                return items
-            }
-            return items.filter { matchesFuzzy(item: $0, query: trimmed) }
-        }
-
-        private func matchesFuzzy(item: String, query: String) -> Bool {
-            if item.localizedCaseInsensitiveContains(query) {
-                return true
-            }
-            let itemChars = Array(item.lowercased())
-            let queryChars = Array(query.lowercased())
-            var index = 0
-            for char in queryChars {
-                var found = false
-                while index < itemChars.count {
-                    if itemChars[index] == char {
-                        found = true
-                        index += 1
-                        break
-                    }
-                    index += 1
-                }
-                if !found {
-                    return false
-                }
-            }
-            return true
-        }
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(.primary)
-                List(selection: selection) {
-                    ForEach(filteredItems, id: \.self) { item in
-                        Text(item)
-                            .tag(item)
-                    }
-                }
-                .listStyle(.inset)
-                .frame(minWidth: 150, minHeight: 180, maxHeight: 220)
-
-                TextField("common.search".localized(), text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
+        MirrorSelectionColumnView(title: title, items: items, selection: selection)
     }
 
     private var serverIconPicker: some View {

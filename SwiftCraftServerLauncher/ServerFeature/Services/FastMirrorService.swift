@@ -24,6 +24,20 @@ enum FastMirrorService {
             homepage = try container.decodeIfPresent(String.self, forKey: .homepage)
             mcVersions = try container.decodeIfPresent([String].self, forKey: .mcVersions)
         }
+
+        init(
+            name: String,
+            tag: String?,
+            recommend: Bool,
+            homepage: String?,
+            mcVersions: [String]?
+        ) {
+            self.name = name
+            self.tag = tag
+            self.recommend = recommend
+            self.homepage = homepage
+            self.mcVersions = mcVersions
+        }
     }
 
     struct CoreInfo: Decodable {
@@ -104,23 +118,24 @@ enum FastMirrorService {
 
     private static let baseURL = URL(string: "https://download.fastmirror.net/api/v3") ?? URL(fileURLWithPath: "/")
 
-    static func fetchGameVersions(coreName: String) async throws -> [String] {
-        let info: CoreInfo = try await requestData(pathComponents: [coreName])
+    static func fetchGameVersions(coreName: String, baseURL: URL? = nil) async throws -> [String] {
+        let info: CoreInfo = try await requestData(pathComponents: [coreName], baseURL: baseURL)
         return info.mcVersions
     }
 
-    static func fetchCores() async throws -> [CoreSummary] {
-        let list: [CoreSummary] = try await requestData(pathComponents: [])
+    static func fetchCores(baseURL: URL? = nil) async throws -> [CoreSummary] {
+        let list: [CoreSummary] = try await requestData(pathComponents: [], baseURL: baseURL)
         return list
     }
 
-    static func fetchCoreVersions(coreName: String, gameVersion: String) async throws -> [String] {
+    static func fetchCoreVersions(coreName: String, gameVersion: String, baseURL: URL? = nil) async throws -> [String] {
         let list: BuildList = try await requestData(
             pathComponents: [coreName, gameVersion],
             queryItems: [
                 URLQueryItem(name: "offset", value: "0"),
                 URLQueryItem(name: "limit", value: "25"),
-            ]
+            ],
+            baseURL: baseURL
         )
         let versions = list.builds.map { $0.coreVersion }
         var seen: Set<String> = []
@@ -132,8 +147,16 @@ enum FastMirrorService {
         return unique
     }
 
-    static func fetchCoreDetail(coreName: String, gameVersion: String, coreVersion: String) async throws -> CoreDetail {
-        return try await requestData(pathComponents: [coreName, gameVersion, coreVersion])
+    static func fetchCoreDetail(
+        coreName: String,
+        gameVersion: String,
+        coreVersion: String,
+        baseURL: URL? = nil
+    ) async throws -> CoreDetail {
+        return try await requestData(
+            pathComponents: [coreName, gameVersion, coreVersion],
+            baseURL: baseURL
+        )
     }
 
     static func coreName(for serverType: ServerType) -> String {
@@ -168,25 +191,34 @@ enum FastMirrorService {
 
     private static func requestData<T: Decodable>(
         pathComponents: [String],
-        queryItems: [URLQueryItem] = []
+        queryItems: [URLQueryItem] = [],
+        baseURL: URL? = nil
     ) async throws -> T {
-        let url = buildURL(pathComponents: pathComponents, queryItems: queryItems)
-        let response: Response<T> = try await APIClient.request(
-            url: url,
-            headers: ["Accept": "application/json"]
-        )
-        guard response.success != false, let data = response.data else {
-            throw GlobalError.network(
-                chineseMessage: response.message ?? "镜像服务不可用",
-                i18nKey: "error.network.api_request_failed",
-                level: .notification
-            )
+        let url = buildURL(pathComponents: pathComponents, queryItems: queryItems, baseURL: baseURL)
+        let data = try await APIClient.get(url: url, headers: ["Accept": "application/json"])
+        if let wrapped = try? JSONDecoder().decode(Response<T>.self, from: data) {
+            guard wrapped.success, let payload = wrapped.data else {
+                throw GlobalError.network(
+                    chineseMessage: wrapped.message ?? "镜像服务不可用",
+                    i18nKey: "error.network.api_request_failed",
+                    level: .notification
+                )
+            }
+            return payload
         }
-        return data
+        if let direct = try? JSONDecoder().decode(T.self, from: data) {
+            return direct
+        }
+        throw GlobalError.network(
+            chineseMessage: "镜像服务数据格式不正确",
+            i18nKey: "error.network.api_request_failed",
+            level: .notification
+        )
     }
 
-    private static func buildURL(pathComponents: [String], queryItems: [URLQueryItem]) -> URL {
-        let base = pathComponents.reduce(baseURL) { partial, component in
+    private static func buildURL(pathComponents: [String], queryItems: [URLQueryItem], baseURL: URL?) -> URL {
+        let resolvedBase = normalizeBaseURL(baseURL ?? FastMirrorService.baseURL)
+        let base = pathComponents.reduce(resolvedBase) { partial, component in
             partial.appendingPathComponent(component)
         }
         guard !queryItems.isEmpty,
@@ -195,5 +227,13 @@ enum FastMirrorService {
         }
         components.queryItems = queryItems
         return components.url ?? base
+    }
+
+    private static func normalizeBaseURL(_ url: URL) -> URL {
+        let path = url.path.lowercased()
+        if path.contains("/api/v3") {
+            return url
+        }
+        return url.appendingPathComponent("api/v3")
     }
 }

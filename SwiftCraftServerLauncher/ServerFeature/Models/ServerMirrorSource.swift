@@ -4,6 +4,7 @@ enum ServerMirrorSource: String, CaseIterable, Identifiable {
     case official
     case fastMirror
     case polars
+    case custom
 
     var id: String { rawValue }
 
@@ -15,6 +16,8 @@ enum ServerMirrorSource: String, CaseIterable, Identifiable {
             return "server.form.mirror.fastmirror".localized()
         case .polars:
             return "server.form.mirror.polars".localized()
+        case .custom:
+            return "server.form.mirror.custom".localized()
         }
     }
 

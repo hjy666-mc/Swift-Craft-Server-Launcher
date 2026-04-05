@@ -17,6 +17,9 @@ class ServerCreationViewModel: ObservableObject {
     @Published var availableLoaderVersions: [String] = []
     @Published var availableVersions: [String] = []
     @Published var selectedMirrorSource: ServerMirrorSource = .official
+    @Published var selectedMirrorSourceId: String = ServerMirrorSource.official.id
+    @Published var selectedMirrorDisplayName: String = ServerMirrorSource.official.displayName
+    @Published var selectedMirrorBaseURL: String = ""
     @Published var fastMirrorCores: [FastMirrorService.CoreSummary] = []
     @Published var selectedFastMirrorCoreName: String = ""
     @Published var polarsCoreTypes: [PolarsMirrorService.CoreType] = []
@@ -24,6 +27,7 @@ class ServerCreationViewModel: ObservableObject {
     @Published var polarsCoreItems: [PolarsMirrorService.CoreItem] = []
     @Published var selectedPolarsCoreItemName: String = ""
     @Published var selectedMirrorDownloadURL: String = ""
+    @Published var selectedMirrorFileName: String = ""
 
     @Published var customJarURL: URL?
     @Published var hasAcceptedEula: Bool = false
@@ -40,6 +44,7 @@ class ServerCreationViewModel: ObservableObject {
     private var isSubmitting = false
     private let configuration: GameFormConfiguration
     private let selectedNode: ServerNode
+    private var selectedCustomConfig: MirrorCustomAPIConfig?
 
     init(configuration: GameFormConfiguration, selectedNode: ServerNode = .local) {
         self.configuration = configuration
@@ -83,6 +88,13 @@ class ServerCreationViewModel: ObservableObject {
         if !serverNameValidator.isFormValid { return false }
         if selectedMirrorSource == .fastMirror, selectedServerType != .custom {
             return !selectedFastMirrorCoreName.isEmpty && !selectedGameVersion.isEmpty && !selectedLoaderVersion.isEmpty
+        }
+        if selectedMirrorSource == .custom {
+            return !selectedFastMirrorCoreName.isEmpty
+                && !selectedGameVersion.isEmpty
+                && !selectedLoaderVersion.isEmpty
+                && !selectedMirrorDownloadURL.isEmpty
+                && !selectedMirrorFileName.isEmpty
         }
         if selectedMirrorSource == .polars {
             return selectedPolarsCoreTypeId != nil && !selectedPolarsCoreItemName.isEmpty && !selectedMirrorDownloadURL.isEmpty
@@ -155,7 +167,7 @@ class ServerCreationViewModel: ObservableObject {
                     // 自定义 Jar 不强依赖版本元数据，延迟到启动时再解析/回退 Java。
                     javaPath = ""
                 } else {
-                    if selectedMirrorSource == .polars {
+                    if selectedMirrorSource == .polars || selectedMirrorSource == .custom {
                         serverJar = try await ServerDownloadService.downloadMirrorJar(
                             downloadURL: selectedMirrorDownloadURL,
                             fileName: selectedMirrorFileName,
@@ -168,11 +180,14 @@ class ServerCreationViewModel: ObservableObject {
                             gameVersion: selectedGameVersion,
                             loaderVersion: selectedLoaderVersion,
                             serverDir: serverDir,
-                            mirror: ServerDownloadService.MirrorDownloadOptions(
-                                source: selectedMirrorSource,
-                                coreName: selectedFastMirrorCoreName
-                            )
+                        mirror: ServerDownloadService.MirrorDownloadOptions(
+                            source: selectedMirrorSource,
+                            coreName: selectedFastMirrorCoreName,
+                            fileName: selectedMirrorFileName,
+                            downloadURL: selectedMirrorDownloadURL,
+                            baseURL: selectedMirrorBaseURL
                         )
+                    )
                         let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
                         javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
                     }
@@ -220,7 +235,8 @@ class ServerCreationViewModel: ObservableObject {
                         source: selectedMirrorSource,
                         coreName: selectedFastMirrorCoreName,
                         fileName: selectedMirrorFileName,
-                        downloadURL: selectedMirrorDownloadURL
+                        downloadURL: selectedMirrorDownloadURL,
+                        baseURL: selectedMirrorBaseURL
                     )
                 )
                 let alreadyPrepared = await SSHNodeService.waitForRemoteServerJar(
@@ -361,7 +377,7 @@ class ServerCreationViewModel: ObservableObject {
         }
 
         if !versions.isEmpty {
-            if selectedMirrorSource == .fastMirror {
+            if selectedMirrorSource == .fastMirror || selectedMirrorSource == .custom {
                 self.versionTime = ""
             } else {
                 let targetVersion = versions.contains(self.selectedGameVersion) ? self.selectedGameVersion : (versions.first ?? "")
@@ -400,6 +416,14 @@ class ServerCreationViewModel: ObservableObject {
             }
             return
         }
+        if newSource == .custom {
+            resetMirrorSelections()
+            Task {
+                await loadCustomMirrorCores()
+                await refreshAvailableVersions(for: selectedServerType)
+            }
+            return
+        }
         if newSource == .polars {
             resetMirrorSelections()
             Task { await loadPolarsCoreTypes() }
@@ -416,6 +440,30 @@ class ServerCreationViewModel: ObservableObject {
         }
     }
 
+    func applyMirrorSelection(
+        sourceId: String,
+        source: ServerMirrorSource,
+        displayName: String,
+        baseURL: String?,
+        customJSON: String?
+    ) {
+        selectedMirrorSourceId = sourceId
+        selectedMirrorDisplayName = displayName
+        if source == .custom {
+            let config = decodeCustomConfig(from: customJSON)
+            selectedCustomConfig = config
+            if let config, !config.baseURL.isEmpty {
+                selectedMirrorBaseURL = config.baseURL
+            } else {
+                selectedMirrorBaseURL = baseURL ?? ""
+            }
+        } else {
+            selectedCustomConfig = nil
+            selectedMirrorBaseURL = baseURL ?? ""
+        }
+        selectedMirrorSource = source
+    }
+
     private func refreshAvailableVersions(for type: ServerType) async {
         let includeSnapshots = GameSettingsManager.shared.includeSnapshotsForGameVersions
         do {
@@ -425,7 +473,22 @@ class ServerCreationViewModel: ObservableObject {
                     await updateAvailableVersions([])
                     return
                 }
-                versions = try await FastMirrorService.fetchGameVersions(coreName: selectedFastMirrorCoreName)
+                versions = try await FastMirrorService.fetchGameVersions(
+                    coreName: selectedFastMirrorCoreName,
+                    baseURL: mirrorBaseURL()
+                )
+            } else if selectedMirrorSource == .custom {
+                guard !selectedFastMirrorCoreName.isEmpty,
+                      let config = selectedCustomConfig,
+                      let baseURL = mirrorBaseURL() else {
+                    await updateAvailableVersions([])
+                    return
+                }
+                versions = try await CustomMirrorService.fetchGameVersions(
+                    config: config,
+                    baseURL: baseURL,
+                    coreName: selectedFastMirrorCoreName
+                )
             } else if selectedMirrorSource == .polars {
                 await updateAvailableVersions([])
                 return
@@ -445,15 +508,28 @@ class ServerCreationViewModel: ObservableObject {
 
     func handleGameVersionChange(_ newVersion: String) {
         Task {
+            if selectedMirrorSource == .custom {
+                selectedMirrorDownloadURL = ""
+                selectedMirrorFileName = ""
+            }
             if requiresLoaderVersion(selectedServerType) {
                 await updateLoaderVersions(for: selectedServerType, gameVersion: newVersion)
             }
         }
     }
 
+    func handleMirrorCoreVersionChange(_ newVersion: String) {
+        selectedLoaderVersion = newVersion
+        guard selectedMirrorSource == .custom else { return }
+        Task { await updateCustomMirrorDetail() }
+    }
+
     private func requiresLoaderVersion(_ type: ServerType) -> Bool {
         if selectedMirrorSource == .fastMirror {
             return type != .custom
+        }
+        if selectedMirrorSource == .custom {
+            return true
         }
         if selectedMirrorSource == .polars {
             return false
@@ -486,6 +562,29 @@ class ServerCreationViewModel: ObservableObject {
                     )
                 }
                 versions = try await FastMirrorService.fetchCoreVersions(
+                    coreName: selectedFastMirrorCoreName,
+                    gameVersion: gameVersion,
+                    baseURL: mirrorBaseURL()
+                )
+            } catch {
+                Logger.shared.error("获取镜像核心版本失败: \(error.localizedDescription)")
+                versions = []
+            }
+        } else if selectedMirrorSource == .custom {
+            do {
+                guard !selectedFastMirrorCoreName.isEmpty,
+                      let config = selectedCustomConfig,
+                      let baseURL = mirrorBaseURL() else {
+                    versions = []
+                    throw GlobalError.resource(
+                        chineseMessage: "未选择核心",
+                        i18nKey: "error.resource.not_found",
+                        level: .notification
+                    )
+                }
+                versions = try await CustomMirrorService.fetchCoreVersions(
+                    config: config,
+                    baseURL: baseURL,
                     coreName: selectedFastMirrorCoreName,
                     gameVersion: gameVersion
                 )
@@ -523,6 +622,13 @@ class ServerCreationViewModel: ObservableObject {
             }
             return
         }
+        if selectedMirrorSource == .custom {
+            if !versions.contains(selectedLoaderVersion) {
+                selectedLoaderVersion = versions.first ?? ""
+            }
+            await updateCustomMirrorDetail()
+            return
+        }
 
         switch type {
         case .fabric:
@@ -546,14 +652,53 @@ class ServerCreationViewModel: ObservableObject {
         }
     }
 
+    private func updateCustomMirrorDetail() async {
+        guard selectedMirrorSource == .custom,
+              let config = selectedCustomConfig,
+              let baseURL = mirrorBaseURL(),
+              !selectedFastMirrorCoreName.isEmpty,
+              !selectedGameVersion.isEmpty,
+              !selectedLoaderVersion.isEmpty else {
+            await MainActor.run {
+                selectedMirrorDownloadURL = ""
+                selectedMirrorFileName = ""
+            }
+            return
+        }
+        do {
+            let detail = try await CustomMirrorService.fetchCoreDetail(
+                config: config,
+                baseURL: baseURL,
+                coreName: selectedFastMirrorCoreName,
+                gameVersion: selectedGameVersion,
+                coreVersion: selectedLoaderVersion
+            )
+            await MainActor.run {
+                selectedMirrorDownloadURL = detail.downloadURL
+                selectedMirrorFileName = detail.filename
+            }
+        } catch {
+            Logger.shared.error("获取镜像下载信息失败: \(error.localizedDescription)")
+            await MainActor.run {
+                selectedMirrorDownloadURL = ""
+                selectedMirrorFileName = ""
+            }
+        }
+    }
+
     func handleFastMirrorCoreChange(_ newCoreName: String) {
         selectedFastMirrorCoreName = newCoreName
-        if let mapped = FastMirrorService.serverType(for: newCoreName) {
+        if selectedMirrorSource == .fastMirror,
+           let mapped = FastMirrorService.serverType(for: newCoreName) {
             selectedServerType = mapped
         }
         selectedGameVersion = ""
         selectedLoaderVersion = ""
         availableLoaderVersions = []
+        if selectedMirrorSource == .custom {
+            selectedMirrorDownloadURL = ""
+            selectedMirrorFileName = ""
+        }
         Task {
             await refreshAvailableVersions(for: selectedServerType)
         }
@@ -561,7 +706,7 @@ class ServerCreationViewModel: ObservableObject {
 
     private func loadFastMirrorCores() async {
         do {
-            let cores = try await FastMirrorService.fetchCores()
+            let cores = try await FastMirrorService.fetchCores(baseURL: mirrorBaseURL())
             let filtered = cores
             await MainActor.run {
                 fastMirrorCores = filtered
@@ -570,6 +715,39 @@ class ServerCreationViewModel: ObservableObject {
                 } else if !selectedFastMirrorCoreName.isEmpty,
                           !filtered.contains(where: { $0.name == selectedFastMirrorCoreName }),
                           let first = filtered.first?.name {
+                    handleFastMirrorCoreChange(first)
+                }
+            }
+        } catch {
+            Logger.shared.error("获取镜像核心失败: \(error.localizedDescription)")
+            await MainActor.run {
+                fastMirrorCores = []
+                selectedFastMirrorCoreName = ""
+            }
+        }
+    }
+
+    private func loadCustomMirrorCores() async {
+        guard let config = selectedCustomConfig,
+              let baseURL = mirrorBaseURL() else {
+            await MainActor.run {
+                fastMirrorCores = []
+                selectedFastMirrorCoreName = ""
+            }
+            return
+        }
+        do {
+            let cores = try await CustomMirrorService.fetchCores(
+                config: config,
+                baseURL: baseURL
+            )
+            await MainActor.run {
+                fastMirrorCores = cores
+                if selectedFastMirrorCoreName.isEmpty, let first = cores.first?.name {
+                    handleFastMirrorCoreChange(first)
+                } else if !selectedFastMirrorCoreName.isEmpty,
+                          !cores.contains(where: { $0.name == selectedFastMirrorCoreName }),
+                          let first = cores.first?.name {
                     handleFastMirrorCoreChange(first)
                 }
             }
@@ -593,11 +771,12 @@ class ServerCreationViewModel: ObservableObject {
     func handlePolarsCoreItemChange(_ item: PolarsMirrorService.CoreItem) {
         selectedPolarsCoreItemName = item.name
         selectedMirrorDownloadURL = item.downloadURL
+        selectedMirrorFileName = item.name
     }
 
     private func loadPolarsCoreTypes() async {
         do {
-            let types = try await PolarsMirrorService.fetchCoreTypes()
+            let types = try await PolarsMirrorService.fetchCoreTypes(baseURL: mirrorBaseURL())
             await MainActor.run {
                 polarsCoreTypes = types
                 if selectedPolarsCoreTypeId == nil, let first = types.first?.id {
@@ -615,7 +794,10 @@ class ServerCreationViewModel: ObservableObject {
 
     private func loadPolarsCoreItems(typeId: Int) async {
         do {
-            let items = try await PolarsMirrorService.fetchCoreItems(coreTypeId: typeId)
+            let items = try await PolarsMirrorService.fetchCoreItems(
+                coreTypeId: typeId,
+                baseURL: mirrorBaseURL()
+            )
             await MainActor.run {
                 polarsCoreItems = items
                 if selectedPolarsCoreItemName.isEmpty, let first = items.first {
@@ -640,15 +822,19 @@ class ServerCreationViewModel: ObservableObject {
         polarsCoreItems = []
         selectedPolarsCoreItemName = ""
         selectedMirrorDownloadURL = ""
+        selectedMirrorFileName = ""
     }
 
-    private var selectedMirrorFileName: String {
-        switch selectedMirrorSource {
-        case .polars:
-            return selectedPolarsCoreItemName
-        default:
-            return ""
-        }
+    private func decodeCustomConfig(from json: String?) -> MirrorCustomAPIConfig? {
+        guard let json, !json.isEmpty,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(MirrorCustomAPIConfig.self, from: data)
+    }
+
+    private func mirrorBaseURL() -> URL? {
+        let trimmed = selectedMirrorBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return URL(string: trimmed)
     }
 
     private func resolvedServerType() -> ServerType {

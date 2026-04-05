@@ -14,17 +14,20 @@ enum ServerDownloadService {
         let coreName: String?
         let fileName: String?
         let downloadURL: String?
+        let baseURL: String?
 
         init(
             source: ServerMirrorSource,
             coreName: String? = nil,
             fileName: String? = nil,
-            downloadURL: String? = nil
+            downloadURL: String? = nil,
+            baseURL: String? = nil
         ) {
             self.source = source
             self.coreName = coreName
             self.fileName = fileName
             self.downloadURL = downloadURL
+            self.baseURL = baseURL
         }
     }
 
@@ -129,10 +132,11 @@ enum ServerDownloadService {
                 serverType: serverType,
                 gameVersion: gameVersion,
                 coreVersion: loaderVersion,
-                coreNameOverride: mirror.coreName
+                coreNameOverride: mirror.coreName,
+                baseURL: mirrorBaseURL(from: mirror.baseURL)
             )
         }
-        if mirror.source == .polars {
+        if mirror.source == .polars || mirror.source == .custom {
             return try resolveMirrorDirect(
                 fileName: mirror.fileName,
                 downloadURL: mirror.downloadURL
@@ -160,7 +164,8 @@ enum ServerDownloadService {
         serverType: ServerType,
         gameVersion: String,
         coreVersion: String,
-        coreNameOverride: String?
+        coreNameOverride: String?,
+        baseURL: URL?
     ) async throws -> DownloadTarget {
         guard serverType != .custom else {
             throw GlobalError.validation(
@@ -183,7 +188,8 @@ enum ServerDownloadService {
         let detail = try await FastMirrorService.fetchCoreDetail(
             coreName: coreName,
             gameVersion: gameVersion,
-            coreVersion: coreVersion
+            coreVersion: coreVersion,
+            baseURL: baseURL
         )
         guard let url = URL(string: detail.downloadURL) else {
             throw GlobalError.validation(
@@ -224,6 +230,12 @@ enum ServerDownloadService {
             fileName: fileName,
             headers: nil
         )
+    }
+
+    private static func mirrorBaseURL(from value: String?) -> URL? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        return URL(string: trimmed)
     }
 
     static func downloadMirrorJar(
