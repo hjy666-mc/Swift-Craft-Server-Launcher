@@ -609,6 +609,7 @@ jobs:
     needs: build
     env:
       GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Download DMG artifacts
@@ -627,10 +628,10 @@ jobs:
         env:
           TITLE: ${{ steps.daily_meta.outputs.title }}
         run: |
-          if gh release view "Daily" >/dev/null 2>&1; then
-            gh release edit "Daily" --title "$TITLE" --prerelease
+          if gh release view "Daily" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "Daily" --repo "$REPOSITORY" --title "$TITLE" --prerelease
           else
-            gh release create "Daily" --title "$TITLE" --prerelease --notes "Daily build"
+            gh release create "Daily" --repo "$REPOSITORY" --title "$TITLE" --prerelease --notes "Daily build"
           fi
 
       - name: Upload DMGs to Daily release
@@ -641,4 +642,4 @@ jobs:
             find release-assets -type f -print
             exit 1
           fi
-          gh release upload "Daily" $DMGS --clobber
+          gh release upload "Daily" --repo "$REPOSITORY" $DMGS --clobber
