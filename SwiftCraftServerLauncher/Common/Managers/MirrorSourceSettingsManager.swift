@@ -112,7 +112,7 @@ final class MirrorSourceSettingsManager: ObservableObject {
                 baseURL: "https://mirror.polars.cc/api/query/minecraft/core",
                 isEnabled: true,
                 isBuiltIn: true
-            )
+            ),
         ]
     }
 }

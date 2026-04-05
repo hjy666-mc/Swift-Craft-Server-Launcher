@@ -217,7 +217,7 @@ enum FastMirrorService {
     }
 
     private static func buildURL(pathComponents: [String], queryItems: [URLQueryItem], baseURL: URL?) -> URL {
-        let resolvedBase = normalizeBaseURL(baseURL ?? FastMirrorService.baseURL)
+        let resolvedBase = normalizeBaseURL(baseURL ?? Self.baseURL)
         let base = pathComponents.reduce(resolvedBase) { partial, component in
             partial.appendingPathComponent(component)
         }

@@ -180,14 +180,14 @@ class ServerCreationViewModel: ObservableObject {
                             gameVersion: selectedGameVersion,
                             loaderVersion: selectedLoaderVersion,
                             serverDir: serverDir,
-                        mirror: ServerDownloadService.MirrorDownloadOptions(
-                            source: selectedMirrorSource,
-                            coreName: selectedFastMirrorCoreName,
-                            fileName: selectedMirrorFileName,
-                            downloadURL: selectedMirrorDownloadURL,
-                            baseURL: selectedMirrorBaseURL
+                            mirror: ServerDownloadService.MirrorDownloadOptions(
+                                source: selectedMirrorSource,
+                                coreName: selectedFastMirrorCoreName,
+                                fileName: selectedMirrorFileName,
+                                downloadURL: selectedMirrorDownloadURL,
+                                baseURL: selectedMirrorBaseURL
+                            )
                         )
-                    )
                         let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
                         javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
                     }

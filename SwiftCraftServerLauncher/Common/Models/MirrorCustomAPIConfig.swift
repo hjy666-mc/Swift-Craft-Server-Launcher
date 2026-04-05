@@ -22,9 +22,9 @@ struct MirrorCustomAPIConfig: Codable, Hashable {
 
     static let currentSchemaVersion = 1
 
-    static var defaultConfig: MirrorCustomAPIConfig {
-        MirrorCustomAPIConfig(
-            schemaVersion: currentSchemaVersion,
+    static var defaultConfig: Self {
+        Self(
+            schemaVersion: Self.currentSchemaVersion,
             baseURL: "https://",
             unwrapData: true,
             coreListPath: "/api/v3",
@@ -48,7 +48,7 @@ struct MirrorCustomAPIConfig: Codable, Hashable {
     static var defaultJSON: String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(defaultConfig),
+        guard let data = try? encoder.encode(Self.defaultConfig),
               let text = String(data: data, encoding: .utf8) else {
             return "{}"
         }

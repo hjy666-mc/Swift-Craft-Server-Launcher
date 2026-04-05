@@ -473,7 +473,7 @@ struct ServerCreationView: View {
                 source: .official,
                 baseURL: nil,
                 customJSON: nil
-            )
+            ),
         ]
         let mirrorItems = mirrorSettings.enabledSources.map { source in
             MirrorSourceOption(

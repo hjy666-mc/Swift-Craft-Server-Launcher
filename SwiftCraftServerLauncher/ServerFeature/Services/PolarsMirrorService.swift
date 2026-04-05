@@ -31,13 +31,13 @@ enum PolarsMirrorService {
     private static let baseURL = URL(string: "https://mirror.polars.cc/api/query/minecraft/core") ?? URL(fileURLWithPath: "/")
 
     static func fetchCoreTypes(baseURL: URL? = nil) async throws -> [CoreType] {
-        let resolvedBaseURL = baseURL ?? PolarsMirrorService.baseURL
+        let resolvedBaseURL = baseURL ?? Self.baseURL
         let data = try await APIClient.get(url: resolvedBaseURL)
         return try JSONDecoder().decode([CoreType].self, from: data)
     }
 
     static func fetchCoreItems(coreTypeId: Int, baseURL: URL? = nil) async throws -> [CoreItem] {
-        let resolvedBaseURL = baseURL ?? PolarsMirrorService.baseURL
+        let resolvedBaseURL = baseURL ?? Self.baseURL
         let url = resolvedBaseURL.appendingPathComponent("\(coreTypeId)")
         let data = try await APIClient.get(url: url)
         return try JSONDecoder().decode([CoreItem].self, from: data)
