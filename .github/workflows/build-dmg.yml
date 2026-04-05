@@ -5,13 +5,16 @@ on:
     branches: [main]
   release:
     types: [published]
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     strategy:
       matrix:
@@ -31,12 +34,19 @@ jobs:
       - name: Extract version info
         id: version
         run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" || "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            DATE_VERSION=$(date +%Y%m%d)
+            VERSION="daily_build(${DATE_VERSION})"
+            MARKETING_VERSION="$VERSION"
+            BUILD_VERSION="$DATE_VERSION"
+          elif [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
             MARKETING_VERSION="$VERSION"
+            BUILD_VERSION="$VERSION"
           else
             VERSION="BETA"
             MARKETING_VERSION="BETA"
+            BUILD_VERSION="BETA"
           fi
 
           # 清理版本号中的无效字符（用于文件名和 artifact 名称）
@@ -45,6 +55,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "safe_version=$SAFE_VERSION" >> $GITHUB_OUTPUT
           echo "marketing_version=$MARKETING_VERSION" >> $GITHUB_OUTPUT
+          echo "build_version=$BUILD_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build app for ${{ matrix.arch }}
         run: |
@@ -66,6 +77,8 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -skipPackagePluginValidation \
             EXCLUDED_ARCHS="$EXCLUDED_ARCHS" \
+            MARKETING_VERSION="${{ steps.version.outputs.marketing_version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build_version }}" \
             archive
 
       - name: Add HelpBook config to generated Info.plist
@@ -589,3 +602,43 @@ jobs:
 
           git commit -m "chore: publish appcast + changelog for ${TAG}"
           git push origin HEAD:gh-pages
+
+  publish-daily-release:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    needs: build
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Download DMG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Resolve daily metadata
+        id: daily_meta
+        run: |
+          DATE_VERSION=$(date +%Y%m%d)
+          echo "date=$DATE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "title=Daily-${DATE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update Daily pre-release
+        env:
+          TITLE: ${{ steps.daily_meta.outputs.title }}
+        run: |
+          if gh release view "Daily" >/dev/null 2>&1; then
+            gh release edit "Daily" --title "$TITLE" --prerelease
+          else
+            gh release create "Daily" --title "$TITLE" --prerelease --notes "Daily build"
+          fi
+
+      - name: Upload DMGs to Daily release
+        run: |
+          DMGS=$(find release-assets -type f -name "*.dmg")
+          if [[ -z "$DMGS" ]]; then
+            echo "❌ 未找到 DMG 产物"
+            find release-assets -type f -print
+            exit 1
+          fi
+          gh release upload "Daily" $DMGS --clobber
