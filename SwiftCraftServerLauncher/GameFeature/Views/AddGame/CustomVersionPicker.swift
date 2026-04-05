@@ -13,9 +13,18 @@ struct CustomVersionPicker: View {
     let onVersionSelected: (String) async -> String  // 新增：版本选择回调，返回时间信息
     @State private var showMenu = false
     @State private var error: GlobalError?
+    @State private var searchText = ""
 
     private var versionItems: [FilterItem] {
         availableVersions.map { FilterItem(id: $0, name: $0) }
+    }
+
+    private var filteredVersionItems: [FilterItem] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return versionItems
+        }
+        return versionItems.filter { matchesFuzzy(item: $0.name, query: trimmed) }
     }
 
     var body: some View {
@@ -78,28 +87,33 @@ struct CustomVersionPicker: View {
     }
 
     private var versionPopoverContent: some View {
-        VersionGroupedView(
-            items: versionItems,
-            selectedItem: Binding<String?>(
-                get: { selected.isEmpty ? nil : selected },
-                set: { newValue in
-                    if let newValue = newValue {
-                        selected = newValue
-                        showMenu = false
-                        // 使用版本时间映射来设置时间信息
-                        Task {
-                            time = await onVersionSelected(newValue)
+        VStack(spacing: 10) {
+            VersionGroupedView(
+                items: filteredVersionItems,
+                selectedItem: Binding<String?>(
+                    get: { selected.isEmpty ? nil : selected },
+                    set: { newValue in
+                        if let newValue = newValue {
+                            selected = newValue
+                            showMenu = false
+                            // 使用版本时间映射来设置时间信息
+                            Task {
+                                time = await onVersionSelected(newValue)
+                            }
                         }
                     }
+                )
+            ) { version in
+                selected = version
+                showMenu = false
+                // 使用版本时间映射来设置时间信息
+                Task {
+                    time = await onVersionSelected(version)
                 }
-            )
-        ) { version in
-            selected = version
-            showMenu = false
-            // 使用版本时间映射来设置时间信息
-            Task {
-                time = await onVersionSelected(version)
             }
+
+            TextField("common.search".localized(), text: $searchText)
+                .textFieldStyle(.roundedBorder)
         }
         .frame(
             minWidth: Constants.versionPopoverMinWidth,
@@ -107,6 +121,7 @@ struct CustomVersionPicker: View {
             minHeight: Constants.versionPopoverMinHeight,
             maxHeight: Constants.versionPopoverMaxHeight
         )
+        .padding(.horizontal, 6)
     }
 
     private func handleEmptyVersionsError() {
@@ -125,5 +140,29 @@ struct CustomVersionPicker: View {
         Logger.shared.error("版本选择错误: \(globalError.chineseMessage)")
         GlobalErrorHandler.shared.handle(globalError)
         self.error = globalError
+    }
+
+    private func matchesFuzzy(item: String, query: String) -> Bool {
+        if item.localizedCaseInsensitiveContains(query) {
+            return true
+        }
+        let itemChars = Array(item.lowercased())
+        let queryChars = Array(query.lowercased())
+        var index = 0
+        for char in queryChars {
+            var found = false
+            while index < itemChars.count {
+                if itemChars[index] == char {
+                    found = true
+                    index += 1
+                    break
+                }
+                index += 1
+            }
+            if !found {
+                return false
+            }
+        }
+        return true
     }
 }

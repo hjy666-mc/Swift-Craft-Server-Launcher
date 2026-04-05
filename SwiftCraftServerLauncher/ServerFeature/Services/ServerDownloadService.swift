@@ -1,4 +1,5 @@
 import Foundation
+import ZIPFoundation
 
 enum ServerDownloadService {
     struct DownloadTarget {
@@ -8,16 +9,40 @@ enum ServerDownloadService {
         let headers: [String: String]?
     }
 
+    struct MirrorDownloadOptions {
+        let source: ServerMirrorSource
+        let coreName: String?
+        let fileName: String?
+        let downloadURL: String?
+        let baseURL: String?
+
+        init(
+            source: ServerMirrorSource,
+            coreName: String? = nil,
+            fileName: String? = nil,
+            downloadURL: String? = nil,
+            baseURL: String? = nil
+        ) {
+            self.source = source
+            self.coreName = coreName
+            self.fileName = fileName
+            self.downloadURL = downloadURL
+            self.baseURL = baseURL
+        }
+    }
+
     static func downloadServerJar(
         serverType: ServerType,
         gameVersion: String,
         loaderVersion: String,
-        serverDir: URL
+        serverDir: URL,
+        mirror: MirrorDownloadOptions
     ) async throws -> String {
         let target = try await resolveDownloadTarget(
             serverType: serverType,
             gameVersion: gameVersion,
-            loaderVersion: loaderVersion
+            loaderVersion: loaderVersion,
+            mirror: mirror
         )
         let destinationURL = serverDir.appendingPathComponent(target.fileName)
         _ = try await DownloadManager.downloadFile(
@@ -32,20 +57,26 @@ enum ServerDownloadService {
     static func resolveDownloadTargetForRemote(
         serverType: ServerType,
         gameVersion: String,
-        loaderVersion: String
+        loaderVersion: String,
+        mirror: MirrorDownloadOptions
     ) async throws -> DownloadTarget {
         try await resolveDownloadTarget(
             serverType: serverType,
             gameVersion: gameVersion,
-            loaderVersion: loaderVersion
+            loaderVersion: loaderVersion,
+            mirror: mirror
         )
     }
 
-    static func resolveDownloadTargetForServer(_ server: ServerInstance) async throws -> DownloadTarget {
+    static func resolveDownloadTargetForServer(
+        _ server: ServerInstance,
+        mirrorSource: ServerMirrorSource = .official
+    ) async throws -> DownloadTarget {
         try await resolveDownloadTarget(
             serverType: server.serverType,
             gameVersion: server.gameVersion,
-            loaderVersion: server.loaderVersion
+            loaderVersion: server.loaderVersion,
+            mirror: MirrorDownloadOptions(source: mirrorSource)
         )
     }
 
@@ -93,8 +124,24 @@ enum ServerDownloadService {
     private static func resolveDownloadTarget(
         serverType: ServerType,
         gameVersion: String,
-        loaderVersion: String
+        loaderVersion: String,
+        mirror: MirrorDownloadOptions
     ) async throws -> DownloadTarget {
+        if mirror.source == .fastMirror {
+            return try await resolveFastMirror(
+                serverType: serverType,
+                gameVersion: gameVersion,
+                coreVersion: loaderVersion,
+                coreNameOverride: mirror.coreName,
+                baseURL: mirrorBaseURL(from: mirror.baseURL)
+            )
+        }
+        if mirror.source == .polars || mirror.source == .custom {
+            return try resolveMirrorDirect(
+                fileName: mirror.fileName,
+                downloadURL: mirror.downloadURL
+            )
+        }
         switch serverType {
         case .vanilla:
             return try await resolveVanilla(gameVersion: gameVersion)
@@ -111,6 +158,145 @@ enum ServerDownloadService {
                 level: .notification
             )
         }
+    }
+
+    private static func resolveFastMirror(
+        serverType: ServerType,
+        gameVersion: String,
+        coreVersion: String,
+        coreNameOverride: String?,
+        baseURL: URL?
+    ) async throws -> DownloadTarget {
+        guard serverType != .custom else {
+            throw GlobalError.validation(
+                chineseMessage: "自定义 Jar 不需要下载",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        guard !coreVersion.isEmpty else {
+            throw GlobalError.validation(
+                chineseMessage: "请选择服务端核心版本",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        let resolvedCoreName = coreNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let coreName = resolvedCoreName?.isEmpty == false
+            ? resolvedCoreName ?? FastMirrorService.coreName(for: serverType)
+            : FastMirrorService.coreName(for: serverType)
+        let detail = try await FastMirrorService.fetchCoreDetail(
+            coreName: coreName,
+            gameVersion: gameVersion,
+            coreVersion: coreVersion,
+            baseURL: baseURL
+        )
+        guard let url = URL(string: detail.downloadURL) else {
+            throw GlobalError.validation(
+                chineseMessage: "无效的下载地址",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        return DownloadTarget(
+            url: url,
+            sha1: detail.sha1,
+            fileName: detail.filename,
+            headers: nil
+        )
+    }
+
+    private static func resolveMirrorDirect(
+        fileName: String?,
+        downloadURL: String?
+    ) throws -> DownloadTarget {
+        guard let fileName, !fileName.isEmpty else {
+            throw GlobalError.validation(
+                chineseMessage: "未选择下载文件",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        guard let urlString = downloadURL, let url = URL(string: urlString) else {
+            throw GlobalError.validation(
+                chineseMessage: "无效的下载地址",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        return DownloadTarget(
+            url: url,
+            sha1: nil,
+            fileName: fileName,
+            headers: nil
+        )
+    }
+
+    private static func mirrorBaseURL(from value: String?) -> URL? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        return URL(string: trimmed)
+    }
+
+    static func downloadMirrorJar(
+        downloadURL: String,
+        fileName: String,
+        serverDir: URL
+    ) async throws -> String {
+        let target = try resolveMirrorDirect(fileName: fileName, downloadURL: downloadURL)
+        let destinationURL = serverDir.appendingPathComponent(target.fileName)
+        _ = try await DownloadManager.downloadFile(
+            urlString: target.url.absoluteString,
+            destinationURL: destinationURL,
+            expectedSha1: nil,
+            headers: nil
+        )
+        if destinationURL.pathExtension.lowercased() == "zip" {
+            try unzipArchive(at: destinationURL, to: serverDir)
+            if let jar = findFirstJar(in: serverDir) {
+                return jar.lastPathComponent
+            }
+        }
+        return target.fileName
+    }
+
+    private static func unzipArchive(at url: URL, to destination: URL) throws {
+        let archive: Archive
+        do {
+            archive = try Archive(url: url, accessMode: .read)
+        } catch {
+            throw GlobalError.validation(
+                chineseMessage: "解压失败: 无法读取压缩包",
+                i18nKey: "error.validation.invalid_download_url",
+                level: .notification
+            )
+        }
+        for entry in archive {
+            let entryPath = entry.path
+            let destinationURL = destination.appendingPathComponent(entryPath)
+            let standardized = destinationURL.standardizedFileURL
+            guard standardized.path.hasPrefix(destination.standardizedFileURL.path) else {
+                continue
+            }
+            let parent = standardized.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+            _ = try archive.extract(entry, to: standardized)
+        }
+    }
+
+    private static func findFirstJar(in directory: URL) -> URL? {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+        var jars: [URL] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension.lowercased() == "jar" {
+            jars.append(fileURL)
+        }
+        return jars.min { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     private static func resolveVanilla(gameVersion: String) async throws -> DownloadTarget {
