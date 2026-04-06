@@ -3,13 +3,13 @@
     <channel>
         <title>SwiftCraftServerLauncher</title>
         <item>
-            <title>0.0.7</title>
-            <pubDate>Thu, 02 Apr 2026 11:46:24 +0000</pubDate>
-            <sparkle:version>7</sparkle:version>
-            <sparkle:shortVersionString>0.0.7</sparkle:shortVersionString>
+            <title>0.1.0</title>
+            <pubDate>Mon, 06 Apr 2026 13:40:32 +0000</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14</sparkle:minimumSystemVersion>
             <sparkle:releaseNotesLink>https://hjy666-mc.github.io/Swift-Craft-Server-Launcher/release-notes/SwiftCraftServerLauncher-x86_64.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/download/0.0.7/SwiftCraftServerLauncher-x86_64.dmg" length="5361608" type="application/octet-stream" sparkle:edSignature="GiOD2AfLNhkDk35TXmJpXO1aoSvk2nUzIXpnggQRrt+Om/AqMKaqNxliS5cdJ6PIpGtWTUmOEpzFwI0zMuQAAg=="/>
+            <enclosure url="https://github.com/hjy666-mc/Swift-Craft-Server-Launcher/releases/download/0.1.0/SwiftCraftServerLauncher-x86_64.dmg" length="5504533" type="application/octet-stream" sparkle:edSignature="BU9xAzEQgyCDpjT6y4Y3OfgUTSsxB0+R3K5XRgoZ1lrmsOxr/7hO1Q0pFJf6XON6TB5jAIX1TGnyzsFPxLHpAw=="/>
         </item>
     </channel>
 </rss>
