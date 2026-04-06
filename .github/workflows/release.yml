@@ -1,3 +1,4 @@
+
 name: Release
 
 on:
@@ -161,8 +162,6 @@ jobs:
             -archivePath "$ARCHIVE_PATH" \
             -skipPackagePluginValidation \
             EXCLUDED_ARCHS="$EXCLUDED_ARCHS" \
-            MARKETING_VERSION="$TAG" \
-            CURRENT_PROJECT_VERSION="$TAG" \
             archive
 
       - name: Add HelpBook config to generated Info.plist
