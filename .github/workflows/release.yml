@@ -1,0 +1,553 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+  pull_request:
+    branches: [main]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. 1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-release-pr:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      REPOSITORY: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tag is on dev
+        run: |
+          git fetch --force --tags
+          if ! git branch -r --contains "${TAG}" | grep -q "origin/dev"; then
+            echo "❌ Tag ${TAG} is not on dev."
+            exit 1
+          fi
+
+      - name: Open PR dev -> main if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git branch -r --contains "${TAG}" | grep -q "origin/main"; then
+            echo "Tag ${TAG} already merged to main."
+            exit 0
+          fi
+
+          EXISTING=$(gh pr list --repo "$REPOSITORY" --head dev --base main --state open --json number -q '.[0].number')
+          if [[ -n "$EXISTING" ]]; then
+            echo "PR already exists: #${EXISTING}"
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$REPOSITORY" \
+            --head dev \
+            --base main \
+            --title "Release ${TAG}" \
+            --body "Auto PR for release tag ${TAG}." \
+            --label "release"
+
+  create-release:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || (github.event_name == 'push')
+    runs-on: ubuntu-latest
+    env:
+      REPOSITORY: ${{ github.repository }}
+    outputs:
+      tag: ${{ steps.tag_resolve.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag_resolve
+        run: |
+          git fetch --force --tags
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            TAG=$(git tag --points-at "$HEAD_SHA" | head -n 1)
+          fi
+
+          if [[ -z "$TAG" ]]; then
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            if ! git branch -r --contains "$TAG" | grep -q "origin/main"; then
+              echo "Tag ${TAG} not merged to main yet."
+              echo "tag=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release (generate notes)
+        if: steps.tag_resolve.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag_resolve.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG"
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --repo "$REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes
+
+  build-release-dmg:
+    if: needs.create-release.outputs.tag != ''
+    runs-on: macos-15
+    needs: create-release
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    env:
+      TAG: ${{ needs.create-release.outputs.tag }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.create-release.outputs.tag }}
+
+      - name: Setup Xcode
+        uses: JohnTitor/setup-xcode@v0.1.1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build app for ${{ matrix.arch }}
+        run: |
+          BUILD_DIR="build_${{ matrix.arch }}"
+          ARCHIVE_PATH="$BUILD_DIR/SwiftCraftServerLauncher.xcarchive"
+
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            EXCLUDED_ARCHS="x86_64"
+          else
+            EXCLUDED_ARCHS="arm64"
+          fi
+
+          xcodebuild -project SwiftCraftServerLauncher.xcodeproj \
+            -scheme SwiftCraftLauncher \
+            -configuration Release \
+            -destination "platform=macOS,arch=${{ matrix.arch }}" \
+            -derivedDataPath "$BUILD_DIR" \
+            -archivePath "$ARCHIVE_PATH" \
+            -skipPackagePluginValidation \
+            EXCLUDED_ARCHS="$EXCLUDED_ARCHS" \
+            MARKETING_VERSION="$TAG" \
+            CURRENT_PROJECT_VERSION="$TAG" \
+            archive
+
+      - name: Add HelpBook config to generated Info.plist
+        run: |
+          ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
+          INFO_PLIST_PATH="$APP_PATH/Contents/Info.plist"
+
+          /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookFolder string SwiftCraftServerLauncher.help" "$INFO_PLIST_PATH" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookFolder SwiftCraftServerLauncher.help" "$INFO_PLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleHelpBookName string com.su.code.SwiftCraftServerLauncher.help" "$INFO_PLIST_PATH" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleHelpBookName com.su.code.SwiftCraftServerLauncher.help" "$INFO_PLIST_PATH"
+
+      - name: Add Sparkle public key to generated Info.plist
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+        run: |
+          ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
+          INFO_PLIST_PATH="$APP_PATH/Contents/Info.plist"
+
+          /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $SPARKLE_PUBLIC_KEY" "$INFO_PLIST_PATH"
+
+      - name: Process app with archify
+        run: |
+          ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
+          PROCESSED_DIR="processed_app_${{ matrix.arch }}"
+
+          mkdir -p "$PROCESSED_DIR"
+
+          python3 .github/scripts/archify.py \
+            -app "$APP_PATH" \
+            -o "$PROCESSED_DIR" \
+            -arch "${{ matrix.arch }}" \
+            --codesign \
+            -l
+
+          PROCESSED_APP="$PROCESSED_DIR/SwiftCraftServerLauncher.app"
+          if [[ -d "$PROCESSED_APP" ]]; then
+            rm -rf "$APP_PATH"
+            cp -R "$PROCESSED_APP" "$APP_PATH"
+          fi
+
+      - name: Install create-dmg
+        run: |
+          brew install create-dmg
+          create-dmg --version
+
+      - name: Prepare DMG assets
+        run: |
+          mkdir -p dmg_background
+          cp "SwiftCraftServerLauncher/Assets.xcassets/AppIcon.appiconset/mac512pt2x.png" "dmg_background/volume_icon.png"
+
+          if [[ -f "dmg_background@2x.png" ]]; then
+            cp "dmg_background@2x.png" "dmg_background/background@2x.png"
+          elif [[ -f ".github/assets/dmg/dmg_background@2x.png" ]]; then
+            cp ".github/assets/dmg/dmg_background@2x.png" "dmg_background/background@2x.png"
+          else
+            cp "SwiftCraftServerLauncher/Assets.xcassets/AppIcon.appiconset/mac512pt2x.png" "dmg_background/background@2x.png"
+          fi
+
+      - name: Create DMG
+        run: |
+          ARCHIVE_PATH="build_${{ matrix.arch }}/SwiftCraftServerLauncher.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/SwiftCraftServerLauncher.app"
+          DMG_DIR="dmg_temp_${{ matrix.arch }}"
+          mkdir -p "$DMG_DIR"
+          cp -R "$APP_PATH" "$DMG_DIR/"
+
+          DMG_NAME="SwiftCraftServerLauncher-${{ matrix.arch }}.dmg"
+
+          create-dmg \
+            --volname "SwiftCraftServerLauncher" \
+            --volicon "dmg_background/volume_icon.png" \
+            --background "dmg_background/background@2x.png" \
+            --window-pos 200 120 \
+            --window-size 600 430 \
+            --icon-size 64 \
+            --icon "SwiftCraftServerLauncher.app" 150 180 \
+            --app-drop-link 450 180 \
+            --hide-extension "SwiftCraftServerLauncher.app" \
+            --text-size 12 \
+            --no-internet-enable \
+            "$DMG_NAME" \
+            "$DMG_DIR"
+
+          gh release upload "$TAG" --repo "$REPOSITORY" "$DMG_NAME" --clobber
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -rf build_${{ matrix.arch }}
+          rm -rf dmg_temp_${{ matrix.arch }}
+          rm -rf dmg_background
+          rm -f SwiftCraftServerLauncher-${{ matrix.arch }}.dmg
+          rm -rf processed_app_${{ matrix.arch }}
+
+  prepare-sparkle-metadata:
+    if: needs.create-release.outputs.tag != ''
+    runs-on: macos-15
+    needs: [create-release, build-release-dmg]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      TAG: ${{ needs.create-release.outputs.tag }}
+      REPOSITORY: ${{ github.repository }}
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
+      REPO_NAME: ${{ github.event.repository.name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --force --tags
+
+      - name: Download DMGs from release assets
+        run: |
+          mkdir -p release-assets
+          gh release download "$TAG" \
+            --repo "$REPOSITORY" \
+            --pattern "*.dmg" \
+            --dir release-assets
+          ls -lah release-assets
+
+      - name: Resolve architecture DMGs
+        id: dmgs
+        run: |
+          ARM_DMG=$(find release-assets -maxdepth 1 -type f -name "*.dmg" | grep -E 'arm64' | head -n 1 || true)
+          X86_DMG=$(find release-assets -maxdepth 1 -type f -name "*.dmg" | grep -E 'x86_64|x64|intel' | head -n 1 || true)
+
+          if [[ -z "$ARM_DMG" || -z "$X86_DMG" ]]; then
+            echo "❌ 发布资产里必须包含 arm64 和 x86_64 两个 DMG"
+            find release-assets -maxdepth 1 -type f -name "*.dmg" -print
+            exit 1
+          fi
+
+          echo "arm_dmg=$ARM_DMG" >> "$GITHUB_OUTPUT"
+          echo "x86_dmg=$X86_DMG" >> "$GITHUB_OUTPUT"
+
+      - name: Create Sparkle private key file
+        run: |
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > ed25519_priv.pem
+          chmod 600 ed25519_priv.pem
+          if [[ $(wc -c < ed25519_priv.pem) -lt 40 ]]; then
+            echo "❌ ed25519_priv.pem looks too short (expected private key)."
+            exit 1
+          fi
+
+      - name: Install Sparkle generate_appcast tool
+        id: sparkle_tool
+        run: |
+          SPARKLE_VERSION="2.9.0"
+          WORK_DIR="$(mktemp -d)"
+          ARCHIVE_PATH="${WORK_DIR}/Sparkle.tar.xz"
+          curl -fL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o "$ARCHIVE_PATH"
+          tar -xf "$ARCHIVE_PATH" -C "$WORK_DIR"
+
+          TOOL_PATH="$(find "$WORK_DIR" -type f -path '*/bin/generate_appcast' | head -n 1)"
+          if [[ ! -x "$TOOL_PATH" ]]; then
+            echo "❌ generate_appcast not found after extraction."
+            find "$WORK_DIR" -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          echo "tool_path=$TOOL_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          DOWNLOAD_URL_PREFIX="https://github.com/${REPOSITORY}/releases/download/${TAG}/"
+          RELEASE_NOTES_URL_PREFIX="https://${REPOSITORY_OWNER}.github.io/${REPO_NAME}/release-notes/${TAG}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "download_url_prefix=$DOWNLOAD_URL_PREFIX" >> "$GITHUB_OUTPUT"
+          echo "release_notes_url_prefix=$RELEASE_NOTES_URL_PREFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve published time
+        id: published
+        run: |
+          PUBLISHED_AT=$(gh release view "$TAG" --repo "$REPOSITORY" --json publishedAt -q .publishedAt)
+          echo "published_at=$PUBLISHED_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Validate DMG Info.plist (version + Sparkle key)
+        env:
+          EXPECTED_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+          ARM_DMG: ${{ steps.dmgs.outputs.arm_dmg }}
+          X86_DMG: ${{ steps.dmgs.outputs.x86_dmg }}
+        run: |
+          if [[ -z "$EXPECTED_PUBLIC_KEY" ]]; then
+            echo "❌ Missing repo variable: SPARKLE_PUBLIC_KEY"
+            exit 1
+          fi
+
+          validate_dmg() {
+            local dmg_path="$1"
+            local mount_dir
+            mount_dir="$(mktemp -d)"
+            hdiutil attach -nobrowse -quiet "$dmg_path" -mountpoint "$mount_dir"
+            local app_path
+            app_path="$(find "$mount_dir" -maxdepth 2 -type d -name "*.app" | head -n 1)"
+            if [[ -z "$app_path" ]]; then
+              hdiutil detach -quiet "$mount_dir" || true
+              echo "❌ 未在 DMG 中找到 .app: $dmg_path"
+              exit 1
+            fi
+
+            local plist_path="$app_path/Contents/Info.plist"
+            local short_version
+            short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist_path" 2>/dev/null || true)"
+
+            if [[ "$short_version" != "$TAG" ]]; then
+              hdiutil detach -quiet "$mount_dir" || true
+              echo "❌ CFBundleShortVersionString 与 TAG 不一致: $short_version != $TAG"
+              exit 1
+            fi
+
+            hdiutil detach -quiet "$mount_dir" || true
+          }
+
+          validate_dmg "$ARM_DMG"
+          validate_dmg "$X86_DMG"
+
+      - name: Generate changelog from feat/fix commits
+        env:
+          PUBLISHED_AT: ${{ steps.published.outputs.published_at }}
+        run: |
+          mkdir -p output/changelog
+
+          PREV_TAG=$(git tag --sort=-creatordate | grep -Fxv "$TAG" | head -n 1 || true)
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="${PREV_TAG}..${TAG}"
+            RANGE_TEXT="${PREV_TAG} -> ${TAG}"
+          else
+            RANGE="$TAG"
+            RANGE_TEXT="初始发布 -> ${TAG}"
+          fi
+
+          git log --pretty=format:'%s (%h)' "$RANGE" > /tmp/all_commits.txt || true
+          grep -E '^(feat|fix)(\([^)]+\))?!?: ' /tmp/all_commits.txt > /tmp/feat_fix_commits.txt || true
+
+          {
+            echo "# ${TAG}"
+            echo
+            echo "- 发布日期: ${PUBLISHED_AT}"
+            echo "- 提交范围: ${RANGE_TEXT}"
+            echo
+            echo "## 更新日志（feat / fix）"
+            if [[ -s /tmp/feat_fix_commits.txt ]]; then
+              sed 's/^/- /' /tmp/feat_fix_commits.txt
+            else
+              echo "- 本次没有匹配到 feat/fix 提交"
+            fi
+          } > "output/changelog/${TAG}.md"
+
+          cp "output/changelog/${TAG}.md" output/changelog/latest.md
+
+      - name: Generate architecture appcasts
+        env:
+          DOWNLOAD_URL_PREFIX: ${{ steps.release_meta.outputs.download_url_prefix }}
+          RELEASE_NOTES_URL_PREFIX: ${{ steps.release_meta.outputs.release_notes_url_prefix }}
+          GENERATE_APPCAST_BIN: ${{ steps.sparkle_tool.outputs.tool_path }}
+          ARM_DMG: ${{ steps.dmgs.outputs.arm_dmg }}
+          X86_DMG: ${{ steps.dmgs.outputs.x86_dmg }}
+        run: |
+          mkdir -p output/archives/arm64 output/archives/x86_64 output/release-notes/"$TAG"
+
+          cp "$ARM_DMG" output/archives/arm64/
+          cp "$X86_DMG" output/archives/x86_64/
+
+          ARM_DMG_NAME=$(basename "$ARM_DMG")
+          X86_DMG_NAME=$(basename "$X86_DMG")
+
+          cp "output/changelog/${TAG}.md" "output/archives/arm64/${ARM_DMG_NAME%.dmg}.md"
+          cp "output/changelog/${TAG}.md" "output/archives/x86_64/${X86_DMG_NAME%.dmg}.md"
+
+          "$GENERATE_APPCAST_BIN" \
+            --ed-key-file ed25519_priv.pem \
+            --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
+            --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
+            output/archives/arm64
+
+          "$GENERATE_APPCAST_BIN" \
+            --ed-key-file ed25519_priv.pem \
+            --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
+            --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX" \
+            output/archives/x86_64
+
+          mv output/archives/arm64/appcast.xml output/appcast-arm64.xml
+          mv output/archives/x86_64/appcast.xml output/appcast-x86_64.xml
+
+          cp output/archives/arm64/*.md output/release-notes/"$TAG"/
+          cp output/archives/x86_64/*.md output/release-notes/"$TAG"/
+
+          shasum -a 256 "$ARM_DMG" "$X86_DMG" > output/SHA256SUMS.txt
+
+      - name: Upload review artifact (before publish)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkle-metadata-${{ needs.create-release.outputs.tag }}
+          path: |
+            output/appcast-arm64.xml
+            output/appcast-x86_64.xml
+            output/SHA256SUMS.txt
+            output/changelog
+            output/release-notes
+          retention-days: 30
+
+  publish-gh-pages:
+    if: needs.create-release.outputs.tag != ''
+    runs-on: macos-15
+    needs: prepare-sparkle-metadata
+    environment:
+      name: sparkle-pages
+      url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+    steps:
+      - name: Download review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sparkle-metadata-${{ needs.create-release.outputs.tag }}
+          path: output
+
+      - name: Publish appcast and changelog to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [[ -f output/appcast-arm64.xml ]]; then
+            SOURCE_DIR="output"
+          elif [[ -f output/output/appcast-arm64.xml ]]; then
+            SOURCE_DIR="output/output"
+          else
+            echo "❌ Unable to locate downloaded artifact files."
+            find output -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads "$REPO_URL" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$REPO_URL" gh-pages
+          else
+            git clone --depth 1 "$REPO_URL" gh-pages
+            cd gh-pages
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+            cd ..
+          fi
+
+          mkdir -p "gh-pages/release-notes/${TAG}" gh-pages/changelog
+
+          cp "$SOURCE_DIR/appcast-arm64.xml" gh-pages/appcast-arm64.xml
+          cp "$SOURCE_DIR/appcast-x86_64.xml" gh-pages/appcast-x86_64.xml
+          cp "$SOURCE_DIR/SHA256SUMS.txt" "gh-pages/changelog/${TAG}-SHA256SUMS.txt"
+          cp "$SOURCE_DIR/changelog/${TAG}.md" "gh-pages/changelog/${TAG}.md"
+          cp "$SOURCE_DIR/changelog/latest.md" gh-pages/changelog/latest.md
+          cp "$SOURCE_DIR/release-notes/${TAG}/"*.md "gh-pages/release-notes/${TAG}/"
+
+          {
+            echo "<!doctype html>"
+            echo "<html><head><meta charset=\"utf-8\"><title>SwiftCraftServerLauncher Updates</title></head><body>"
+            echo "<h1>SwiftCraftServerLauncher Updates</h1>"
+            echo "<ul>"
+            echo "<li><a href=\"./appcast-arm64.xml\">appcast-arm64.xml</a></li>"
+            echo "<li><a href=\"./appcast-x86_64.xml\">appcast-x86_64.xml</a></li>"
+            echo "<li><a href=\"./changelog/latest.md\">latest changelog</a></li>"
+            echo "</ul>"
+            echo "</body></html>"
+          } > gh-pages/index.html
+
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+
+          git commit -m "chore: publish appcast + changelog for ${TAG}"
+          git push origin HEAD:gh-pages
