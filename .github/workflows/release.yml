@@ -25,7 +25,6 @@ jobs:
     env:
       REPOSITORY: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
-      RELEASE_PR_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -42,15 +41,10 @@ jobs:
 
       - name: Open PR dev -> main if needed
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git branch -r --contains "${TAG}" | grep -q "origin/main"; then
             echo "Tag ${TAG} already merged to main."
-            exit 0
-          fi
-
-          if [[ -z "$RELEASE_PR_TOKEN" ]]; then
-            echo "Skipping PR creation: RELEASE_PR_TOKEN not set."
             exit 0
           fi
 
