@@ -265,6 +265,8 @@ jobs:
     if: needs.create-release.outputs.tag != ''
     runs-on: macos-15
     needs: [create-release, build-release-dmg]
+    outputs:
+      tag: ${{ steps.release_meta.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -465,7 +467,7 @@ jobs:
       - name: Upload review artifact (before publish)
         uses: actions/upload-artifact@v4
         with:
-          name: sparkle-metadata-${{ needs.create-release.outputs.tag }}
+          name: sparkle-metadata-${{ steps.release_meta.outputs.tag }}
           path: |
             output/appcast-arm64.xml
             output/appcast-x86_64.xml
