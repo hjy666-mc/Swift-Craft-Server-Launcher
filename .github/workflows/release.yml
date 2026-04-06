@@ -129,6 +129,7 @@ jobs:
     env:
       TAG: ${{ needs.create-release.outputs.tag }}
       REPOSITORY: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout
