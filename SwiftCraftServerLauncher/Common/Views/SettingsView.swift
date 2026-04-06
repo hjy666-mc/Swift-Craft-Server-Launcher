@@ -6,7 +6,8 @@ enum SettingsTab: Int {
     case general = 0
     case generalBackup = 1
     case appearance = 2
-    case ai = 3
+    case mirrorSources = 3
+    case ai = 4
 }
 
 /// 通用设置视图
@@ -35,6 +36,12 @@ public struct SettingsView: View {
                     Label("settings.appearance.tab".localized(), systemImage: "paintpalette")
                 }
                 .tag(SettingsTab.appearance)
+
+            MirrorSourceSettingsView()
+                .tabItem {
+                    Label("settings.mirror.tab".localized(), systemImage: "link")
+                }
+                .tag(SettingsTab.mirrorSources)
 
             AISettingsView()
                 .tabItem {
