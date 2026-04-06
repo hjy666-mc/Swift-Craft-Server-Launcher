@@ -59,8 +59,7 @@ jobs:
             --head dev \
             --base main \
             --title "Release ${TAG}" \
-            --body "Auto PR for release tag ${TAG}." \
-            --label "release"
+            --body "Auto PR for release tag ${TAG}."
 
   create-release:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || (github.event_name == 'push')
