@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UniformTypeIdentifiers
 
 @MainActor
@@ -42,6 +43,7 @@ class ServerCreationViewModel: ObservableObject {
     private var serverRepository: ServerRepository?
     private var didInit = false
     private var isSubmitting = false
+    private var cancellables = Set<AnyCancellable>()
     private let configuration: GameFormConfiguration
     private let selectedNode: ServerNode
     private var selectedCustomConfig: MirrorCustomAPIConfig?
@@ -51,7 +53,28 @@ class ServerCreationViewModel: ObservableObject {
         self.selectedNode = selectedNode
         self.isRemoteNode = !selectedNode.isLocal
         self.serverNameValidator = ServerNameValidator(serverSetupService: serverSetupService)
+        setupObservers()
         updateParentState()
+    }
+
+    private func setupObservers() {
+        serverNameValidator.objectWillChange
+            .sink { [weak self] in
+                DispatchQueue.main.async {
+                    self?.updateParentState()
+                    self?.objectWillChange.send()
+                }
+            }
+            .store(in: &cancellables)
+
+        serverSetupService.objectWillChange
+            .sink { [weak self] in
+                DispatchQueue.main.async {
+                    self?.updateParentState()
+                    self?.objectWillChange.send()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func setup(serverRepository: ServerRepository) {
@@ -385,6 +408,7 @@ class ServerCreationViewModel: ObservableObject {
                 self.versionTime = timeString
             }
         }
+        updateParentState()
     }
 
     func handleServerTypeChange(_ newType: ServerType) {
@@ -516,12 +540,14 @@ class ServerCreationViewModel: ObservableObject {
                 await updateLoaderVersions(for: selectedServerType, gameVersion: newVersion)
             }
         }
+        updateParentState()
     }
 
     func handleMirrorCoreVersionChange(_ newVersion: String) {
         selectedLoaderVersion = newVersion
         guard selectedMirrorSource == .custom else { return }
         Task { await updateCustomMirrorDetail() }
+        updateParentState()
     }
 
     private func requiresLoaderVersion(_ type: ServerType) -> Bool {
@@ -546,6 +572,7 @@ class ServerCreationViewModel: ObservableObject {
         guard requiresLoaderVersion(type), !gameVersion.isEmpty else {
             availableLoaderVersions = []
             selectedLoaderVersion = ""
+            updateParentState()
             return
         }
 
@@ -650,6 +677,7 @@ class ServerCreationViewModel: ObservableObject {
                 selectedLoaderVersion = versions.first ?? ""
             }
         }
+        updateParentState()
     }
 
     private func updateCustomMirrorDetail() async {
@@ -677,12 +705,14 @@ class ServerCreationViewModel: ObservableObject {
                 selectedMirrorDownloadURL = detail.downloadURL
                 selectedMirrorFileName = detail.filename
             }
+            updateParentState()
         } catch {
             Logger.shared.error("获取镜像下载信息失败: \(error.localizedDescription)")
             await MainActor.run {
                 selectedMirrorDownloadURL = ""
                 selectedMirrorFileName = ""
             }
+            updateParentState()
         }
     }
 
@@ -699,6 +729,7 @@ class ServerCreationViewModel: ObservableObject {
             selectedMirrorDownloadURL = ""
             selectedMirrorFileName = ""
         }
+        updateParentState()
         Task {
             await refreshAvailableVersions(for: selectedServerType)
         }
@@ -765,6 +796,7 @@ class ServerCreationViewModel: ObservableObject {
         selectedPolarsCoreItemName = ""
         selectedMirrorDownloadURL = ""
         polarsCoreItems = []
+        updateParentState()
         Task { await loadPolarsCoreItems(typeId: typeId) }
     }
 
@@ -772,6 +804,7 @@ class ServerCreationViewModel: ObservableObject {
         selectedPolarsCoreItemName = item.name
         selectedMirrorDownloadURL = item.downloadURL
         selectedMirrorFileName = item.name
+        updateParentState()
     }
 
     private func loadPolarsCoreTypes() async {

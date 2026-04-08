@@ -46,6 +46,22 @@ struct ServerCreationView: View {
     }
 
     var body: some View {
+        formContentWithHandlers
+            .fileImporter(
+                isPresented: $showJarPicker,
+                allowedContentTypes: [UTType(filenameExtension: "jar") ?? .data],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    viewModel.customJarURL = urls.first
+                case .failure:
+                    viewModel.customJarURL = nil
+                }
+            }
+    }
+
+    private var formContentWithHandlers: some View {
         formContentView
             .onAppear {
                 viewModel.setup(serverRepository: serverRepository)
@@ -61,6 +77,21 @@ struct ServerCreationView: View {
                     viewModel.handleMirrorSourceChange(newValue)
                     viewModel.updateParentState()
                 }
+            }
+            .onChange(of: viewModel.selectedFastMirrorCoreName) { _, _ in
+                viewModel.updateParentState()
+            }
+            .onChange(of: viewModel.selectedPolarsCoreTypeId) { _, _ in
+                viewModel.updateParentState()
+            }
+            .onChange(of: viewModel.selectedPolarsCoreItemName) { _, _ in
+                viewModel.updateParentState()
+            }
+            .onChange(of: viewModel.selectedMirrorDownloadURL) { _, _ in
+                viewModel.updateParentState()
+            }
+            .onChange(of: viewModel.selectedMirrorFileName) { _, _ in
+                viewModel.updateParentState()
             }
             .onChange(of: viewModel.selectedGameVersion) { oldValue, newValue in
                 if oldValue != newValue {
@@ -119,18 +150,6 @@ struct ServerCreationView: View {
                 if newValue {
                     viewModel.handleCancel()
                     triggerCancel.wrappedValue = false
-                }
-            }
-            .fileImporter(
-                isPresented: $showJarPicker,
-                allowedContentTypes: [UTType(filenameExtension: "jar") ?? .data],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    viewModel.customJarURL = urls.first
-                case .failure:
-                    viewModel.customJarURL = nil
                 }
             }
     }
@@ -211,6 +230,9 @@ struct ServerCreationView: View {
                         get: { viewModel.serverNameValidator.isServerNameDuplicate },
                         set: { viewModel.serverNameValidator.isServerNameDuplicate = $0 }
                     ),
+                    onNameChange: {
+                        viewModel.updateParentState()
+                    },
                     isDisabled: viewModel.serverSetupService.downloadState.isDownloading,
                     serverSetupService: viewModel.serverSetupService
                 )

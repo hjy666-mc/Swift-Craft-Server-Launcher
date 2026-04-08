@@ -3,6 +3,7 @@ import SwiftUI
 struct ServerNameInputView: View {
     @Binding var serverName: String
     @Binding var isServerNameDuplicate: Bool
+    let onNameChange: () -> Void
     @FocusState private var isServerNameFocused: Bool
     @State private var showErrorPopover: Bool = false
     let isDisabled: Bool
@@ -30,6 +31,7 @@ struct ServerNameInputView: View {
                 }
             }
             .onChange(of: serverName) { _, newName in
+                onNameChange()
                 Task {
                     let isDuplicate = await serverSetupService.checkServerNameDuplicate(newName)
                     await MainActor.run {
@@ -39,6 +41,9 @@ struct ServerNameInputView: View {
                         showErrorPopover = isDuplicate
                     }
                 }
+            }
+            .onSubmit {
+                onNameChange()
             }
         }
     }
