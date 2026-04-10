@@ -332,7 +332,7 @@ enum ServerDownloadService {
         )
     }
 
-    static func resolveJavaComponent(gameVersion: String) async throws -> String {
+    static func resolveJavaVersion(gameVersion: String) async throws -> JavaVersion {
         guard let manifestURL = URL(string: "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json") else {
             throw GlobalError.validation(
                 chineseMessage: "无效的下载地址",
@@ -349,7 +349,7 @@ enum ServerDownloadService {
             )
         }
         let versionManifest: MinecraftVersionManifest = try await fetchJSON(url: versionInfo.url, headers: nil)
-        return versionManifest.javaVersion.component
+        return versionManifest.javaVersion
     }
 
     private static func resolvePaper(gameVersion: String) async throws -> DownloadTarget {

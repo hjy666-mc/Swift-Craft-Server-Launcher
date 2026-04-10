@@ -211,8 +211,11 @@ class ServerCreationViewModel: ObservableObject {
                                 baseURL: selectedMirrorBaseURL
                             )
                         )
-                        let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
-                        javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
+                        let javaVersion = try await ServerDownloadService.resolveJavaVersion(gameVersion: selectedGameVersion)
+                        javaPath = await JavaManager.shared.ensureJavaExists(
+                            version: javaVersion.component,
+                            minimumMajorVersion: javaVersion.majorVersion
+                        )
                     }
                 }
                 if hasAcceptedEula {
