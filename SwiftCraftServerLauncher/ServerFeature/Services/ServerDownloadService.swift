@@ -81,7 +81,7 @@ enum ServerDownloadService {
     }
 
     static func verifyLocalJarIntegrity(server: ServerInstance) async -> Bool {
-        let jarURL = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(server.serverJar)
+        let jarURL = AppPaths.serverDirectory(serverName: server.directoryName).appendingPathComponent(server.serverJar)
         guard FileManager.default.fileExists(atPath: jarURL.path) else { return false }
         let java = server.javaPath.isEmpty ? "java" : server.javaPath
         return await withCheckedContinuation { continuation in

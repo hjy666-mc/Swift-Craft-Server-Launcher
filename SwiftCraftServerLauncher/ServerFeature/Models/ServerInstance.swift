@@ -30,6 +30,9 @@ enum ServerType: String, Codable, CaseIterable, Identifiable {
 struct ServerInstance: Codable, Identifiable, Hashable {
     let id: String
     let name: String
+    /// Filesystem directory name for this server (local node only).
+    /// Defaults to `name` for legacy servers; Forge may require an ASCII-safe name.
+    var directoryName: String
     let iconName: String
     let iconImageFileName: String?
     let serverType: ServerType
@@ -50,6 +53,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     init(
         id: UUID = UUID(),
         name: String,
+        directoryName: String? = nil,
         iconName: String = "server.rack",
         iconImageFileName: String? = nil,
         serverType: ServerType,
@@ -69,6 +73,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     ) {
         self.id = id.uuidString
         self.name = name
+        self.directoryName = directoryName ?? name
         self.iconName = iconName
         self.iconImageFileName = iconImageFileName
         self.serverType = serverType
@@ -88,7 +93,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, iconName, iconImageFileName, serverType, gameVersion, loaderVersion, serverJar
+        case id, name, directoryName, iconName, iconImageFileName, serverType, gameVersion, loaderVersion, serverJar
         case launchCommand, lastPlayed, javaPath, jvmArguments, xms, xmx, nodeId, consoleMode, rconPort, rconPassword
     }
 
@@ -96,6 +101,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
+        directoryName = try container.decodeIfPresent(String.self, forKey: .directoryName) ?? name
         iconName = try container.decodeIfPresent(String.self, forKey: .iconName) ?? "server.rack"
         iconImageFileName = try container.decodeIfPresent(String.self, forKey: .iconImageFileName)
         serverType = try container.decode(ServerType.self, forKey: .serverType)
@@ -120,7 +126,7 @@ struct ServerInstance: Codable, Identifiable, Hashable {
 
     var iconFileURL: URL? {
         let baseDirectory: URL = nodeId == ServerNode.local.id
-            ? AppPaths.serverDirectory(serverName: name)
+            ? AppPaths.serverDirectory(serverName: directoryName)
             : AppPaths.remoteNodeServersDirectory(nodeId: nodeId).appendingPathComponent(name, isDirectory: true)
         if let iconImageFileName, !iconImageFileName.isEmpty {
             let specificPath = baseDirectory.appendingPathComponent(iconImageFileName)

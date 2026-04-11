@@ -129,7 +129,7 @@ struct ServerWorldsManagerView: View {
     }
 
     private func worldDir() -> URL {
-        AppPaths.serverDirectory(serverName: server.name)
+        AppPaths.serverDirectory(serverName: server.directoryName)
     }
 
     private func loadFolders() {

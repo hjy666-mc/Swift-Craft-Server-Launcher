@@ -155,7 +155,7 @@ struct ServerLogManagerView: View {
             loadError = nil
             return
         }
-        let baseDir = AppPaths.serverDirectory(serverName: server.name)
+        let baseDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let logDir = baseDir.appendingPathComponent("logs", isDirectory: true)
         let crashDir = baseDir.appendingPathComponent("crash-reports", isDirectory: true)
         let logFiles = loadFiles(in: logDir).filter { url in

@@ -201,7 +201,7 @@ struct ServerPlayersView: View {
             loadRemoteLists()
             return
         }
-        let dir = AppPaths.serverDirectory(serverName: server.name)
+        let dir = AppPaths.serverDirectory(serverName: server.directoryName)
         do {
             whitelist = try ServerPlayerListService.readList(serverDir: dir, fileName: "whitelist.json")
             ops = try ServerPlayerListService.readList(serverDir: dir, fileName: "ops.json")
@@ -218,7 +218,7 @@ struct ServerPlayersView: View {
             return
         }
         if serverStatusManager.isServerRunning(serverId: server.id) { return }
-        let dir = AppPaths.serverDirectory(serverName: server.name)
+        let dir = AppPaths.serverDirectory(serverName: server.directoryName)
         do {
             try ServerPlayerListService.writeList(serverDir: dir, fileName: "whitelist.json", entries: whitelist)
             try ServerPlayerListService.writeList(serverDir: dir, fileName: "ops.json", entries: ops)

@@ -333,7 +333,7 @@ enum SSHNodeService {
         else \
           rm -f .scsl.pid .scsl.stdin; \
           mkfifo .scsl.stdin && \
-          nohup /bin/sh -lc 'tail -f .scsl.stdin | \(escapeSingleQuotes(launchCommand))' >> scsl-server.log 2>&1 & \
+          nohup /bin/sh -lc 'tail -f .scsl.stdin | /bin/sh -lc \"\(escapeSingleQuotes(launchCommand))\"' >> scsl-server.log 2>&1 & \
           echo $! > .scsl.pid; \
           sleep 1; \
           if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; fi; \
@@ -1284,7 +1284,8 @@ enum SSHNodeService {
             fi
             rm -f .scsl.pid .scsl.stdin
             mkfifo .scsl.stdin
-            nohup /bin/sh -lc "tail -f .scsl.stdin | $launch_cmd" >> scsl-server.log 2>&1 &
+            launch_cmd_escaped="$(printf '%s' "$launch_cmd" | sed 's/\"/\\\\\"/g')"
+            nohup /bin/sh -lc "tail -f .scsl.stdin | /bin/sh -lc \"$launch_cmd_escaped\"" >> scsl-server.log 2>&1 &
             echo $! > .scsl.pid
             sleep 1
             if test -f .scsl.pid && kill -0 "$(cat .scsl.pid)" 2>/dev/null; then

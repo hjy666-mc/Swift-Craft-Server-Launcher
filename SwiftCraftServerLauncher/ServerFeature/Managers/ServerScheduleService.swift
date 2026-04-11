@@ -167,7 +167,7 @@ final class ServerScheduleService: ObservableObject {
     private func scheduleFileURL(for server: ServerInstance) -> URL {
         let base: URL
         if server.nodeId == ServerNode.local.id {
-            base = AppPaths.serverDirectory(serverName: server.name)
+            base = AppPaths.serverDirectory(serverName: server.directoryName)
         } else {
             base = AppPaths.remoteNodeServersDirectory(nodeId: server.nodeId)
                 .appendingPathComponent(server.name, isDirectory: true)
@@ -224,7 +224,7 @@ final class ServerScheduleService: ObservableObject {
     }
 
     private func pollLocalLog(server: ServerInstance) async {
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let candidates = [
             serverDir.appendingPathComponent("logs/latest.log"),
             serverDir.appendingPathComponent("latest.log"),

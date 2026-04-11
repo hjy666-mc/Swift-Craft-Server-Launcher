@@ -14,7 +14,7 @@ class ServerActionManager: ObservableObject {
             Logger.shared.info("在访达中显示远程节点缓存目录: \(base.path)")
             return
         }
-        let dir = AppPaths.serverDirectory(serverName: server.name)
+        let dir = AppPaths.serverDirectory(serverName: server.directoryName)
         guard FileManager.default.fileExists(atPath: dir.path) else {
             Logger.shared.warning("服务器目录不存在: \(dir.path)")
             return
@@ -43,7 +43,7 @@ class ServerActionManager: ObservableObject {
 
                 let dir: URL
                 if server.nodeId == ServerNode.local.id {
-                    dir = AppPaths.serverDirectory(serverName: server.name)
+                    dir = AppPaths.serverDirectory(serverName: server.directoryName)
                 } else {
                     dir = AppPaths.remoteNodeServersDirectory(nodeId: server.nodeId)
                         .appendingPathComponent(server.name, isDirectory: true)
