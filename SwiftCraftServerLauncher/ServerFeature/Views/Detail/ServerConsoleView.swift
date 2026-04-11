@@ -302,7 +302,7 @@ struct ServerConsoleView: View {
         guard !isRemoteServer else { return }
         guard ServerProcessManager.shared.getProcess(for: server.id) == nil else { return }
         localLogTask?.cancel()
-        let serverName = server.name
+        let serverName = server.directoryName
         localLogTask = Task {
             await loadLocalLog(serverName: serverName)
             while !Task.isCancelled {
@@ -426,7 +426,7 @@ struct ServerConsoleView: View {
             if let p = UInt16(rconPort.trimmingCharacters(in: .whitespacesAndNewlines)) {
                 return p
             }
-            if let props = try? ServerPropertiesService.readProperties(serverDir: AppPaths.serverDirectory(serverName: server.name)),
+            if let props = try? ServerPropertiesService.readProperties(serverDir: AppPaths.serverDirectory(serverName: server.directoryName)),
                let portText = props["rcon.port"],
                let p = UInt16(portText.trimmingCharacters(in: .whitespacesAndNewlines)) {
                 rconPort = String(p)
@@ -437,7 +437,7 @@ struct ServerConsoleView: View {
         let password: String = {
             let typed = rconPassword.trimmingCharacters(in: .whitespacesAndNewlines)
             if !typed.isEmpty { return typed }
-            if let props = try? ServerPropertiesService.readProperties(serverDir: AppPaths.serverDirectory(serverName: server.name)),
+            if let props = try? ServerPropertiesService.readProperties(serverDir: AppPaths.serverDirectory(serverName: server.directoryName)),
                let pass = props["rcon.password"]?.trimmingCharacters(in: .whitespacesAndNewlines),
                !pass.isEmpty {
                 rconPassword = pass
@@ -710,7 +710,7 @@ struct ServerConsoleView: View {
     private func historyFileURL() -> URL {
         let base: URL
         if server.nodeId == ServerNode.local.id {
-            base = AppPaths.serverDirectory(serverName: server.name)
+            base = AppPaths.serverDirectory(serverName: server.directoryName)
         } else {
             base = AppPaths.remoteNodeServersDirectory(nodeId: server.nodeId)
                 .appendingPathComponent(server.name)
@@ -1130,6 +1130,19 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
             }
 
             paint(#"\b\d{2}[:.]\d{2}[:.]\d{2}\b"#, color: palette.timestamp)
+            // Example: "[21:18:23]"
+            paint(#"\[\d{2}[:.]\d{2}[:.]\d{2}\]"#, color: palette.timestamp)
+            // Example: "10 4月2026 21:18:23.873" (some logs omit whitespace: "104月2026 ...")
+            // Avoid `\b` here: ICU word boundary rules + Chinese chars can cause misses.
+            if let cnDateRegex = try? NSRegularExpression(
+                pattern: #"(^|\s)(\d{1,2}\s*\d{1,2}月\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)"#
+            ) {
+                for match in cnDateRegex.matches(in: line, range: fullRange) where match.numberOfRanges >= 3 {
+                    attributed.addAttribute(.foregroundColor, value: palette.timestamp, range: match.range(at: 2))
+                }
+            }
+            // Example: "[10 4月2026 21:18:23.873]" or "[104月2026 21:18:23.873]"
+            paint(#"\[\d{1,2}\s*\d{1,2}月\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?\]"#, color: palette.timestamp)
             paint(#"\bINFO\b"#, color: palette.info, options: [.caseInsensitive])
             paint(#"\bWARN\b"#, color: palette.warn, options: [.caseInsensitive])
             paint(#"\bERROR\b"#, color: palette.error, options: [.caseInsensitive])
@@ -1138,6 +1151,9 @@ private struct NativeTerminalRepresentable: NSViewRepresentable {
                 for match in componentRegex.matches(in: line, range: fullRange) where match.range.length > 2 {
                     let inner = ns.substring(with: NSRange(location: match.range.location + 1, length: match.range.length - 2))
                     if inner.range(of: #"^\d{2}[:.]\d{2}[:.]\d{2}(\s+(INFO|WARN|ERROR)(/(INFO|WARN|ERROR))?)?$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+                        continue
+                    }
+                    if inner.range(of: #"^\d{1,2}\s*\d{1,2}月\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$"#, options: [.regularExpression]) != nil {
                         continue
                     }
                     let innerRange = NSRange(location: match.range.location + 1, length: match.range.length - 2)
@@ -1204,7 +1220,7 @@ extension ServerConsoleView {
 
     private func clearConsole() {
         console.clear(serverId: server.id)
-        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.name)
+        lastLocalPolledText = currentLocalLogSnapshot(serverName: server.directoryName)
         if isRemoteServer, let node = resolvedRemoteNode(nodeId: server.nodeId) {
             Task { @MainActor in
                 if let snapshot = try? await SSHNodeService.fetchRemoteServerLog(node: node, serverName: server.name) {

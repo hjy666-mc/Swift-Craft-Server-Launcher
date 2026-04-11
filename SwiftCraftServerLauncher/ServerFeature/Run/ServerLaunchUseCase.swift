@@ -28,14 +28,33 @@ final class ServerLaunchUseCase: ObservableObject {
             return
         }
 
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let jarPath = serverDir.appendingPathComponent(server.serverJar).path
         try? applyLocalConsoleProperties(server: server, serverDir: serverDir)
         var resolvedJavaPath = server.javaPath
-        if resolvedJavaPath.isEmpty {
-            if let component = try? await ServerDownloadService.resolveJavaComponent(gameVersion: server.gameVersion) {
-                resolvedJavaPath = await JavaManager.shared.ensureJavaExists(version: component)
+        if let javaVersion = try? await ServerDownloadService.resolveJavaVersion(gameVersion: server.gameVersion) {
+            let needsResolve = resolvedJavaPath.isEmpty
+                || resolvedJavaPath == "java"
+                || JavaManager.shared.satisfiesMinimumMajorVersion(
+                    at: resolvedJavaPath,
+                    minimumMajorVersion: javaVersion.majorVersion
+                ) == false
+            if needsResolve {
+                resolvedJavaPath = await JavaManager.shared.ensureJavaExists(
+                    version: javaVersion.component,
+                    minimumMajorVersion: javaVersion.majorVersion
+                )
             }
+        }
+        if resolvedJavaPath.isEmpty {
+            GlobalErrorHandler.shared.handle(
+                GlobalError.validation(
+                    chineseMessage: "未找到可用的 Java 运行时，请在运行设置中选择 Java，或检查网络后重试。",
+                    i18nKey: "error.validation.server_not_selected",
+                    level: .notification
+                )
+            )
+            return
         }
 
         if server.serverType == .forge {
@@ -226,7 +245,14 @@ final class ServerLaunchUseCase: ObservableObject {
     ) -> (launchPath: String, args: [String])? {
         let runScript = serverDir.appendingPathComponent("run.sh")
         if FileManager.default.fileExists(atPath: runScript.path) {
-            return ("/bin/zsh", ["-lc", "./run.sh nogui"])
+            let javaHome = URL(fileURLWithPath: resolvedJavaPath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .path
+            let escapedJavaHome = javaHome.replacingOccurrences(of: "'", with: "'\"'\"'")
+            // Forge 的 run.sh 会优先使用 JAVA_HOME/bin/java；这里强制它走我们解析出来的运行时，
+            // 避免继续使用系统自带 Java（例如 24）导致 Forge 需要 Java 25+ 时启动失败。
+            return ("/bin/zsh", ["-lc", "env JAVA_HOME='\(escapedJavaHome)' ./run.sh nogui"])
         }
 
         if let unixArgs = ForgeInstallerService.findUnixArgsFile(in: serverDir) {
@@ -312,7 +338,7 @@ final class ServerLaunchUseCase: ObservableObject {
             return node
         }
 
-        let localJar = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(server.serverJar)
+        let localJar = AppPaths.serverDirectory(serverName: server.directoryName).appendingPathComponent(server.serverJar)
         if FileManager.default.fileExists(atPath: localJar.path) {
             return nil
         }

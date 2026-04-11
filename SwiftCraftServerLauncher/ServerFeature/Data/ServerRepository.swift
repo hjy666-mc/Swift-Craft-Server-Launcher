@@ -262,7 +262,49 @@ class ServerRepository: ObservableObject {
         let result: [ServerInstance] = try await Task.detached(priority: .userInitiated) {
             let db = ServerDatabase(dbPath: dbPath)
             try? db.initialize()
-            return try db.loadServers(workingPath: workingPath)
+            var servers = try db.loadServers(workingPath: workingPath)
+
+            // Forge 26+ 在包含非 ASCII 的服务器目录名下会启动失败（Bad escape）。
+            // 这里对历史数据做一次迁移：将 Forge 本地服务器目录从 `name` 迁移到 ASCII 安全的 `id`。
+            let fileManager = FileManager.default
+            var didMigrateAny = false
+            for index in servers.indices {
+                let server = servers[index]
+                guard server.nodeId == ServerNode.local.id else { continue }
+                guard server.serverType == .forge else { continue }
+                guard server.directoryName == server.name else { continue }
+                guard server.name.canBeConverted(to: .ascii) == false else { continue }
+
+                let newDirectoryName = server.id
+                let oldDir = AppPaths.serverDirectory(serverName: server.name)
+                let newDir = AppPaths.serverDirectory(serverName: newDirectoryName)
+
+                if fileManager.fileExists(atPath: newDir.path) == false,
+                   fileManager.fileExists(atPath: oldDir.path) {
+                    do {
+                        try fileManager.moveItem(at: oldDir, to: newDir)
+                        AppPaths.invalidatePaths(forServerName: server.name)
+                        AppPaths.invalidatePaths(forServerName: newDirectoryName)
+                        didMigrateAny = true
+                    } catch {
+                        Logger.shared.warning("Forge 服务器目录迁移失败: \(error.localizedDescription)")
+                        continue
+                    }
+                }
+
+                if fileManager.fileExists(atPath: newDir.path) {
+                    servers[index].directoryName = newDirectoryName
+                    didMigrateAny = true
+                }
+            }
+
+            if didMigrateAny {
+                for server in servers {
+                    try? db.saveServer(server, workingPath: workingPath)
+                }
+            }
+
+            return servers
         }.value
 
         let (uniqueServers, duplicateIds) = dedupeByNodeAndName(servers: result)
@@ -318,7 +360,7 @@ class ServerRepository: ObservableObject {
             if server.nodeId != ServerNode.local.id {
                 continue
             }
-            let dir = AppPaths.serverDirectory(serverName: server.name)
+            let dir = AppPaths.serverDirectory(serverName: server.directoryName)
             if !FileManager.default.fileExists(atPath: dir.path) {
                 corrupted.append(server.name)
             }

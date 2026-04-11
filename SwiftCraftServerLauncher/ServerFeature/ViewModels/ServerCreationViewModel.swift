@@ -160,6 +160,16 @@ class ServerCreationViewModel: ObservableObject {
             return
         }
 
+        let serverUUID = UUID()
+        let directoryName: String = {
+            // Forge 26+ 在包含非 ASCII 的服务器目录名下会启动失败（Bad escape）。
+            // 为了兼容中文服务器名，Forge 默认使用 UUID 作为目录名。
+            if selectedNode.isLocal, selectedServerType == .forge {
+                return serverUUID.uuidString
+            }
+            return name
+        }()
+
         do {
             await MainActor.run {
                 serverSetupService.downloadState.reset()
@@ -175,7 +185,7 @@ class ServerCreationViewModel: ObservableObject {
             let javaPath: String
             let iconImageFileName: String?
             if selectedNode.isLocal {
-                let serverDir = try serverSetupService.createServerDirectory(name: name)
+                let serverDir = try serverSetupService.createServerDirectory(name: directoryName)
                 iconImageFileName = try persistServerIconIfNeeded(serverName: name, baseDirectory: serverDir)
                 if selectedServerType == .custom, let url = customJarURL {
                     guard url.startAccessingSecurityScopedResource() else {
@@ -211,8 +221,11 @@ class ServerCreationViewModel: ObservableObject {
                                 baseURL: selectedMirrorBaseURL
                             )
                         )
-                        let javaComponent = try await ServerDownloadService.resolveJavaComponent(gameVersion: selectedGameVersion)
-                        javaPath = await JavaManager.shared.ensureJavaExists(version: javaComponent)
+                        let javaVersion = try await ServerDownloadService.resolveJavaVersion(gameVersion: selectedGameVersion)
+                        javaPath = await JavaManager.shared.ensureJavaExists(
+                            version: javaVersion.component,
+                            minimumMajorVersion: javaVersion.majorVersion
+                        )
                     }
                 }
                 if hasAcceptedEula {
@@ -221,7 +234,9 @@ class ServerCreationViewModel: ObservableObject {
 
                 if selectedServerType == .forge {
                     let tempServer = ServerInstance(
+                        id: serverUUID,
                         name: name,
+                        directoryName: directoryName,
                         serverType: selectedServerType,
                         gameVersion: selectedGameVersion,
                         loaderVersion: selectedLoaderVersion,
@@ -297,7 +312,9 @@ class ServerCreationViewModel: ObservableObject {
             }
 
             let server = ServerInstance(
+                id: serverUUID,
                 name: name,
+                directoryName: directoryName,
                 iconName: selectedServerIcon,
                 iconImageFileName: iconImageFileName,
                 serverType: resolvedServerType(),
@@ -314,7 +331,7 @@ class ServerCreationViewModel: ObservableObject {
             serverRepository.addServerSilently(server)
         } catch {
             if selectedNode.isLocal {
-                let serverDir = AppPaths.serverDirectory(serverName: name)
+                let serverDir = AppPaths.serverDirectory(serverName: directoryName)
                 if FileManager.default.fileExists(atPath: serverDir.path) {
                     try? FileManager.default.removeItem(at: serverDir)
                 }

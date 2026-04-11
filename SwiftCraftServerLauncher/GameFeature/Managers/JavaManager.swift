@@ -6,11 +6,35 @@ class JavaManager {
 
     private let fileManager = FileManager.default
 
+    func javaMajorVersion(at javaPath: String) -> Int? {
+        guard let info = getJavaVersionInfo(at: javaPath) else { return nil }
+        guard let firstLine = info.split(whereSeparator: \.isNewline).first else { return nil }
+        for rawToken in firstLine.split(separator: " ") {
+            let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            guard let majorToken = token.split(separator: ".").first, let major = Int(majorToken) else {
+                continue
+            }
+            return major
+        }
+        return nil
+    }
+
+    func satisfiesMinimumMajorVersion(at javaPath: String, minimumMajorVersion: Int) -> Bool {
+        guard !javaPath.isEmpty, javaPath != "java" else { return false }
+        guard canJavaRun(at: javaPath) else { return false }
+        guard let major = javaMajorVersion(at: javaPath) else { return false }
+        return major >= minimumMajorVersion
+    }
+
     func getJavaExecutablePath(version: String) -> String {
         return AppPaths.javaExecutablePath(version: version)
     }
 
     func findJavaExecutable(version: String) -> String {
+        return findJavaExecutable(version: version, minimumMajorVersion: nil)
+    }
+
+    func findJavaExecutable(version: String, minimumMajorVersion: Int?) -> String {
         let javaPath = getJavaExecutablePath(version: version)
 
         // 检查文件是否存在
@@ -21,6 +45,12 @@ class JavaManager {
         // 验证Java是否能正常启动
         guard canJavaRun(at: javaPath) else {
             return ""
+        }
+
+        if let minimumMajorVersion {
+            guard let major = javaMajorVersion(at: javaPath), major >= minimumMajorVersion else {
+                return ""
+            }
         }
 
         return javaPath
@@ -83,8 +113,12 @@ class JavaManager {
 
     // 检查Java是否存在，不存在则使用进度窗口下载
     func ensureJavaExists(version: String) async -> String {
+        return await ensureJavaExists(version: version, minimumMajorVersion: nil)
+    }
+
+    func ensureJavaExists(version: String, minimumMajorVersion: Int?) async -> String {
         // 优先使用已经存在并且可运行的 Java
-        let existingPath = findJavaExecutable(version: version)
+        let existingPath = findJavaExecutable(version: version, minimumMajorVersion: minimumMajorVersion)
         if !existingPath.isEmpty {
             Logger.shared.info("Java版本 \(version) 已存在")
             return existingPath
@@ -96,7 +130,7 @@ class JavaManager {
         Logger.shared.info("Java版本 \(version) 下载完成")
 
         // 下载完成后再次尝试获取 Java 路径
-        let newPath = findJavaExecutable(version: version)
+        let newPath = findJavaExecutable(version: version, minimumMajorVersion: minimumMajorVersion)
         if newPath.isEmpty {
             Logger.shared.error("Java版本 \(version) 下载完成后仍无法找到可用的Java可执行文件")
         }

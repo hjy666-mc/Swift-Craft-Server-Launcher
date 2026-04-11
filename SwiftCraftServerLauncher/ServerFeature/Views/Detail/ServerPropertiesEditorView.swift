@@ -163,7 +163,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let dir = AppPaths.serverDirectory(serverName: server.name)
+        let dir = AppPaths.serverDirectory(serverName: server.directoryName)
         do {
             properties = try ServerPropertiesService.readProperties(serverDir: dir)
             isLoaded = true
@@ -186,7 +186,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let dir = AppPaths.serverDirectory(serverName: server.name)
+        let dir = AppPaths.serverDirectory(serverName: server.directoryName)
         do {
             try ServerPropertiesService.writeProperties(serverDir: dir, properties: properties)
             isDirty = false
@@ -218,7 +218,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         var result: [ServerFileItem] = []
         let enumerator = FileManager.default.enumerator(
             at: root,
@@ -257,7 +257,7 @@ struct ServerPropertiesEditorView: View {
     }
 
     private func relativePath(for url: URL) -> String {
-        let root = AppPaths.serverDirectory(serverName: server.name).path
+        let root = AppPaths.serverDirectory(serverName: server.directoryName).path
         if url.path.hasPrefix(root) {
             return String(url.path.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         }
@@ -538,7 +538,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let targetDir = targetFolder.isEmpty ? root : root.appendingPathComponent(targetFolder)
         do {
             try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
@@ -574,7 +574,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let sourceURL = root.appendingPathComponent(sourceRelativePath)
         let targetURL = root.appendingPathComponent(targetPath)
         do {
@@ -608,7 +608,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let url = root.appendingPathComponent(targetPath)
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -638,7 +638,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let url = root.appendingPathComponent(targetPath)
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -685,7 +685,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let sourceURL = root.appendingPathComponent(target.relativePath)
         let targetURL = root.appendingPathComponent(newPath)
         do {
@@ -724,7 +724,7 @@ struct ServerPropertiesEditorView: View {
             }
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let targetURL = root.appendingPathComponent(deleteTarget.relativePath)
         do {
             try FileManager.default.removeItem(at: targetURL)
@@ -759,7 +759,7 @@ struct ServerPropertiesEditorView: View {
             serverActionManager.showInFinder(server: server)
             return
         }
-        let root = AppPaths.serverDirectory(serverName: server.name)
+        let root = AppPaths.serverDirectory(serverName: server.directoryName)
         let targetURL = root.appendingPathComponent(item.relativePath)
         if item.isDirectory {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: targetURL.path)

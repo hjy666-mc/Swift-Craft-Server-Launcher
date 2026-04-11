@@ -3,7 +3,7 @@ import Darwin
 
 enum LocalServerDirectService {
     static func start(server: ServerInstance, launchCommand: String) throws {
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let escapedServerDir = escapeSingleQuotes(serverDir.path)
         let escapedLaunchCommand = launchCommand.replacingOccurrences(of: "\"", with: "\\\"")
         Logger.shared.info("Local launch command: \(launchCommand)")
@@ -14,7 +14,7 @@ enum LocalServerDirectService {
         else \
           rm -f .scsl.pid .scsl.stdin; \
           mkfifo .scsl.stdin && \
-          nohup /bin/sh -lc "tail -f .scsl.stdin | \(escapedLaunchCommand)" >> scsl-server.log 2>&1 & \
+          nohup /bin/sh -lc "tail -f .scsl.stdin | /bin/sh -lc \\\"\(escapedLaunchCommand)\\\"" >> scsl-server.log 2>&1 & \
           echo $! > .scsl.pid; \
           sleep 1; \
           if test -f .scsl.pid && kill -0 $(cat .scsl.pid) 2>/dev/null; then echo __SCSL_STARTED__; else echo __SCSL_START_FAILED__; fi; \
@@ -38,7 +38,7 @@ enum LocalServerDirectService {
     }
 
     static func stop(server: ServerInstance) throws {
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let escapedServerDir = escapeSingleQuotes(serverDir.path)
         let escapedJar = escapeSingleQuotes(server.serverJar)
         let command = """
@@ -51,7 +51,7 @@ enum LocalServerDirectService {
     }
 
     static func sendCommand(server: ServerInstance, command: String) throws {
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let fifo = serverDir.appendingPathComponent(".scsl.stdin").path
         let escapedCommand = escapeSingleQuotes(command)
         let shell = "test -p '\(escapeSingleQuotes(fifo))' && printf '%s\\n' '\(escapedCommand)' > '\(escapeSingleQuotes(fifo))'"
@@ -59,7 +59,7 @@ enum LocalServerDirectService {
     }
 
     static func sendInterrupt(server: ServerInstance, force: Bool = false) throws {
-        let serverDir = AppPaths.serverDirectory(serverName: server.name)
+        let serverDir = AppPaths.serverDirectory(serverName: server.directoryName)
         let escapedServerDir = escapeSingleQuotes(serverDir.path)
         let command: String
         if force {
@@ -102,7 +102,7 @@ enum LocalServerDirectService {
     }
 
     static func isDirectModeAvailable(server: ServerInstance) -> Bool {
-        let fifo = AppPaths.serverDirectory(serverName: server.name).appendingPathComponent(".scsl.stdin").path
+        let fifo = AppPaths.serverDirectory(serverName: server.directoryName).appendingPathComponent(".scsl.stdin").path
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: fifo, isDirectory: &isDir), !isDir.boolValue {
             return true
